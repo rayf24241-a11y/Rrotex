@@ -278,6 +278,7 @@ function renderChats() {
     button.innerHTML = `<span>${escapeHtml(chat.title)}</span><small>${chat.messages.length}</small>`;
     button.addEventListener('click', () => {
       state.activeChatId = chat.id;
+      closeComputerMode();
       persistState();
       render();
     });
@@ -519,8 +520,16 @@ function closeModelMenu() {
   modelButton.setAttribute('aria-expanded', 'false');
 }
 
-newChatButton.addEventListener('click', () => {
+function closeComputerMode() {
   state.computerMode = false;
+  closeModelMenu();
+  if (connectDialog.open) {
+    connectDialog.close();
+  }
+}
+
+newChatButton.addEventListener('click', () => {
+  closeComputerMode();
   createChat();
 });
 modelButton.addEventListener('click', toggleModelMenu);
