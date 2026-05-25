@@ -63,6 +63,7 @@ const models = [
 ];
 
 const chatList = document.querySelector('#chatList');
+const appShell = document.querySelector('#appShell');
 const messagesEl = document.querySelector('#messages');
 const composer = document.querySelector('#composer');
 const messageInput = document.querySelector('#messageInput');
@@ -75,6 +76,8 @@ const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
 const creditStatus = document.querySelector('#creditStatus');
 const upgradeButton = document.querySelector('#upgradeButton');
+const proPage = document.querySelector('#proPage');
+const closeProPageButton = document.querySelector('#closeProPageButton');
 const chatPanel = document.querySelector('#chatPanel');
 const modeEyebrow = document.querySelector('#modeEyebrow');
 const modeTitle = document.querySelector('#modeTitle');
@@ -87,7 +90,6 @@ const modelButton = document.querySelector('#modelButton');
 const modelMenu = document.querySelector('#modelMenu');
 const selectedModelName = document.querySelector('#selectedModelName');
 const selectedModelShort = document.querySelector('#selectedModelShort');
-const upgradeDialog = document.querySelector('#upgradeDialog');
 const checkoutButton = document.querySelector('#checkoutButton');
 const connectDialog = document.querySelector('#connectDialog');
 const connectOptions = document.querySelectorAll('.connect-option');
@@ -309,9 +311,11 @@ function renderModelMenu() {
 function renderChats() {
   chatList.innerHTML = '';
   state.chats.forEach((chat) => {
+    const row = document.createElement('div');
+    row.className = `chat-row${chat.id === state.activeChatId ? ' active' : ''}`;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = `chat-item${chat.id === state.activeChatId ? ' active' : ''}`;
+    button.className = 'chat-item';
     button.innerHTML = `<span>${escapeHtml(chat.title)}</span><small>${chat.messages.length}</small>`;
     button.addEventListener('click', () => {
       state.activeChatId = chat.id;
@@ -319,7 +323,17 @@ function renderChats() {
       persistState();
       render();
     });
-    chatList.appendChild(button);
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'delete-chat';
+    deleteButton.setAttribute('aria-label', `Delete ${chat.title}`);
+    deleteButton.textContent = 'X';
+    deleteButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      deleteChat(chat.id);
+    });
+    row.append(button, deleteButton);
+    chatList.appendChild(row);
   });
 }
 
@@ -498,9 +512,31 @@ async function sendMessage(text) {
 }
 
 async function startUpgrade() {
-  if (!upgradeDialog.open) {
-    upgradeDialog.showModal();
+  appShell.hidden = true;
+  proPage.hidden = false;
+  window.location.hash = 'pro';
+}
+
+function closeProPage() {
+  proPage.hidden = true;
+  appShell.hidden = false;
+  if (window.location.hash === '#pro') {
+    history.pushState('', document.title, window.location.pathname + window.location.search);
   }
+}
+
+function deleteChat(chatId) {
+  const deletingActive = state.activeChatId === chatId;
+  state.chats = state.chats.filter((chat) => chat.id !== chatId);
+  if (state.chats.length === 0) {
+    const id = crypto.randomUUID();
+    state.chats = [{ id, title: 'New ROTEX chat', createdAt: Date.now(), messages: [] }];
+    state.activeChatId = id;
+  } else if (deletingActive) {
+    state.activeChatId = state.chats[0].id;
+  }
+  persistState();
+  render();
 }
 
 async function continueCheckout() {
@@ -697,8 +733,9 @@ computerEntry.addEventListener('click', () => {
 });
 
 connectOptions.forEach((button) => {
-  button.addEventListener('click', () => {
+  button.addEventListener('click', async () => {
     const value = button.dataset.connect;
+    const provider = button.dataset.provider;
     if (value === 'all') {
       state.computerConnections = [...connectableServices];
       announceActivation('Google Drive, GitHub, and PC');
@@ -707,11 +744,16 @@ connectOptions.forEach((button) => {
       openPcDialog();
     } else if (state.computerConnections.includes(value)) {
       setConnection(value, false);
+    } else if (provider) {
+      setConnection(value, true);
     } else {
       activateService(value);
     }
     persistState();
     render();
+    if (provider) {
+      await startProviderConnect(provider);
+    }
   });
 });
 
@@ -835,7 +877,7 @@ connectDialog.addEventListener('close', () => {
 
 async function startProviderConnect(provider) {
   try {
-    const response = await fetch(`/api/connect/${provider}`);
+    const response = await fetch(`/api/connect/${provider}`, { cache: 'no-store' });
     const data = await response.json();
     if (data.url) {
       window.location.href = data.url;
@@ -879,7 +921,12 @@ signOutButton.addEventListener('click', async () => {
 });
 
 upgradeButton.addEventListener('click', startUpgrade);
+closeProPageButton.addEventListener('click', closeProPage);
 checkoutButton.addEventListener('click', continueCheckout);
+
+if (window.location.hash === '#pro') {
+  startUpgrade();
+}
 
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 document.addEventListener('keydown', (event) => {

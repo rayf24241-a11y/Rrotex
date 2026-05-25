@@ -69,6 +69,7 @@ button {
 }
 
 .brand,
+.chat-row,
 .chat-item,
 .google-button,
 .topbar,
@@ -182,26 +183,38 @@ button {
   padding-right: 2px;
 }
 
-.chat-item {
+.chat-row {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
   min-width: 0;
   min-height: 48px;
-  padding: 10px 12px;
+  padding: 0;
   color: var(--muted);
-  text-align: left;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 12px;
 }
 
-.chat-item:hover,
-.chat-item.active {
+.chat-row:hover,
+.chat-row.active {
   color: var(--text);
   background: rgba(255, 255, 255, 0.055);
   border-color: var(--line);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+}
+
+.chat-item {
+  flex: 1;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 0 10px 12px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
 }
 
 .chat-item span {
@@ -215,6 +228,26 @@ button {
 .chat-item small {
   flex-shrink: 0;
   color: var(--quiet);
+}
+
+.delete-chat {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  margin-right: 7px;
+  place-items: center;
+  color: var(--quiet);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.delete-chat:hover {
+  color: var(--pink);
+  background: rgba(255, 107, 157, 0.08);
+  border-color: rgba(255, 107, 157, 0.22);
 }
 
 .account-panel {
@@ -593,7 +626,8 @@ h1 {
 }
 
 .upgrade-button,
-.message-action {
+.message-action,
+.download-app-button {
   padding: 10px 13px;
   color: var(--bg);
   background: linear-gradient(135deg, var(--amber), var(--pink));
@@ -603,6 +637,13 @@ h1 {
 .message-action {
   display: inline-flex;
   margin-top: 12px;
+}
+
+.download-app-button {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .download-list {
@@ -619,14 +660,6 @@ h1 {
   background: linear-gradient(135deg, var(--blue), var(--green));
   border-radius: 8px;
   font-weight: 900;
-}
-
-.upgrade-dialog {
-  width: min(460px, calc(100vw - 28px));
-  padding: 0;
-  color: var(--text);
-  background: transparent;
-  border: 0;
 }
 
 .connect-dialog {
@@ -743,25 +776,37 @@ h1 {
   line-height: 1.45;
 }
 
-.upgrade-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.74);
-  backdrop-filter: blur(8px);
+.pro-page {
+  display: grid;
+  min-height: 100vh;
+  padding: clamp(18px, 4vw, 52px);
+  place-items: center;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(76, 201, 240, 0.18), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(255, 107, 157, 0.14), transparent 28%),
+    var(--bg);
 }
 
-.upgrade-card {
+.pro-page[hidden] {
+  display: none;
+}
+
+.pro-shell {
+  position: relative;
   display: grid;
-  gap: 14px;
-  padding: 24px;
+  gap: 16px;
+  width: min(760px, 100%);
+  padding: clamp(24px, 5vw, 54px);
   background: rgba(13, 17, 24, 0.98);
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: 8px;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
   animation: floatIn 180ms ease both;
 }
 
-.upgrade-card h2 {
+.pro-shell h2 {
   margin: 0;
-  font-size: 42px;
+  font-size: clamp(46px, 8vw, 88px);
   line-height: 0.95;
 }
 
@@ -796,7 +841,8 @@ h1 {
 }
 
 .checkout-action,
-.secondary-action {
+.secondary-action,
+.download-app-link {
   padding: 12px 14px;
 }
 
@@ -809,6 +855,14 @@ h1 {
   color: var(--muted);
   background: transparent;
   border-color: var(--line);
+}
+
+.download-app-link {
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-weight: 850;
 }
 
 @keyframes appIn {

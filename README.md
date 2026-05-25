@@ -84,6 +84,8 @@ https://www.rrotex.com/api/connect/google-drive-callback
 
 Connect PC uses the in-app 3 digit pairing UI. Real phone-to-PC file access still needs a desktop helper app/server to run on the PC and approve file operations.
 
+The PC helper source lives in `pc_app/rotex_pc_app.py`. The downloadable Windows build is served from `downloads/ROTEX-PC-App.exe`.
+
 ## Stripe checkout
 
 Create a Stripe product/price for the upgrade, then add:

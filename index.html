@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app-shell">
+    <main class="app-shell" id="appShell">
       <aside class="sidebar" aria-label="Saved chats">
         <a class="brand" href="#" aria-label="ROTEX home">
           <span class="brand-mark">R</span>
@@ -41,7 +41,8 @@
             <h1 id="modeTitle">Chat with ROTEX</h1>
             <p class="mode-subtitle" id="modeSubtitle">Fast chat, code, and research with ROTEX.</p>
           </div>
-          <div class="top-actions">
+        <div class="top-actions">
+            <a class="download-app-button" id="downloadPcAppTop" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
             <button class="upgrade-button" id="upgradeButton" type="button">Upgrade</button>
             <div class="credit-pill" id="creditStatus">$0.300 credits</div>
             <div class="status-pill" id="syncStatus">Local mode</div>
@@ -89,10 +90,11 @@
       </section>
     </main>
 
-    <dialog class="upgrade-dialog" id="upgradeDialog">
-      <form method="dialog" class="upgrade-card">
+    <section class="pro-page" id="proPage" hidden>
+      <div class="pro-shell">
+        <button class="dialog-x" id="closeProPageButton" type="button" aria-label="Close">X</button>
         <p class="eyebrow">ROTEX Pro</p>
-        <h2>Upgrade</h2>
+        <h2>ROTEX Pro</h2>
         <p class="upgrade-copy">Get more room for heavier ROTEX work, more access, and more plugins.</p>
         <div class="upgrade-price">$15 <span>/ month</span></div>
         <ul class="upgrade-list">
@@ -102,11 +104,11 @@
           <li>More plugins</li>
         </ul>
         <div class="dialog-actions">
-          <button value="cancel" type="submit" class="secondary-action">Cancel</button>
+          <a class="secondary-action download-app-link" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
           <button id="checkoutButton" type="button" class="checkout-action">Continue</button>
         </div>
-      </form>
-    </dialog>
+      </div>
+    </section>
 
     <dialog class="connect-dialog" id="connectDialog">
       <form method="dialog" class="connect-card">
@@ -115,8 +117,8 @@
         <h2>Connect apps</h2>
         <p class="upgrade-copy">Pick what ROTEX should ask for when computer mode needs access.</p>
         <div class="connect-grid">
-          <button class="connect-option" type="button" data-connect="Google Drive">Google Drive</button>
-          <button class="connect-option" type="button" data-connect="GitHub">GitHub</button>
+          <button class="connect-option" type="button" data-connect="Google Drive" data-provider="google-drive">Google Drive</button>
+          <button class="connect-option" type="button" data-connect="GitHub" data-provider="github">GitHub</button>
           <button class="connect-option" type="button" data-connect="PC">Connect PC</button>
           <button class="connect-option all" type="button" data-connect="all">Connect all</button>
         </div>
