@@ -52,6 +52,7 @@ module.exports = async function handler(request, response) {
   const authResult = await verifyFirebaseToken(authToken);
 
   const selected = MODELS[model] || MODELS['rod-1'];
+  const connectionStatus = summarizeConnections(computerConnections, pcBridge);
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
     .slice(-18)
@@ -66,6 +67,8 @@ module.exports = async function handler(request, response) {
       'You are a ROTEX web assistant.',
       'Chat naturally. Do not start with a giant capability list, identity speech, or "I am your assistant" intro unless the user asks what you can do. Keep normal answers short and useful.',
       personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
+      connectionStatus,
+      'If the user asks whether GitHub, Google Drive, PC, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
       'You CAN generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files — never just paste raw code when a file was asked for.',
       'You cannot directly access, read, or modify files already on the user\'s device.',
       computerMode
@@ -108,6 +111,24 @@ module.exports = async function handler(request, response) {
     });
   }
 };
+
+function summarizeConnections(computerConnections, pcBridge) {
+  const services = ['Google Drive', 'GitHub', 'PC'];
+  const connected = Array.isArray(computerConnections)
+    ? [...new Set(computerConnections.filter((item) => services.includes(item)))]
+    : [];
+  const missing = services.filter((service) => !connected.includes(service));
+  const pcFolder = pcBridge?.folderReady
+    ? `yes${pcBridge.folderName ? ` (${pcBridge.folderName})` : ''}`
+    : 'no';
+
+  return [
+    `ROTEX connection status: connected services: ${connected.length ? connected.join(', ') : 'none'}.`,
+    `Not connected: ${missing.length ? missing.join(', ') : 'none'}.`,
+    `PC paired: ${pcBridge?.connected ? 'yes' : 'no'}.`,
+    `PC folder approved: ${pcFolder}.`,
+  ].join(' ');
+}
 
 async function verifyFirebaseToken(authToken) {
   if (!authToken) {

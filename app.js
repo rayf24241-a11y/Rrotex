@@ -1176,6 +1176,15 @@ async function sendMessage(text) {
   if (chat.title === 'New ROTEX chat') {
     chat.title = clean.length > 32 ? `${clean.slice(0, 32)}...` : clean;
   }
+
+  const localStatus = localConnectionAnswer(clean);
+  if (localStatus) {
+    chat.messages.push({ role: 'assistant', model: model.name, text: localStatus });
+    persistState();
+    render();
+    return;
+  }
+
   persistState();
   render();
 
@@ -1206,6 +1215,34 @@ async function sendMessage(text) {
 
   persistState();
   render();
+}
+
+function localConnectionAnswer(text) {
+  const lower = text.toLowerCase();
+  const asksStatus = /\b(check|connected|connect|success|worked|status|did)\b/.test(lower);
+  if (!asksStatus) return '';
+
+  const targets = [
+    ['github', 'GitHub'],
+    ['google drive', 'Google Drive'],
+    ['drive', 'Google Drive'],
+    ['pc', 'PC'],
+    ['computer', 'PC'],
+  ];
+  const found = targets.find(([needle]) => lower.includes(needle));
+  if (!found) return '';
+
+  const service = found[1];
+  const connected = state.computerConnections.includes(service);
+  if (service === 'PC') {
+    if (!connected) return 'PC is not connected yet.';
+    return state.pcBridge?.folderReady
+      ? `PC is connected, and the approved folder is ${state.pcBridge.folderName || 'ready'}.`
+      : 'PC is connected, but no folder is approved yet.';
+  }
+  return connected
+    ? `${service} is connected successfully.`
+    : `${service} is not connected yet.`;
 }
 
 async function sendTeamupMessage(chat, clean) {
