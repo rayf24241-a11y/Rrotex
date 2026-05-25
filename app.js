@@ -2,6 +2,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/fireba
 import {
   createUserWithEmailAndPassword,
   getAuth,
+  getRedirectResult,
   GoogleAuthProvider,
   linkWithCredential,
   onAuthStateChanged,
@@ -9,6 +10,7 @@ import {
   RecaptchaVerifier,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
@@ -186,6 +188,8 @@ async function initFirebase() {
         } else if (authReason === 'upgrade') {
           closeAuthPage();
           await startUpgrade();
+        } else {
+          closeAuthPage();
         }
       } else {
         localStorage.removeItem(storageKey);
@@ -193,6 +197,13 @@ async function initFirebase() {
       }
       render();
     });
+
+    // Handle redirect sign-in result (fires after signInWithRedirect completes)
+    try {
+      await getRedirectResult(auth);
+    } catch (error) {
+      console.warn('Redirect result error:', error);
+    }
   } catch (error) {
     console.warn('Firebase unavailable:', error);
     setCloudStatus('Local mode');
@@ -369,14 +380,24 @@ function closeAuthPage() {
 
 async function signInWithGoogleFromAuth() {
   if (!auth) {
-    authStatus.textContent = 'Firebase is not configured yet. Add Firebase env vars in Vercel.';
+    authStatus.textContent = 'Firebase is starting, try again in a second.';
     return;
   }
   try {
     authStatus.textContent = 'Opening Google login...';
     await signInWithPopup(auth, new GoogleAuthProvider());
   } catch (error) {
-    authStatus.textContent = firebaseAuthMessage(error, 'Google login could not start.');
+    const code = error?.code || '';
+    if (code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user') {
+      try {
+        authStatus.textContent = 'Redirecting to Google...';
+        await signInWithRedirect(auth, new GoogleAuthProvider());
+      } catch (redirectError) {
+        authStatus.textContent = firebaseAuthMessage(redirectError, 'Google login could not start.');
+      }
+    } else {
+      authStatus.textContent = firebaseAuthMessage(error, 'Google login could not start.');
+    }
   }
 }
 
