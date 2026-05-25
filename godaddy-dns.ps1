@@ -48,8 +48,8 @@ Set-GoDaddyRecord -Type 'A' -Name '@' -Records @(
   @{ data = '76.76.21.21'; ttl = 600 }
 )
 
-Set-GoDaddyRecord -Type 'CNAME' -Name 'www' -Records @(
-  @{ data = 'cname.vercel-dns.com'; ttl = 600 }
+Set-GoDaddyRecord -Type 'A' -Name 'www' -Records @(
+  @{ data = '76.76.21.21'; ttl = 600 }
 )
 
 Write-Host ''
