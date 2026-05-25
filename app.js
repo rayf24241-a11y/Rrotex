@@ -77,7 +77,6 @@ const newChatButton = document.querySelector('#newChatButton');
 const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
 const signOutButton = document.querySelector('#signOutButton');
-const phoneVerifyButton = document.querySelector('#phoneVerifyButton');
 const pcShareButton = document.querySelector('#pcShareButton');
 const planStatus = document.querySelector('#planStatus');
 const saveStatus = document.querySelector('#saveStatus');
@@ -123,7 +122,6 @@ const makePcCodeButton = document.querySelector('#makePcCodeButton');
 const pairPcButton = document.querySelector('#pairPcButton');
 const choosePcFolderButton = document.querySelector('#choosePcFolderButton');
 const disconnectPcButton = document.querySelector('#disconnectPcButton');
-const phoneDialog = document.querySelector('#phoneDialog');
 const phoneStatus = document.querySelector('#phoneStatus');
 const phoneInput = document.querySelector('#phoneInput');
 const phoneCodeWrap = document.querySelector('#phoneCodeWrap');
@@ -188,9 +186,6 @@ async function initFirebase() {
         state = normalizeState({});
       }
       render();
-      if (shouldAskPhone()) {
-        window.setTimeout(openPhoneDialog, 350);
-      }
     });
   } catch (error) {
     console.warn('Firebase unavailable:', error);
@@ -216,7 +211,9 @@ function normalizeState(value) {
   const pro = Boolean(value.pro);
   const phoneVerified = Boolean(value.phoneVerified);
   const phoneSkipped = Boolean(value.phoneSkipped);
-  const creditUsage = normalizeCreditUsage(value.creditUsage, pro, value.credits, { phoneVerified, phoneSkipped });
+  const accountState = { phoneVerified, phoneSkipped };
+  const creditUsage = normalizeCreditUsage(value.creditUsage, pro, value.credits, accountState);
+  const plan = pro ? creditPlans.pro : activeFreePlan(accountState);
 
   return {
     activeModel: value.activeModel || 'rod-1',
@@ -232,7 +229,7 @@ function normalizeState(value) {
       : [],
     pcBridge: normalizePcBridge(value.pcBridge),
     activeChatId: value.activeChatId || chats[0].id,
-    credits: remainingMonthlyCredits(pro, creditUsage),
+    credits: Math.max(0, plan.monthly - (Number(creditUsage.monthSpent) || 0)),
     chats,
   };
 }
@@ -356,6 +353,13 @@ function openAuthPage(reason = 'account', forceProfile = false) {
   if (!profileFields.hidden) {
     profileNameInput.value = state.profile?.name || currentUser?.displayName || '';
     profileNicknameInput.value = state.profile?.nickname || '';
+    phoneStatus.textContent = state.phoneVerified
+      ? 'Phone verified. Normal free credits are active.'
+      : 'Add a phone number to keep normal free credits, or skip for lower free credits.';
+    phoneCodeWrap.hidden = true;
+    confirmPhoneCodeButton.hidden = true;
+    sendPhoneCodeButton.hidden = state.phoneVerified;
+    skipPhoneButton.hidden = state.phoneVerified || state.phoneSkipped;
     profileNameInput.focus();
   } else {
     authEmailInput.focus();
@@ -454,6 +458,9 @@ async function saveProfile() {
       authStatus.textContent = 'Somebody already has that ROTEX name. Pick another.';
       return;
     }
+    if (!state.phoneVerified && !state.phoneSkipped) {
+      state.phoneSkipped = true;
+    }
     await setDoc(usernameRef, {
       uid: currentUser.uid,
       name,
@@ -483,18 +490,19 @@ function normalizeUsername(value) {
 }
 
 function shouldAskPhone() {
-  return currentUser && !needsProfile() && authPage.hidden && !state.pro && !state.phoneVerified && !state.phoneSkipped;
+  return false;
 }
 
 function openPhoneDialog() {
-  if (!currentUser) return;
-  phoneStatus.textContent = 'Verify once to keep normal free credits. You can skip, but free credits drop to $0.100 daily.';
+  if (!currentUser) {
+    openAuthPage('account');
+    return;
+  }
+  openAuthPage(authReason, true);
+  phoneStatus.textContent = 'Add a phone number to keep normal free credits, or skip for lower free credits.';
   phoneCodeWrap.hidden = true;
   confirmPhoneCodeButton.hidden = true;
   sendPhoneCodeButton.hidden = false;
-  if (!phoneDialog.open) {
-    phoneDialog.showModal();
-  }
 }
 
 function ensurePhoneVerifier() {
@@ -555,14 +563,12 @@ async function confirmPhoneCode() {
     persistState();
     render();
     phoneStatus.textContent = 'Phone verified. Normal free credits are active.';
-    phoneDialog.close();
   } catch (error) {
     if (error?.code === 'auth/provider-already-linked' || error?.code === 'auth/credential-already-in-use') {
       state.phoneVerified = true;
       state.phoneSkipped = false;
       persistState();
       render();
-      phoneDialog.close();
       return;
     }
     phoneStatus.textContent = firebaseAuthMessage(error, 'That code did not work. Try again.');
@@ -577,7 +583,7 @@ function skipPhoneVerification() {
   state.creditUsage = normalizeCreditUsage(state.creditUsage, state.pro, state.credits, state);
   persistState();
   render();
-  phoneDialog.close();
+  phoneStatus.textContent = 'Phone skipped. Lower free credits are active.';
 }
 
 function resetPhoneVerifier() {
@@ -749,8 +755,6 @@ function renderAccount() {
     googleButtonText.textContent = state.profile?.nickname || state.profile?.name || currentUser.displayName || currentUser.email || 'Google account';
     planStatus.textContent = state.pro ? 'Pro' : 'Normal';
     planStatus.hidden = false;
-    phoneVerifyButton.hidden = state.pro || state.phoneVerified;
-    phoneVerifyButton.textContent = state.phoneSkipped ? 'Verify phone for more credits' : 'Verify phone';
     signOutButton.hidden = false;
     saveStatus.textContent = state.phoneVerified
       ? `Phone verified. Chats sync with Firebase for ${currentUser.email || 'this account'}.`
@@ -759,14 +763,12 @@ function renderAccount() {
     googleButtonText.textContent = 'Log in or sign up';
     planStatus.textContent = 'Normal';
     planStatus.hidden = true;
-    phoneVerifyButton.hidden = true;
     signOutButton.hidden = true;
     saveStatus.textContent = 'Sign in with Google to save chats with Firebase.';
   } else {
     googleButtonText.textContent = 'Firebase not configured';
     planStatus.textContent = 'Normal';
     planStatus.hidden = true;
-    phoneVerifyButton.hidden = true;
     signOutButton.hidden = true;
     saveStatus.textContent = 'Add Firebase env vars in Vercel to enable Google login.';
   }
@@ -1407,7 +1409,6 @@ authGoogleButton.addEventListener('click', signInWithGoogleFromAuth);
 sendEmailCodeButton.addEventListener('click', sendEmailCodeNotice);
 emailLoginButton.addEventListener('click', continueEmailLogin);
 saveProfileButton.addEventListener('click', saveProfile);
-phoneVerifyButton.addEventListener('click', openPhoneDialog);
 sendPhoneCodeButton.addEventListener('click', sendPhoneCode);
 confirmPhoneCodeButton.addEventListener('click', confirmPhoneCode);
 skipPhoneButton.addEventListener('click', skipPhoneVerification);
