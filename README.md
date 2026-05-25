@@ -2,6 +2,16 @@
 
 Standalone website for the ROTEX AI family.
 
+Current web features:
+
+- Sidebar chat list
+- Local saved chats
+- Google login/sign-up placeholder
+- ROTEX model picker
+- Pro plan section
+
+The Google button currently creates a local test profile. Real Google cloud saving needs Firebase, Supabase, or a backend auth/database setup.
+
 ## Local preview
 
 Open `index.html` in a browser, or run a tiny static server:
@@ -31,3 +41,22 @@ http://localhost:3001
 ```
 
 For a deployed site, `localhost` only points to the visitor's device, so the backend needs to be deployed too.
+
+## GoDaddy DNS helper
+
+Copy `.env.example` to `.env`, then put your Production GoDaddy API key and secret in `.env`.
+
+Run:
+
+```powershell
+.\godaddy-dns.ps1
+```
+
+The script sets:
+
+```text
+A      @      76.76.21.21
+CNAME  www    cname.vercel-dns.com
+```
+
+Do not commit `.env`.

@@ -7,129 +7,112 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand" href="#home" aria-label="ROTEX home">
-        <span class="brand-mark">R</span>
-        <span>ROTEX</span>
-      </a>
-      <nav class="nav">
-        <a href="#models">Models</a>
-        <a href="#pro">Pro</a>
-        <a href="#connect">Connect</a>
-      </nav>
-      <button class="profile-button" id="profileButton" type="button" aria-haspopup="true" aria-expanded="false">
-        <span class="profile-dot"></span>
-        Ray
-      </button>
-    </header>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Saved chats">
+        <a class="brand" href="#" aria-label="ROTEX home">
+          <span class="brand-mark">R</span>
+          <span>ROTEX</span>
+        </a>
+        <button class="new-chat" id="newChatButton" type="button">New chat</button>
+        <div class="sidebar-label">Chats</div>
+        <div class="chat-list" id="chatList"></div>
+        <div class="account-panel">
+          <button class="google-button" id="googleButton" type="button">
+            <span class="google-mark">G</span>
+            <span id="googleButtonText">Log in or sign up</span>
+          </button>
+          <p id="saveStatus">Chats save on this device until Google sync is connected.</p>
+        </div>
+      </aside>
 
-    <main id="home">
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">ROTEX AI system</p>
-          <h1>One AI family for chat, code, research, and computer work.</h1>
-          <p class="hero-text">
-            Five focused ROTEX models, one account, and a web experience built separate from the mobile app.
-          </p>
-          <div class="hero-actions">
-            <a class="primary-action" href="#models">View models</a>
-            <a class="secondary-action" href="#pro">See Pro</a>
+      <section class="chat-panel">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">ROTEX web</p>
+            <h1>Chat with ROTEX</h1>
           </div>
-        </div>
-        <div class="console-visual" aria-label="ROTEX dashboard preview">
-          <div class="console-header">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <div class="console-body">
-            <div class="model-chip active">Rod _ 1</div>
-            <div class="model-chip">Rod thinking</div>
-            <div class="model-chip">Tex 0</div>
-            <div class="model-chip">Tex 1.5</div>
-            <div class="model-chip">Treesearch _ q</div>
-            <div class="response-card">
-              <span>ROTEX</span>
-              <p>Ready for fast answers, project work, and approved actions.</p>
-            </div>
-          </div>
-        </div>
-      </section>
+          <a class="upgrade-link" href="#pro">Upgrade</a>
+        </header>
 
-      <section class="models-section" id="models">
-        <div class="section-heading">
-          <p class="eyebrow">Model family</p>
-          <h2>ROTEX</h2>
-        </div>
-        <div class="model-grid">
-          <article class="model-card">
-            <span class="model-number">01</span>
-            <h3>Rod _ 1</h3>
-            <p>Everyday tasks, quick answers, and normal assistant work.</p>
-          </article>
-          <article class="model-card">
-            <span class="model-number">02</span>
-            <h3>Rod thinking</h3>
-            <p>Harder tasks that need deeper planning and better reasoning.</p>
-          </article>
-          <article class="model-card">
-            <span class="model-number">03</span>
-            <h3>Tex 0</h3>
-            <p>Code help, edits, debugging, and file-aware project work.</p>
-          </article>
-          <article class="model-card">
-            <span class="model-number">04</span>
-            <h3>Tex 1.5</h3>
-            <p>Complex code, bigger builds, and tougher implementation work.</p>
-          </article>
-          <article class="model-card wide">
-            <span class="model-number">05</span>
-            <h3>Treesearch _ q</h3>
-            <p>Research mode for searching, comparing, and explaining. It does not create files.</p>
-          </article>
-        </div>
-      </section>
+        <section class="model-strip" id="modelStrip" aria-label="ROTEX models"></section>
 
-      <section class="pro-section" id="pro">
-        <div>
-          <p class="eyebrow">Upgrade</p>
-          <h2>Pro plan</h2>
-          <p class="pro-copy">Built for the real ROTEX rollout when payments go live.</p>
-        </div>
-        <div class="price-panel">
-          <div class="price-row">
-            <span class="price">$15</span>
-            <span class="period">monthly</span>
-          </div>
-          <ul>
-            <li>More models</li>
-            <li>More computer mode</li>
-            <li>More access</li>
-            <li>More merges</li>
-          </ul>
-          <button class="checkout-button" id="checkoutButton" type="button">Test checkout later</button>
-        </div>
-      </section>
+        <section class="messages" id="messages" aria-live="polite"></section>
 
-      <section class="connect-section" id="connect">
-        <p class="eyebrow">Test connection</p>
-        <h2>Use test mode first.</h2>
-        <p>
-          Keep secret keys on a backend. The website should call your backend, then the backend creates the Stripe
-          test checkout or talks to ROTEX.
-        </p>
+        <form class="composer" id="composer">
+          <textarea id="messageInput" rows="1" placeholder="Message ROTEX..."></textarea>
+          <button type="submit">Send</button>
+        </form>
       </section>
     </main>
 
-    <div class="profile-menu" id="profileMenu" aria-hidden="true">
-      <div class="profile-card">
-        <div>
-          <strong>Ray</strong>
-          <span>Free plan</span>
-        </div>
-        <a href="#pro" id="upgradeLink">Upgrade</a>
+    <section class="models-section" id="models">
+      <div class="section-heading">
+        <p class="eyebrow">Model family</p>
+        <h2>ROTEX models</h2>
       </div>
-    </div>
+      <div class="model-grid">
+        <article class="model-card">
+          <span class="model-number">01</span>
+          <h3>Rod _ 1</h3>
+          <p>Everyday tasks, quick answers, normal chat, and simple work.</p>
+        </article>
+        <article class="model-card">
+          <span class="model-number">02</span>
+          <h3>Rod thinking</h3>
+          <p>Harder tasks that need more reasoning, planning, and careful answers.</p>
+        </article>
+        <article class="model-card">
+          <span class="model-number">03</span>
+          <h3>Tex 0</h3>
+          <p>Code help, debugging, implementation, and file-aware project work.</p>
+        </article>
+        <article class="model-card">
+          <span class="model-number">04</span>
+          <h3>Tex 1.5</h3>
+          <p>Complex code, larger builds, deeper architecture, and tougher fixes.</p>
+        </article>
+        <article class="model-card wide">
+          <span class="model-number">05</span>
+          <h3>Treesearch _ q</h3>
+          <p>Research mode for searching, comparing, and explaining. It cannot create files.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="pro-section" id="pro">
+      <div>
+        <p class="eyebrow">Upgrade</p>
+        <h2>Pro plan</h2>
+        <p class="pro-copy">Built for the real ROTEX rollout when Stripe checkout goes live.</p>
+      </div>
+      <div class="price-panel">
+        <div class="price-row">
+          <span class="price">$15</span>
+          <span class="period">monthly</span>
+        </div>
+        <ul>
+          <li>More models</li>
+          <li>More computer mode</li>
+          <li>More access</li>
+          <li>More merges</li>
+        </ul>
+        <button class="checkout-button" id="checkoutButton" type="button">Test checkout later</button>
+      </div>
+    </section>
+
+    <dialog class="login-dialog" id="loginDialog">
+      <form method="dialog" class="login-card">
+        <p class="eyebrow">Google account</p>
+        <h2>Log in or sign up</h2>
+        <p class="dialog-copy">For now this creates a local test profile. Real Google cloud saves need Firebase, Supabase, or a backend.</p>
+        <label for="emailInput">Google email</label>
+        <input id="emailInput" type="email" placeholder="you@gmail.com" />
+        <div class="dialog-actions">
+          <button value="cancel" type="submit" class="secondary-button">Cancel</button>
+          <button id="saveLoginButton" value="default" type="button">Continue</button>
+        </div>
+      </form>
+    </dialog>
 
     <script src="./app.js"></script>
   </body>
