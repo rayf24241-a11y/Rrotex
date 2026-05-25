@@ -89,6 +89,7 @@ const proPage = document.querySelector('#proPage');
 const closeProPageButton = document.querySelector('#closeProPageButton');
 const authPage = document.querySelector('#authPage');
 const closeAuthPageButton = document.querySelector('#closeAuthPageButton');
+const authBackButton = document.querySelector('#authBackButton');
 const authTitle = document.querySelector('#authTitle');
 const authStatus = document.querySelector('#authStatus');
 const authMethodStep = document.querySelector('#authMethodStep');
@@ -407,8 +408,16 @@ function showAuthStep(step) {
   authCodeStep.hidden = step !== 'code';
   profileFields.hidden = step !== 'profile';
 
+  // Back button: hidden on method step, shown on all others
+  if (authBackButton) {
+    authBackButton.hidden = step === 'method';
+    authBackButton.onclick = step === 'code'
+      ? () => showAuthStep('email')
+      : () => showAuthStep('method');
+  }
+
   if (step === 'method') {
-    authTitle.textContent = 'Log in first';
+    authTitle.textContent = 'Log in';
     authStatus.textContent = 'Choose how you want to sign in.';
   }
   if (step === 'email') {
@@ -920,11 +929,6 @@ async function sendMessage(text) {
   const clean = text.trim();
   if (!clean || !chat) return;
 
-  if (!currentUser) {
-    openAuthPage('account');
-    return;
-  }
-
   if (shouldAskPhone()) {
     openPhoneDialog();
     return;
@@ -974,7 +978,7 @@ async function sendMessage(text) {
   render();
 
   try {
-    const authToken = await currentUser.getIdToken();
+    const authToken = currentUser ? await currentUser.getIdToken() : '';
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

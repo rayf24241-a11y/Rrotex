@@ -38,14 +38,8 @@ module.exports = async function handler(request, response) {
   }
 
   const { authToken = '', model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {} } = request.body || {};
+  // Auth is optional — logged-in users get cloud sync, guests can still chat
   const authResult = await verifyFirebaseToken(authToken);
-  if (!authResult.ok) {
-    response.status(401).json({
-      error: 'login_required',
-      text: 'Log in with Google to use ROTEX credits and chat.',
-    });
-    return;
-  }
 
   const selected = MODELS[model] || MODELS['rod-1'];
   const cleanMessages = messages

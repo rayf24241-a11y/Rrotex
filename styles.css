@@ -706,6 +706,23 @@ h1 {
   animation: floatIn 180ms ease both;
 }
 
+.auth-back {
+  align-self: start;
+  padding: 6px 14px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.auth-back:hover {
+  color: var(--text);
+  border-color: rgba(76, 201, 240, 0.42);
+}
+
 .dialog-x {
   position: absolute;
   top: 12px;
