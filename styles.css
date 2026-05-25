@@ -293,6 +293,17 @@ button {
   line-height: 1.45;
 }
 
+.plan-status {
+  width: fit-content;
+  padding: 6px 9px;
+  color: var(--green) !important;
+  background: rgba(128, 237, 153, 0.08);
+  border: 1px solid rgba(128, 237, 153, 0.22);
+  border-radius: 8px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
 .chat-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;

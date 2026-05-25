@@ -16,12 +16,16 @@ module.exports = async function handler(request, response) {
   }
 
   const { uid = '', email = '' } = request.body || {};
+  if (!uid) {
+    response.status(401).json({ error: 'login_required', message: 'Log in with Google before upgrading.' });
+    return;
+  }
   const origin = request.headers.origin || 'https://www.rrotex.com';
   const body = new URLSearchParams({
     mode: 'subscription',
     'line_items[0][price]': priceId,
     'line_items[0][quantity]': '1',
-    success_url: `${origin}/?upgraded=1`,
+    success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: origin,
     client_reference_id: uid,
     'metadata[uid]': uid,

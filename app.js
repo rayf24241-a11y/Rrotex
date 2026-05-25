@@ -72,6 +72,7 @@ const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
 const signOutButton = document.querySelector('#signOutButton');
 const pcShareButton = document.querySelector('#pcShareButton');
+const planStatus = document.querySelector('#planStatus');
 const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
 const creditStatus = document.querySelector('#creditStatus');
@@ -142,6 +143,7 @@ async function initFirebase() {
       currentUser = user;
       if (user) {
         await loadCloudState();
+        await handleCheckoutReturn();
       }
       render();
     });
@@ -405,14 +407,17 @@ function renderAccount() {
   renderModeShell();
   if (currentUser) {
     googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
+    planStatus.textContent = state.pro ? 'Pro' : 'Normal';
     signOutButton.hidden = false;
     saveStatus.textContent = `Chats sync with Firebase for ${currentUser.email || 'this account'}.`;
   } else if (cloudReady) {
     googleButtonText.textContent = 'Log in or sign up';
+    planStatus.textContent = 'Normal';
     signOutButton.hidden = true;
     saveStatus.textContent = 'Sign in with Google to save chats with Firebase.';
   } else {
     googleButtonText.textContent = 'Firebase not configured';
+    planStatus.textContent = 'Normal';
     signOutButton.hidden = true;
     saveStatus.textContent = 'Add Firebase env vars in Vercel to enable Google login.';
   }
@@ -561,6 +566,10 @@ function deleteChat(chatId) {
 }
 
 async function continueCheckout() {
+  if (!currentUser) {
+    alert('Log in with Google before upgrading so ROTEX can apply Pro to your account.');
+    return;
+  }
   try {
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
@@ -578,6 +587,37 @@ async function continueCheckout() {
     alert(data.message || 'Stripe is not configured yet. Make a Stripe product/price and send me the Price ID.');
   } catch {
     alert('Stripe checkout is not ready yet. Make the Stripe product and send me the Price ID.');
+  }
+}
+
+async function handleCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session_id');
+  if (params.get('checkout') !== 'success' || !sessionId || !currentUser) return;
+
+  setCloudStatus('Verifying Pro');
+  try {
+    const response = await fetch('/api/verify-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, uid: currentUser.uid }),
+    });
+    const data = await response.json();
+    if (!data.verified) {
+      alert(data.message || 'Checkout could not be verified yet.');
+      return;
+    }
+    state.pro = true;
+    state.stripeSubscriptionId = data.subscriptionId || state.stripeSubscriptionId || '';
+    state.creditUsage = normalizeCreditUsage({}, true, creditPlans.pro.monthly);
+    state.credits = remainingMonthlyCredits(true, state.creditUsage);
+    persistState();
+    setCloudStatus('Pro active');
+    history.replaceState('', document.title, window.location.pathname);
+    closeProPage();
+    render();
+  } catch (error) {
+    alert('ROTEX could not verify Stripe yet. Try refreshing after Stripe redirects back.');
   }
 }
 
