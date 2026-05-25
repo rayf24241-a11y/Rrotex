@@ -159,6 +159,7 @@ const makeTeamupRoomButton = document.querySelector('#makeTeamupRoomButton');
 const storageKey = 'rotex:web:v2';
 const pendingActivationKey = 'rotex:pending-activation';
 const pendingAuthReasonKey = 'rotex:pending-auth-reason';
+const testingPlanResetKey = 'rotex:testing-plan-reset-v1';
 const creditPlans = {
   normal: { daily: 0.3, weekly: 0.9, monthly: 1.5 },
   limited: { daily: 0.1, weekly: 0.3, monthly: 0.5 },
@@ -184,6 +185,8 @@ let phoneVerifier = null;
 let phoneConfirmation = null;
 let authReason = localStorage.getItem(pendingAuthReasonKey) || 'account';
 let emailCodeToken = '';
+const testingResetEmails = new Set(['rayf24241@gmail.com']);
+const testingPlanResetVersion = 'stripe-test-2026-05-25';
 
 initFirebase();
 applyPendingActivation();
@@ -361,6 +364,7 @@ function applyComputerUsageReset() {
 function persistState() {
   applyCreditRefill();
   applyComputerUsageReset();
+  applyTestingPlanReset();
   localStorage.setItem(storageKey, JSON.stringify(state));
   if (!currentUser || !db) return;
 
@@ -385,14 +389,35 @@ async function loadCloudState() {
   const snap = await getDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'));
   if (snap.exists()) {
     state = normalizeState(snap.data());
+    const planWasReset = applyTestingPlanReset();
     localStorage.setItem(storageKey, JSON.stringify(state));
+    if (planWasReset) {
+      await setDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'), {
+        ...state,
+        updatedAt: serverTimestamp(),
+      });
+    }
   } else {
+    applyTestingPlanReset();
     await setDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'), {
       ...state,
       updatedAt: serverTimestamp(),
     });
   }
   setCloudStatus('Synced');
+}
+
+function applyTestingPlanReset() {
+  const email = currentUser?.email?.toLowerCase?.() || '';
+  if (!testingResetEmails.has(email)) return false;
+  const marker = localStorage.getItem(testingPlanResetKey);
+  if (marker === testingPlanResetVersion) return false;
+  localStorage.setItem(testingPlanResetKey, testingPlanResetVersion);
+  if (!state.pro) return false;
+  state.pro = false;
+  state.creditUsage = normalizeCreditUsage(state.creditUsage, false, state.credits, state);
+  state.credits = remainingMonthlyCredits(false, state.creditUsage);
+  return true;
 }
 
 function needsProfile() {
@@ -933,6 +958,9 @@ function renderAccount() {
   }
 
   if (!accountPage) return;
+  if (teamupEntry) {
+    teamupEntry.hidden = !state.pro;
+  }
   teamupCreditStatus.textContent = `${remainingTeamupTokens().toLocaleString()} weekly tokens`;
   const displayName = state.profile?.name || currentUser?.displayName || currentUser?.email || 'Not signed in';
   const nickname = state.profile?.nickname || displayName;
@@ -1056,7 +1084,6 @@ function createChat(personality = 'normal') {
 
 function createTeamupRoom() {
   if (!state.pro) {
-    teamupStatus.textContent = 'Teamup rooms are Pro only. Upgrade first.';
     startUpgrade();
     return;
   }
@@ -1565,11 +1592,13 @@ personalityOptions.forEach((button) => {
 });
 
 teamupEntry.addEventListener('click', () => {
+  if (!state.pro) {
+    startUpgrade();
+    return;
+  }
   closeComputerMode();
   populateTeamupSelectors();
-  teamupStatus.textContent = state.pro
-    ? `Pro teamup ready. ${remainingTeamupTokens().toLocaleString()} weekly tokens left.`
-    : 'Teamup rooms are Pro only.';
+  teamupStatus.textContent = `Pro teamup ready. ${remainingTeamupTokens().toLocaleString()} weekly tokens left.`;
   teamupDialog.showModal();
 });
 

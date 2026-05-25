@@ -1124,8 +1124,8 @@ body:has(.account-page:target) .app-shell {
 
 .acct-upgrade-block {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  min-height: clamp(520px, 64vh, 720px);
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  min-height: clamp(720px, 86vh, 940px);
   align-content: start;
   padding: clamp(22px, 4vw, 34px);
   background: rgba(19, 26, 36, 0.82);
@@ -1155,11 +1155,75 @@ body:has(.account-page:target) .app-shell {
 .acct-upgrade-block .upgrade-list {
   display: grid;
   gap: 16px;
-  margin: 0 0 32px;
+  margin: 0 0 24px;
   padding-left: 20px;
   color: var(--muted);
   font-size: 18px;
   line-height: 1.35;
+}
+
+.stripe-ai-card {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding: 16px;
+  background: rgba(8, 12, 18, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.stripe-ai-models {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stripe-ai-models span {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.stripe-ai-models strong {
+  color: var(--green);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.stripe-ai-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.stripe-ai-table > div {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(88px, 0.7fr) minmax(116px, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 38px;
+  padding: 9px 12px;
+  color: var(--muted);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+
+.stripe-ai-table > div:first-child {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.055);
+  border-top: 0;
+}
+
+.stripe-ai-table span:last-child,
+.stripe-ai-table strong:last-child {
+  color: var(--green);
 }
 
 .acct-buy-btn {
@@ -1429,7 +1493,17 @@ body:has(.account-page:target) .app-shell {
   }
 
   .acct-upgrade-block {
-    min-height: 520px;
+    min-height: 760px;
+  }
+
+  .stripe-ai-models,
+  .stripe-ai-table > div {
+    grid-template-columns: 1fr;
+  }
+
+  .stripe-ai-table > div {
+    gap: 4px;
+    align-items: start;
   }
 
   .composer {

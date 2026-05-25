@@ -15,7 +15,7 @@
         </a>
 
         <button class="new-chat" id="newChatButton" type="button">New chat</button>
-        <button class="teamup-entry" id="teamupEntry" type="button">
+        <button class="teamup-entry" id="teamupEntry" type="button" hidden>
           <span>Teamup rooms</span>
           <small id="teamupCreditStatus">10,000 weekly tokens</small>
         </button>
@@ -131,6 +131,26 @@
             <li>1 teamup and 2 spots</li>
             <li>One mini private teamup room</li>
           </ul>
+          <div class="stripe-ai-card">
+            <div class="stripe-ai-models">
+              <span><strong>Free</strong> Haiku 4.5</span>
+              <span><strong>Pro</strong> Haiku 4.5 + Tex 2.5</span>
+            </div>
+            <div class="stripe-ai-table" aria-label="Stripe AI feature comparison">
+              <div><strong>Stripe AI feature</strong><strong>Free</strong><strong>ROTEX Pro</strong></div>
+              <div><span>Billing questions</span><span>10/month</span><span>200/month</span></div>
+              <div><span>Plan/status checker</span><span>Basic</span><span>Full</span></div>
+              <div><span>Checkout help</span><span>Basic answers</span><span>Full help</span></div>
+              <div><span>Stripe code debugging</span><span>2/month</span><span>50/month</span></div>
+              <div><span>Webhook help</span><span>Locked</span><span>Included</span></div>
+              <div><span>Refund/cancel/change-price</span><span>Locked</span><span>Manual approval</span></div>
+              <div><span>Secret keys</span><span>No</span><span>No, env vars only</span></div>
+              <div><span>Stripe file edits</span><span>1/month</span><span>50/month</span></div>
+              <div><span>Products/prices</span><span>No</span><span>Drafts you approve</span></div>
+              <div><span>Fraud/card testing</span><span>Basic tips</span><span>Radar guidance</span></div>
+              <div><span>Tex 2.5 / Opus tasks</span><span>0</span><span>5-10/month</span></div>
+            </div>
+          </div>
           <button id="checkoutButton" type="button" class="acct-buy-btn">Buy Pro — $15 / month →</button>
         </div>
 
