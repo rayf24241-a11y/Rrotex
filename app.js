@@ -89,11 +89,16 @@ const authPage = document.querySelector('#authPage');
 const closeAuthPageButton = document.querySelector('#closeAuthPageButton');
 const authTitle = document.querySelector('#authTitle');
 const authStatus = document.querySelector('#authStatus');
+const authMethodStep = document.querySelector('#authMethodStep');
+const authEmailStep = document.querySelector('#authEmailStep');
+const authCodeStep = document.querySelector('#authCodeStep');
 const authGoogleButton = document.querySelector('#authGoogleButton');
+const chooseEmailButton = document.querySelector('#chooseEmailButton');
 const authEmailInput = document.querySelector('#authEmailInput');
 const authCodeInput = document.querySelector('#authCodeInput');
 const sendEmailCodeButton = document.querySelector('#sendEmailCodeButton');
 const emailLoginButton = document.querySelector('#emailLoginButton');
+const backToEmailButton = document.querySelector('#backToEmailButton');
 const profileFields = document.querySelector('#profileFields');
 const profileNameInput = document.querySelector('#profileNameInput');
 const profileNicknameInput = document.querySelector('#profileNicknameInput');
@@ -150,6 +155,7 @@ let saveTimer = null;
 let phoneVerifier = null;
 let phoneConfirmation = null;
 let authReason = localStorage.getItem(pendingAuthReasonKey) || 'account';
+let emailCodeToken = '';
 
 initFirebase();
 applyPendingActivation();
@@ -345,25 +351,11 @@ function openAuthPage(reason = 'account', forceProfile = false) {
   proPage.hidden = true;
   authPage.hidden = false;
   window.location.hash = 'login';
-  authTitle.textContent = currentUser ? 'Finish account' : 'Log in first';
-  authStatus.textContent = currentUser
-    ? 'Pick a unique ROTEX name and nickname.'
-    : 'Choose Google or email so ROTEX can save credits, chats, and Pro.';
-  profileFields.hidden = !forceProfile && !needsProfile();
-  if (!profileFields.hidden) {
-    profileNameInput.value = state.profile?.name || currentUser?.displayName || '';
-    profileNicknameInput.value = state.profile?.nickname || '';
-    phoneStatus.textContent = state.phoneVerified
-      ? 'Phone verified. Normal free credits are active.'
-      : 'Add a phone number to keep normal free credits, or skip for lower free credits.';
-    phoneCodeWrap.hidden = true;
-    confirmPhoneCodeButton.hidden = true;
-    sendPhoneCodeButton.hidden = state.phoneVerified;
-    skipPhoneButton.hidden = state.phoneVerified || state.phoneSkipped;
-    profileNameInput.focus();
-  } else {
-    authEmailInput.focus();
+  if (currentUser && (forceProfile || needsProfile())) {
+    showAuthStep('profile');
+    return;
   }
+  showAuthStep('method');
 }
 
 function closeAuthPage() {
@@ -388,14 +380,69 @@ async function signInWithGoogleFromAuth() {
   }
 }
 
-function sendEmailCodeNotice() {
+function showAuthStep(step) {
+  authMethodStep.hidden = step !== 'method';
+  authEmailStep.hidden = step !== 'email';
+  authCodeStep.hidden = step !== 'code';
+  profileFields.hidden = step !== 'profile';
+
+  if (step === 'method') {
+    authTitle.textContent = 'Log in first';
+    authStatus.textContent = 'Choose how you want to sign in.';
+  }
+  if (step === 'email') {
+    authTitle.textContent = 'Email login';
+    authStatus.textContent = 'Enter your email and ROTEX will send a code.';
+    authEmailInput.focus();
+  }
+  if (step === 'code') {
+    authTitle.textContent = 'Check email';
+    authStatus.textContent = 'Type the code ROTEX sent you.';
+    authCodeInput.focus();
+  }
+  if (step === 'profile') {
+    authTitle.textContent = 'Finish account';
+    authStatus.textContent = 'Pick a unique ROTEX name and nickname.';
+    profileNameInput.value = state.profile?.name || currentUser?.displayName || '';
+    profileNicknameInput.value = state.profile?.nickname || '';
+    phoneStatus.textContent = state.phoneVerified
+      ? 'Phone verified. Normal free credits are active.'
+      : 'Add a phone number to keep normal free credits, or skip for lower free credits.';
+    phoneCodeWrap.hidden = true;
+    confirmPhoneCodeButton.hidden = true;
+    sendPhoneCodeButton.hidden = state.phoneVerified;
+    skipPhoneButton.hidden = state.phoneVerified || state.phoneSkipped;
+    profileNameInput.focus();
+  }
+}
+
+async function sendEmailCodeNotice() {
   const email = authEmailInput.value.trim();
   if (!email.includes('@')) {
     authStatus.textContent = 'Enter your email first.';
     return;
   }
-  authStatus.textContent = 'Use a private 6+ character code. New emails create an account; existing emails log in with the same code.';
-  authCodeInput.focus();
+  try {
+    sendEmailCodeButton.disabled = true;
+    authStatus.textContent = 'Sending code...';
+    const response = await fetch('/api/send-email-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    if (!data.ok) {
+      authStatus.textContent = data.message || 'ROTEX could not send that code.';
+      return;
+    }
+    emailCodeToken = data.token;
+    authCodeInput.value = '';
+    showAuthStep('code');
+  } catch {
+    authStatus.textContent = 'Email codes are not ready yet.';
+  } finally {
+    sendEmailCodeButton.disabled = false;
+  }
 }
 
 async function continueEmailLogin() {
@@ -409,14 +456,30 @@ async function continueEmailLogin() {
     authStatus.textContent = 'Enter a real email.';
     return;
   }
+  if (!emailCodeToken) {
+    authStatus.textContent = 'Send a code first.';
+    showAuthStep('email');
+    return;
+  }
   if (code.length < 6) {
-    authStatus.textContent = 'Your email code needs at least 6 characters.';
+    authStatus.textContent = 'Type the 6 digit email code.';
     return;
   }
   try {
     emailLoginButton.disabled = true;
-    authStatus.textContent = 'Checking email account...';
-    await signInWithEmailAndPassword(auth, email, code);
+    authStatus.textContent = 'Verifying code...';
+    const verifyResponse = await fetch('/api/verify-email-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, token: emailCodeToken }),
+    });
+    const verified = await verifyResponse.json();
+    if (!verified.ok) {
+      authStatus.textContent = verified.message || 'That code is wrong or expired.';
+      return;
+    }
+    authStatus.textContent = 'Logging in...';
+    await signInWithEmailAndPassword(auth, email, verified.sessionPassword);
   } catch (error) {
     if (error?.code !== 'auth/invalid-credential' && error?.code !== 'auth/user-not-found') {
       authStatus.textContent = firebaseAuthMessage(error, 'Email login failed.');
@@ -425,9 +488,19 @@ async function continueEmailLogin() {
     }
     try {
       authStatus.textContent = 'Creating email account...';
-      await createUserWithEmailAndPassword(auth, email, code);
+      const verifyResponse = await fetch('/api/verify-email-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code, token: emailCodeToken }),
+      });
+      const verified = await verifyResponse.json();
+      if (!verified.ok) {
+        authStatus.textContent = verified.message || 'That code is wrong or expired.';
+        return;
+      }
+      await createUserWithEmailAndPassword(auth, email, verified.sessionPassword);
     } catch (createError) {
-      authStatus.textContent = firebaseAuthMessage(createError, 'Email signup failed. If this email exists, use its original code.');
+      authStatus.textContent = firebaseAuthMessage(createError, 'Email signup failed.');
     }
   } finally {
     emailLoginButton.disabled = false;
@@ -1390,9 +1463,18 @@ composer.addEventListener('submit', (event) => {
 });
 
 messageInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter') {
     event.preventDefault();
-    composer.requestSubmit();
+    if (event.shiftKey) {
+      const start = messageInput.selectionStart;
+      const end = messageInput.selectionEnd;
+      messageInput.value = `${messageInput.value.slice(0, start)}\n${messageInput.value.slice(end)}`;
+      messageInput.selectionStart = start + 1;
+      messageInput.selectionEnd = start + 1;
+      return;
+    }
+    sendMessage(messageInput.value);
+    messageInput.value = '';
   }
 });
 
@@ -1406,8 +1488,10 @@ signOutButton.addEventListener('click', async () => {
 
 closeAuthPageButton.addEventListener('click', closeAuthPage);
 authGoogleButton.addEventListener('click', signInWithGoogleFromAuth);
+chooseEmailButton.addEventListener('click', () => showAuthStep('email'));
 sendEmailCodeButton.addEventListener('click', sendEmailCodeNotice);
 emailLoginButton.addEventListener('click', continueEmailLogin);
+backToEmailButton.addEventListener('click', () => showAuthStep('email'));
 saveProfileButton.addEventListener('click', saveProfile);
 sendPhoneCodeButton.addEventListener('click', sendPhoneCode);
 confirmPhoneCodeButton.addEventListener('click', confirmPhoneCode);

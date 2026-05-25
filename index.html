@@ -120,21 +120,29 @@
         <h2 id="authTitle">Log in first</h2>
         <p class="upgrade-copy" id="authStatus">Choose Google or email so ROTEX can save credits, chats, and Pro.</p>
 
-        <button class="auth-google" id="authGoogleButton" type="button">
-          <span class="google-mark">G</span>
-          <span>Log in with Google</span>
-        </button>
-
-        <div class="auth-divider">or</div>
-
-        <div class="auth-fields">
-          <input class="auth-input" id="authEmailInput" type="email" autocomplete="email" placeholder="Email" />
-          <input class="auth-input" id="authCodeInput" type="password" autocomplete="one-time-code" placeholder="Email code" />
-          <button class="secondary-action" id="sendEmailCodeButton" type="button">Send code</button>
-          <button class="checkout-action" id="emailLoginButton" type="button">Continue with email</button>
+        <div class="auth-step" id="authMethodStep">
+          <button class="auth-google" id="authGoogleButton" type="button">
+            <span class="google-mark">G</span>
+            <span>Log in with Google</span>
+          </button>
+          <button class="auth-google" id="chooseEmailButton" type="button">
+            <span class="google-mark">@</span>
+            <span>Log in with email</span>
+          </button>
         </div>
 
-        <div class="profile-fields" id="profileFields" hidden>
+        <div class="auth-step" id="authEmailStep" hidden>
+          <input class="auth-input" id="authEmailInput" type="email" autocomplete="email" placeholder="Email" />
+          <button class="checkout-action" id="sendEmailCodeButton" type="button">Send code</button>
+        </div>
+
+        <div class="auth-step" id="authCodeStep" hidden>
+          <input class="auth-input" id="authCodeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="Email code" />
+          <button class="checkout-action" id="emailLoginButton" type="button">Continue</button>
+          <button class="secondary-action" id="backToEmailButton" type="button">Use another email</button>
+        </div>
+
+        <div class="auth-step profile-fields" id="profileFields" hidden>
           <input class="auth-input" id="profileNameInput" maxlength="24" autocomplete="name" placeholder="Pick your ROTEX name" />
           <input class="auth-input" id="profileNicknameInput" maxlength="24" placeholder="Pick a nickname" />
           <p class="upgrade-copy" id="phoneStatus">Add a phone number to keep normal free credits, or skip for lower free credits.</p>

@@ -886,10 +886,15 @@ h1 {
   background: var(--line);
 }
 
-.auth-fields,
+.auth-step,
 .profile-fields {
   display: grid;
   gap: 10px;
+}
+
+.auth-step[hidden],
+.profile-fields[hidden] {
+  display: none;
 }
 
 .auth-input {
