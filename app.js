@@ -79,10 +79,13 @@ const modelMenu = document.querySelector('#modelMenu');
 const selectedModelName = document.querySelector('#selectedModelName');
 const selectedModelShort = document.querySelector('#selectedModelShort');
 const computerToggle = document.querySelector('#computerToggle');
+const upgradeDialog = document.querySelector('#upgradeDialog');
+const checkoutButton = document.querySelector('#checkoutButton');
 
 const storageKey = 'rotex:web:v2';
 const freeCreditAmount = 0.3;
 const refillEveryMs = 3 * 24 * 60 * 60 * 1000;
+const freeComputerMessagesPerDay = 3;
 let state = loadState();
 let auth = null;
 let db = null;
@@ -140,11 +143,21 @@ function normalizeState(value) {
   return {
     activeModel: value.activeModel || 'rod-1',
     computerMode: Boolean(value.computerMode),
+    pro: Boolean(value.pro),
+    computerUsage: normalizeComputerUsage(value.computerUsage),
     activeChatId: value.activeChatId || chats[0].id,
     credits: typeof value.credits === 'number' ? Math.max(value.credits, value.credits <= 0.003 ? freeCreditAmount : value.credits) : freeCreditAmount,
     nextRefillAt: typeof value.nextRefillAt === 'number' ? value.nextRefillAt : Date.now() + refillEveryMs,
     chats,
   };
+}
+
+function normalizeComputerUsage(value) {
+  const today = dayKey();
+  if (!value || value.day !== today) {
+    return { day: today, count: 0 };
+  }
+  return { day: today, count: Number(value.count) || 0 };
 }
 
 function applyCreditRefill() {
@@ -153,8 +166,13 @@ function applyCreditRefill() {
   state.nextRefillAt = Date.now() + refillEveryMs;
 }
 
+function applyComputerUsageReset() {
+  state.computerUsage = normalizeComputerUsage(state.computerUsage);
+}
+
 function persistState() {
   applyCreditRefill();
+  applyComputerUsageReset();
   localStorage.setItem(storageKey, JSON.stringify(state));
   if (!currentUser || !db) return;
 
@@ -202,6 +220,11 @@ function activeCost() {
   return state.computerMode ? (model.computerCost ?? model.cost) : model.cost;
 }
 
+function computerMessagesLeft() {
+  applyComputerUsageReset();
+  return Math.max(0, freeComputerMessagesPerDay - state.computerUsage.count);
+}
+
 function ensureComputerModel() {
   if (!state.computerMode || activeModel().computerCost !== null) return;
   state.activeModel = 'rod-thinking';
@@ -216,6 +239,9 @@ function renderModelMenu() {
   const model = activeModel();
   selectedModelName.textContent = model.name;
   selectedModelShort.textContent = state.computerMode ? 'Computer mode' : model.short;
+  if (state.computerMode && !state.pro) {
+    selectedModelShort.textContent = `${computerMessagesLeft()} free today`;
+  }
   modelMenu.innerHTML = '';
 
   models.forEach((item) => {
@@ -288,6 +314,7 @@ function renderMessages() {
 
 function renderAccount() {
   applyCreditRefill();
+  applyComputerUsageReset();
   creditStatus.textContent = `${formatMoney(state.credits)} credits`;
   computerToggle.classList.toggle('active', state.computerMode);
   computerToggle.setAttribute('aria-pressed', String(state.computerMode));
@@ -308,6 +335,7 @@ function renderAccount() {
 
 function render() {
   applyCreditRefill();
+  applyComputerUsageReset();
   renderModelMenu();
   renderChats();
   renderMessages();
@@ -334,9 +362,21 @@ async function sendMessage(text) {
   if (!clean || !chat) return;
 
   applyCreditRefill();
+  applyComputerUsageReset();
   ensureComputerModel();
   const model = activeModel();
   const cost = activeCost();
+  if (state.computerMode && !state.pro && computerMessagesLeft() <= 0) {
+    chat.messages.push({
+      role: 'assistant',
+      model: 'ROTEX Pro',
+      text: 'Free computer mode limit reached for today. Upgrade?',
+      action: 'upgrade',
+    });
+    persistState();
+    render();
+    return;
+  }
   if (state.credits + 0.0000001 < cost) {
     chat.messages.push({
       role: 'assistant',
@@ -350,6 +390,9 @@ async function sendMessage(text) {
   }
 
   state.credits = Math.max(0, state.credits - cost);
+  if (state.computerMode && !state.pro) {
+    state.computerUsage.count += 1;
+  }
   chat.messages.push({ role: 'user', text: clean, model: 'You' });
   if (chat.title === 'New ROTEX chat') {
     chat.title = clean.length > 32 ? `${clean.slice(0, 32)}...` : clean;
@@ -382,6 +425,12 @@ async function sendMessage(text) {
 }
 
 async function startUpgrade() {
+  if (!upgradeDialog.open) {
+    upgradeDialog.showModal();
+  }
+}
+
+async function continueCheckout() {
   try {
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
@@ -404,6 +453,10 @@ async function startUpgrade() {
 
 function formatMoney(value) {
   return `$${Number(value).toFixed(3)}`;
+}
+
+function dayKey() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function escapeHtml(value) {
@@ -469,6 +522,7 @@ signOutButton.addEventListener('click', async () => {
 });
 
 upgradeButton.addEventListener('click', startUpgrade);
+checkoutButton.addEventListener('click', continueCheckout);
 
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 document.addEventListener('keydown', (event) => {
