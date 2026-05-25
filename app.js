@@ -910,7 +910,9 @@ function renderAccount() {
   acctPlanBadge.classList.toggle('pro', state.pro);
   acctCreditDay.textContent = formatMoney(remainingDailyCredits());
   acctCreditMonth.textContent = formatMoney(remainingMonthlyCredits());
-  acctUpgradeBlock.hidden = Boolean(state.pro);
+  acctUpgradeBlock.hidden = false;
+  checkoutButton.disabled = Boolean(state.pro);
+  checkoutButton.textContent = state.pro ? 'Already have plan' : 'Buy Pro - $15 / month';
   acctProActive.hidden = !state.pro;
   accountSignOutBtn.hidden = !currentUser;
 }
@@ -1082,6 +1084,7 @@ function deleteChat(chatId) {
 }
 
 async function continueCheckout() {
+  if (state.pro) return;
   if (!currentUser) {
     openAuthPage('upgrade');
     return;
