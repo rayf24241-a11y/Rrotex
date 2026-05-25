@@ -39,7 +39,7 @@ function Set-GoDaddyRecord {
   )
 
   $uri = "https://api.godaddy.com/v1/domains/$domain/records/$Type/$Name"
-  $body = $Records | ConvertTo-Json -Depth 5
+  $body = ConvertTo-Json -InputObject @($Records) -Depth 5
   Invoke-RestMethod -Method Put -Uri $uri -Headers $headers -Body $body | Out-Null
   Write-Host "Set $Type $Name"
 }
