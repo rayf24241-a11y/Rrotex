@@ -5,29 +5,45 @@ import sys
 import tkinter as tk
 import webbrowser
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 
 APP_URL = "https://www.rrotex.com"
 STATE_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "ROTEX"
 STATE_PATH = STATE_DIR / "pc_state.json"
 INSTALL_PATH = STATE_DIR / "ROTEX-PC-App.exe"
+HOME = Path.home()
+
+BG = "#06070b"
+SIDEBAR = "#0d1118"
+PANEL = "#131a24"
+PANEL_2 = "#1b2431"
+LINE = "#2c3748"
+TEXT = "#f5f8fc"
+MUTED = "#9cadc1"
+QUIET = "#647386"
+BLUE = "#4cc9f0"
+GREEN = "#80ed99"
+AMBER = "#ffd166"
+PINK = "#ff6b9d"
 
 
 class RotexPcApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("ROTEX PC")
-        self.geometry("940x620")
-        self.minsize(820, 560)
-        self.configure(bg="#06070b")
+        self.geometry("1120x720")
+        self.minsize(980, 640)
+        self.configure(bg=BG)
         self.state_data = self.load_state()
-        self.main = tk.Frame(self, bg="#06070b")
+        self.pending_file = None
+        self.selected_path = None
+        self.main = tk.Frame(self, bg=BG)
         self.main.pack(fill="both", expand=True)
         if not self.state_data.get("installed"):
             self.show_install()
         else:
-            self.show_app()
+            self.show_workspace()
 
     def load_state(self):
         if STATE_PATH.exists():
@@ -38,10 +54,9 @@ class RotexPcApp(tk.Tk):
         return {
             "installed": False,
             "logged_in": False,
-            "email": "",
-            "connected": False,
-            "code": "",
-            "folder": "",
+            "github_connected": False,
+            "root": str(HOME),
+            "messages": [],
         }
 
     def save_state(self):
@@ -57,28 +72,28 @@ class RotexPcApp(tk.Tk):
         self.main.columnconfigure(0, weight=1)
         self.main.rowconfigure(0, weight=1)
 
-        card = tk.Frame(self.main, bg="#0d1118", padx=34, pady=32)
+        card = tk.Frame(self.main, bg=SIDEBAR, padx=34, pady=32, highlightbackground=LINE, highlightthickness=1)
         card.grid(row=0, column=0, sticky="", padx=28, pady=28)
 
-        tk.Label(card, text="ROTEX PC", bg="#0d1118", fg="#f5f8fc", font=("Segoe UI", 40, "bold")).pack(anchor="w")
+        tk.Label(card, text="ROTEX PC", bg=SIDEBAR, fg=TEXT, font=("Segoe UI", 40, "bold")).pack(anchor="w")
         tk.Label(
             card,
-            text="Setting up your computer workspace.",
-            bg="#0d1118",
-            fg="#9cadc1",
+            text="Installing the local computer workspace.",
+            bg=SIDEBAR,
+            fg=MUTED,
             font=("Segoe UI", 13),
         ).pack(anchor="w", pady=(8, 26))
 
-        self.install_status = tk.Label(card, text="Ready", bg="#0d1118", fg="#80ed99", font=("Segoe UI", 14, "bold"))
+        self.install_status = tk.Label(card, text="Ready", bg=SIDEBAR, fg=GREEN, font=("Segoe UI", 14, "bold"))
         self.install_status.pack(anchor="w")
 
-        self.install_steps = tk.Text(card, width=62, height=9, bg="#131a24", fg="#f5f8fc", relief="flat", padx=12, pady=12)
+        self.install_steps = tk.Text(card, width=68, height=10, bg=PANEL, fg=TEXT, relief="flat", padx=12, pady=12)
         self.install_steps.pack(fill="x", pady=(14, 18))
         self.install_steps.configure(state="disabled")
 
-        self.progress = tk.Canvas(card, width=520, height=10, bg="#1b2431", highlightthickness=0)
+        self.progress = tk.Canvas(card, width=560, height=10, bg=PANEL_2, highlightthickness=0)
         self.progress.pack(fill="x")
-        self.progress_bar = self.progress.create_rectangle(0, 0, 0, 10, fill="#80ed99", outline="")
+        self.progress_bar = self.progress.create_rectangle(0, 0, 0, 10, fill=GREEN, outline="")
 
         self.after(450, lambda: self.run_install_step(0))
 
@@ -91,14 +106,14 @@ class RotexPcApp(tk.Tk):
     def run_install_step(self, index):
         steps = [
             ("Installing ROTEX PC...", self.copy_to_appdata),
-            ("Moving app to path...", self.copy_to_appdata),
-            ("Making shortcut...", self.make_shortcut),
-            ("Preparing secure workspace...", self.prepare_workspace),
+            ("Moving app to local path...", self.copy_to_appdata),
+            ("Making desktop shortcut...", self.make_shortcut),
+            ("Preparing local file workspace...", self.prepare_workspace),
             ("Finishing setup...", self.finish_install),
         ]
         if index >= len(steps):
             self.install_status.config(text="Done")
-            self.after(650, self.show_app)
+            self.after(650, self.show_workspace)
             return
         label, action = steps[index]
         self.install_status.config(text=label)
@@ -107,7 +122,7 @@ class RotexPcApp(tk.Tk):
             action()
         except Exception as error:
             self.install_log(f"Skipped: {error}")
-        width = 520 * ((index + 1) / len(steps))
+        width = 560 * ((index + 1) / len(steps))
         self.progress.coords(self.progress_bar, 0, 0, width, 10)
         self.after(650, lambda: self.run_install_step(index + 1))
 
@@ -118,7 +133,7 @@ class RotexPcApp(tk.Tk):
             shutil.copy2(current, INSTALL_PATH)
 
     def make_shortcut(self):
-        desktop = Path.home() / "Desktop"
+        desktop = HOME / "Desktop"
         shortcut = desktop / "ROTEX PC.url"
         target = INSTALL_PATH if INSTALL_PATH.exists() else Path(sys.executable)
         shortcut.write_text(f"[InternetShortcut]\nURL=file:///{target.as_posix()}\n", encoding="utf-8")
@@ -130,115 +145,212 @@ class RotexPcApp(tk.Tk):
         self.state_data["installed"] = True
         self.save_state()
 
-    def show_app(self):
+    def show_workspace(self):
         self.clear()
         self.main.columnconfigure(0, weight=0)
         self.main.columnconfigure(1, weight=1)
         self.main.rowconfigure(0, weight=1)
 
-        sidebar = tk.Frame(self.main, bg="#0d1118", padx=20, pady=20)
+        sidebar = tk.Frame(self.main, bg=SIDEBAR, padx=18, pady=18, width=286)
         sidebar.grid(row=0, column=0, sticky="ns")
-        tk.Label(sidebar, text="R", bg="#4cc9f0", fg="#06070b", width=3, height=1, font=("Segoe UI", 20, "bold")).pack(anchor="w")
-        tk.Label(sidebar, text="ROTEX", bg="#0d1118", fg="#f5f8fc", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(14, 4))
-        tk.Label(sidebar, text="PC workspace", bg="#0d1118", fg="#647386", font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        self.login_button = self.side_button(sidebar, "Log into Google", self.open_google_login)
-        self.login_button.pack(fill="x", pady=(28, 8))
-        self.return_button = self.side_button(sidebar, "I am logged in", self.mark_logged_in)
-        self.return_button.pack(fill="x", pady=8)
-        self.disable_button = self.side_button(sidebar, "Disable PC", self.disable_pc)
-        self.disable_button.pack(fill="x", pady=8)
+        sidebar.grid_propagate(False)
 
-        body = tk.Frame(self.main, bg="#06070b", padx=28, pady=24)
+        brand = tk.Frame(sidebar, bg=SIDEBAR)
+        brand.pack(anchor="w", fill="x")
+        tk.Label(brand, text="R", bg=BLUE, fg=BG, width=3, font=("Segoe UI", 18, "bold")).pack(side="left")
+        tk.Label(brand, text=" ROTEX", bg=SIDEBAR, fg=TEXT, font=("Segoe UI", 17, "bold")).pack(side="left")
+
+        self.side_button(sidebar, "New local chat", self.new_chat, GREEN).pack(fill="x", pady=(28, 10))
+        self.side_button(sidebar, "Open website", self.open_website, BLUE).pack(fill="x", pady=6)
+        self.side_button(sidebar, "Bot browser window", self.open_bot_browser, AMBER).pack(fill="x", pady=6)
+        self.side_button(sidebar, "Connect GitHub", self.connect_github, PANEL).pack(fill="x", pady=6)
+        self.side_button(sidebar, "Choose file root", self.choose_root, PANEL).pack(fill="x", pady=6)
+
+        tk.Label(sidebar, text="LOCAL ACCESS", bg=SIDEBAR, fg=QUIET, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(28, 8))
+        self.safety_text = tk.Label(
+            sidebar,
+            text="Installed on this PC. ROTEX can browse local files here, but file changes should be approved before they happen.",
+            bg=SIDEBAR,
+            fg=MUTED,
+            wraplength=232,
+            justify="left",
+        )
+        self.safety_text.pack(anchor="w")
+        self.status_label = tk.Label(sidebar, text="", bg=SIDEBAR, fg=GREEN, wraplength=232, justify="left")
+        self.status_label.pack(anchor="w", pady=(18, 0))
+
+        body = tk.Frame(self.main, bg=BG, padx=24, pady=20)
         body.grid(row=0, column=1, sticky="nsew")
         body.columnconfigure(0, weight=1)
         body.columnconfigure(1, weight=1)
         body.rowconfigure(2, weight=1)
 
-        tk.Label(body, text="Computer mode", bg="#06070b", fg="#80ed99", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
-        tk.Label(body, text="ROTEX PC", bg="#06070b", fg="#f5f8fc", font=("Segoe UI", 42, "bold")).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 20))
+        tk.Label(body, text="ROTEX computer", bg=BG, fg=GREEN, font=("Segoe UI", 10, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+        tk.Label(body, text="Computer mode", bg=BG, fg=TEXT, font=("Segoe UI", 42, "bold")).grid(row=1, column=0, sticky="w")
+        tk.Label(body, text="Local PC workspace. No Drive/OneDrive pairing needed; GitHub is optional.", bg=BG, fg=MUTED, font=("Segoe UI", 12)).grid(row=1, column=1, sticky="e")
 
-        self.account_card = self.card(body, "Account", "Log into Google first so this PC can match your ROTEX account.")
-        self.account_card.grid(row=2, column=0, sticky="nsew", padx=(0, 10), pady=(0, 12))
-        self.account_status = self.value_label(self.account_card)
-        self.account_status.pack(anchor="w", fill="x", pady=(12, 0))
+        file_card = self.card(body, "Files on this PC", "Browse from the selected root. ROTEX can inspect files you open here.")
+        file_card.grid(row=2, column=0, sticky="nsew", padx=(0, 10), pady=(16, 0))
+        file_card.rowconfigure(2, weight=1)
+        file_card.columnconfigure(0, weight=1)
+        self.root_label = tk.Label(file_card, text="", bg=PANEL_2, fg=TEXT, padx=10, pady=8, anchor="w")
+        self.root_label.grid(row=0, column=0, sticky="ew", pady=(10, 10))
+        self.file_tree = ttk.Treeview(file_card, columns=("path",), show="tree")
+        self.file_tree.grid(row=2, column=0, sticky="nsew")
+        self.file_tree.bind("<<TreeviewOpen>>", self.on_tree_open)
+        self.file_tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        self.action_button(file_card, "Read selected file", self.read_selected_file, BLUE).grid(row=3, column=0, sticky="w", pady=(12, 0))
 
-        self.pair_card = self.card(body, "Pair with phone", "Make a 3 digit code on your phone, then type it here.")
-        self.pair_card.grid(row=2, column=1, sticky="nsew", padx=(10, 0), pady=(0, 12))
-        self.code_entry = tk.Entry(self.pair_card, font=("Segoe UI", 30, "bold"), justify="center", width=6, bg="#1b2431", fg="#f5f8fc", insertbackground="#f5f8fc", relief="flat")
-        self.code_entry.pack(anchor="w", ipady=8, pady=(14, 10))
-        self.action_button(self.pair_card, "Connect PC", self.connect_pc, "#80ed99").pack(anchor="w")
+        chat_card = self.card(body, "ROTEX local chat", "The bot can use the file preview and browser window for PC work.")
+        chat_card.grid(row=2, column=1, sticky="nsew", padx=(10, 0), pady=(16, 0))
+        chat_card.rowconfigure(1, weight=1)
+        chat_card.columnconfigure(0, weight=1)
+        self.chat_log = scrolledtext.ScrolledText(chat_card, bg="#0b0f16", fg=TEXT, insertbackground=TEXT, relief="flat", padx=12, pady=12, wrap="word")
+        self.chat_log.grid(row=1, column=0, sticky="nsew", pady=(10, 10))
+        composer = tk.Frame(chat_card, bg=PANEL)
+        composer.grid(row=2, column=0, sticky="ew")
+        composer.columnconfigure(0, weight=1)
+        self.chat_input = tk.Entry(composer, bg=PANEL_2, fg=TEXT, insertbackground=TEXT, relief="flat", font=("Segoe UI", 11))
+        self.chat_input.grid(row=0, column=0, sticky="ew", ipady=10, padx=(0, 8))
+        self.chat_input.bind("<Return>", lambda _event: self.send_local_message())
+        self.action_button(composer, "Send", self.send_local_message, GREEN).grid(row=0, column=1)
 
-        self.folder_card = self.card(body, "Approved folder", "Choose a folder ROTEX can use after you approve file actions.")
-        self.folder_card.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
-        self.folder_status = self.value_label(self.folder_card)
-        self.folder_status.pack(anchor="w", fill="x", pady=(12, 12))
-        self.action_button(self.folder_card, "Choose folder", self.choose_folder, "#4cc9f0").pack(anchor="w")
-
-        self.footer = tk.Label(body, text="", bg="#06070b", fg="#647386", font=("Segoe UI", 10))
-        self.footer.grid(row=4, column=0, columnspan=2, sticky="w", pady=(18, 0))
         self.render()
 
     def card(self, parent, title, subtitle):
-        frame = tk.Frame(parent, bg="#131a24", padx=20, pady=18)
-        tk.Label(frame, text=title, bg="#131a24", fg="#f5f8fc", font=("Segoe UI", 20, "bold")).pack(anchor="w")
-        tk.Label(frame, text=subtitle, bg="#131a24", fg="#9cadc1", wraplength=360, justify="left").pack(anchor="w", pady=(6, 0))
+        frame = tk.Frame(parent, bg=PANEL, padx=18, pady=16, highlightbackground=LINE, highlightthickness=1)
+        tk.Label(frame, text=title, bg=PANEL, fg=TEXT, font=("Segoe UI", 18, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(frame, text=subtitle, bg=PANEL, fg=MUTED, justify="left", wraplength=420).grid(row=1, column=0, sticky="w", pady=(4, 0))
         return frame
 
-    def value_label(self, parent):
-        return tk.Label(parent, text="", bg="#1b2431", fg="#f5f8fc", wraplength=720, justify="left", padx=12, pady=12)
-
-    def side_button(self, parent, text, command):
-        return tk.Button(parent, text=text, command=command, bg="#131a24", fg="#f5f8fc", activebackground="#1b2431", activeforeground="#f5f8fc", relief="flat", padx=14, pady=11, font=("Segoe UI", 10, "bold"))
+    def side_button(self, parent, text, command, color):
+        fg = BG if color in (GREEN, BLUE, AMBER) else TEXT
+        return tk.Button(parent, text=text, command=command, bg=color, fg=fg, activebackground=color, activeforeground=fg, relief="flat", padx=14, pady=12, font=("Segoe UI", 10, "bold"))
 
     def action_button(self, parent, text, command, color):
-        return tk.Button(parent, text=text, command=command, bg=color, fg="#06070b", activebackground=color, relief="flat", padx=16, pady=11, font=("Segoe UI", 11, "bold"))
+        return tk.Button(parent, text=text, command=command, bg=color, fg=BG, activebackground=color, activeforeground=BG, relief="flat", padx=14, pady=10, font=("Segoe UI", 10, "bold"))
 
     def render(self):
-        if not hasattr(self, "account_status"):
+        root = Path(self.state_data.get("root") or HOME)
+        self.root_label.config(text=str(root))
+        self.status_label.config(
+            text="GitHub connected" if self.state_data.get("github_connected") else "GitHub optional. Local PC files are ready."
+        )
+        self.refresh_tree()
+        self.render_messages()
+
+    def refresh_tree(self):
+        root = Path(self.state_data.get("root") or HOME)
+        self.file_tree.delete(*self.file_tree.get_children())
+        root_id = self.file_tree.insert("", "end", text=root.name or str(root), values=(str(root),), open=True)
+        self.add_children(root_id, root)
+
+    def add_children(self, node_id, path):
+        try:
+            children = sorted(path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))[:80]
+        except Exception:
             return
-        logged_in = self.state_data.get("logged_in")
-        connected = self.state_data.get("connected")
-        folder = self.state_data.get("folder") or "No folder selected."
-        self.account_status.config(text="Google connected" if logged_in else "Not logged in")
-        self.folder_status.config(text=folder)
-        self.footer.config(text="Connected. Keep this app open while using ROTEX Computer mode." if connected else "Not connected yet.")
+        for child in children:
+            label = child.name + ("\\" if child.is_dir() else "")
+            child_id = self.file_tree.insert(node_id, "end", text=label, values=(str(child),))
+            if child.is_dir():
+                self.file_tree.insert(child_id, "end", text="Loading...", values=("",))
 
-    def open_google_login(self):
-        webbrowser.open(f"{APP_URL}/?pc_login=1")
-        messagebox.showinfo("ROTEX PC", "Log into Google in the browser. When you are done, come back and press 'I am logged in'.")
+    def on_tree_open(self, _event):
+        node_id = self.file_tree.focus()
+        path = self.node_path(node_id)
+        if not path or not path.is_dir():
+            return
+        children = self.file_tree.get_children(node_id)
+        if len(children) == 1 and not self.file_tree.item(children[0], "values")[0]:
+            self.file_tree.delete(children[0])
+            self.add_children(node_id, path)
 
-    def mark_logged_in(self):
-        self.state_data["logged_in"] = True
+    def on_tree_select(self, _event):
+        node_id = self.file_tree.focus()
+        self.selected_path = self.node_path(node_id)
+
+    def node_path(self, node_id):
+        values = self.file_tree.item(node_id, "values")
+        if not values or not values[0]:
+            return None
+        return Path(values[0])
+
+    def read_selected_file(self):
+        path = self.selected_path
+        if not path:
+            messagebox.showinfo("ROTEX PC", "Select a file first.")
+            return
+        if path.is_dir():
+            messagebox.showinfo("ROTEX PC", "Select a file, not a folder.")
+            return
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")[:12000]
+        except Exception as error:
+            messagebox.showerror("ROTEX PC", f"Could not read file: {error}")
+            return
+        self.pending_file = {"path": str(path), "text": text}
+        self.add_message("system", f"Loaded file: {path}\n\n{text[:2200]}")
+
+    def render_messages(self):
+        self.chat_log.configure(state="normal")
+        self.chat_log.delete("1.0", "end")
+        messages = self.state_data.get("messages") or []
+        if not messages:
+            messages = [
+                {"role": "assistant", "text": "ROTEX PC is ready. I can inspect files you open here, launch a browser window, and help with local computer work."}
+            ]
+        for message in messages[-40:]:
+            prefix = "You" if message["role"] == "user" else "ROTEX"
+            self.chat_log.insert("end", f"{prefix}: {message['text']}\n\n")
+        self.chat_log.configure(state="disabled")
+        self.chat_log.see("end")
+
+    def add_message(self, role, text):
+        self.state_data.setdefault("messages", []).append({"role": role, "text": text})
         self.save_state()
-        self.render()
+        self.render_messages()
 
-    def connect_pc(self):
-        if not self.state_data.get("logged_in"):
-            messagebox.showerror("ROTEX PC", "Log into Google first.")
+    def send_local_message(self):
+        text = self.chat_input.get().strip()
+        if not text:
             return
-        code = self.code_entry.get().strip()
-        if len(code) != 3 or not code.isdigit():
-            messagebox.showerror("ROTEX PC", "Enter the 3 digit code from your phone.")
-            return
-        self.state_data["connected"] = True
-        self.state_data["code"] = code
+        self.chat_input.delete(0, "end")
+        self.add_message("user", text)
+        file_hint = ""
+        if self.pending_file:
+            file_hint = f"\n\nI have local file context from {self.pending_file['path']}."
+        self.add_message(
+            "assistant",
+            "I can help with that from this PC app. File edits should be approved before changing anything."
+            + file_hint
+            + " For full AI responses, use the ROTEX website or connect the backend key to this desktop app next.",
+        )
+
+    def new_chat(self):
+        self.state_data["messages"] = []
         self.save_state()
-        self.render()
-        messagebox.showinfo("ROTEX PC", "PC connected. Now choose a folder if you want file access.")
+        self.render_messages()
 
-    def choose_folder(self):
-        if not self.state_data.get("connected"):
-            messagebox.showerror("ROTEX PC", "Connect this PC first.")
-            return
-        folder = filedialog.askdirectory(title="Choose a ROTEX folder")
+    def open_website(self):
+        webbrowser.open(APP_URL)
+
+    def open_bot_browser(self):
+        webbrowser.open(f"{APP_URL}/#account")
+        messagebox.showinfo("ROTEX PC", "Opened ROTEX in its own browser window. Keep this PC app open for local file context.")
+
+    def connect_github(self):
+        self.state_data["github_connected"] = True
+        self.save_state()
+        webbrowser.open(f"{APP_URL}/api/connect/github")
+        self.render()
+        messagebox.showinfo("ROTEX PC", "GitHub connect opened. GitHub is optional in the PC app.")
+
+    def choose_root(self):
+        folder = filedialog.askdirectory(title="Choose the root ROTEX can browse")
         if not folder:
             return
-        self.state_data["folder"] = folder
-        self.save_state()
-        self.render()
-
-    def disable_pc(self):
-        self.state_data.update({"connected": False, "code": "", "folder": ""})
+        self.state_data["root"] = folder
         self.save_state()
         self.render()
 
