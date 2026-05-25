@@ -107,6 +107,7 @@ const freeCreditAmount = 0.3;
 const refillEveryMs = 3 * 24 * 60 * 60 * 1000;
 const freeComputerMessagesPerDay = 3;
 const connectableServices = ['Google Drive', 'GitHub', 'PC'];
+const deviceRole = detectDeviceRole();
 let state = loadState();
 let auth = null;
 let db = null;
@@ -182,11 +183,20 @@ function normalizePcBridge(value) {
   return {
     code: typeof value?.code === 'string' ? value.code.slice(0, 3) : '',
     connected: Boolean(value?.connected),
+    requesterRole: value?.requesterRole === 'phone' ? 'phone' : '',
+    connectedRole: value?.connectedRole === 'pc' ? 'pc' : '',
     folderName: typeof value?.folderName === 'string' ? value.folderName.slice(0, 120) : '',
     folderReady: Boolean(value?.folderReady),
     createdAt: typeof value?.createdAt === 'number' ? value.createdAt : 0,
     pairedAt: typeof value?.pairedAt === 'number' ? value.pairedAt : 0,
   };
+}
+
+function detectDeviceRole() {
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
+  const narrowScreen = window.matchMedia?.('(max-width: 760px)').matches;
+  const mobileUserAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  return coarsePointer && (narrowScreen || mobileUserAgent) ? 'phone' : 'pc';
 }
 
 function normalizeComputerUsage(value) {
@@ -533,18 +543,28 @@ function renderConnectOptions() {
 }
 
 function renderPcBridge() {
-  if (state.pcBridge.connected) {
+  if (deviceRole === 'phone' && state.pcBridge.connected) {
+    pcPairStatus.textContent = 'Your phone is connected to a PC. Use the PC page to approve folders or disable access here anytime.';
+  } else if (deviceRole === 'pc' && state.pcBridge.connected) {
     pcPairStatus.textContent = 'PC connected. Keep this page open on the PC when you want ROTEX to work with approved files.';
-  } else if (state.pcBridge.code) {
+  } else if (deviceRole === 'phone' && state.pcBridge.code) {
+    pcPairStatus.textContent = 'Code ready. Type it on your PC from Settings / Share. This blocks phone-to-phone pairing.';
+  } else if (deviceRole === 'pc' && state.pcBridge.code) {
     pcPairStatus.textContent = 'Type this code on your PC from Settings > Share to finish pairing.';
+  } else if (deviceRole === 'pc') {
+    pcPairStatus.textContent = 'Open ROTEX on your phone first and make a code. This blocks PC-to-PC pairing.';
   } else {
-    pcPairStatus.textContent = 'Make a 3 digit code on your phone, then type it on your PC from Settings > Share.';
+    pcPairStatus.textContent = 'Make a 3 digit code on your phone, then type it on your PC from Settings / Share.';
   }
   pcPairCode.textContent = state.pcBridge.code || '---';
   pcFolderStatus.textContent = state.pcBridge.folderReady
     ? `Approved PC folder: ${state.pcBridge.folderName || 'selected folder'}`
     : 'No PC folder approved yet. On the PC, connect first, then choose a folder.';
-  choosePcFolderButton.disabled = !state.pcBridge.connected;
+  makePcCodeButton.hidden = deviceRole !== 'phone';
+  pcCodeInput.hidden = deviceRole !== 'pc';
+  pairPcButton.hidden = deviceRole !== 'pc';
+  choosePcFolderButton.hidden = deviceRole !== 'pc';
+  choosePcFolderButton.disabled = deviceRole !== 'pc' || !state.pcBridge.connected;
   disconnectPcButton.disabled = !state.pcBridge.connected && !state.pcBridge.code;
 }
 
@@ -614,7 +634,9 @@ function openPcDialog() {
   if (!pcDialog.open) {
     pcDialog.showModal();
   }
-  pcCodeInput.focus();
+  if (deviceRole === 'pc') {
+    pcCodeInput.focus();
+  }
 }
 
 function setConnection(value, enabled) {
@@ -720,9 +742,17 @@ connectorCards.forEach((button) => {
 });
 
 makePcCodeButton.addEventListener('click', () => {
+  if (deviceRole !== 'phone') {
+    pcPairStatus.textContent = 'Make the code from your phone. PC-to-PC pairing is blocked.';
+    return;
+  }
   state.pcBridge = {
     code: String(Math.floor(100 + Math.random() * 900)),
     connected: false,
+    requesterRole: 'phone',
+    connectedRole: '',
+    folderName: '',
+    folderReady: false,
     createdAt: Date.now(),
   };
   activateService('PC', false);
@@ -732,12 +762,21 @@ makePcCodeButton.addEventListener('click', () => {
 });
 
 pairPcButton.addEventListener('click', () => {
+  if (deviceRole !== 'pc') {
+    pcPairStatus.textContent = 'Enter the code from your PC. Phone-to-phone pairing is blocked.';
+    return;
+  }
+  if (state.pcBridge.requesterRole !== 'phone') {
+    pcPairStatus.textContent = 'Make a fresh code on your phone first. PC-to-PC pairing is blocked.';
+    return;
+  }
   const typedCode = pcCodeInput.value.trim();
   if (!state.pcBridge.code || typedCode !== state.pcBridge.code) {
     pcPairStatus.textContent = 'That code does not match. Check the 3 digits and try again.';
     return;
   }
   state.pcBridge.connected = true;
+  state.pcBridge.connectedRole = 'pc';
   state.pcBridge.pairedAt = Date.now();
   activateService('PC', false);
   announceActivation('PC');
@@ -747,6 +786,10 @@ pairPcButton.addEventListener('click', () => {
 });
 
 choosePcFolderButton.addEventListener('click', async () => {
+  if (deviceRole !== 'pc') {
+    pcPairStatus.textContent = 'Folders can only be approved on the connected PC.';
+    return;
+  }
   if (!state.pcBridge.connected) {
     pcPairStatus.textContent = 'Connect this PC with the 3 digit code first.';
     return;
