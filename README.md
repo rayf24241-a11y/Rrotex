@@ -22,6 +22,16 @@ Model costs:
 | Tex 1.5 | DeepSeek `deepseek-chat` | `$0.015/message` |
 | Treesearch _ q | Groq `llama-3.3-70b-versatile` | `$0.002/message` |
 
+When a user is out of credits, the app shows `your out of credits, upgrade?` with an Upgrade button.
+
+Upgrade benefits:
+
+- `$3` in credits
+- Better models (coming soon)
+- Computer mode (coming soon)
+- More plugins
+- Tex 2.5 (coming soon)
+
 ## Firebase Auth
 
 Create a Firebase web app, enable Google Auth, create a Firestore database, and add these domains in Firebase Authentication authorized domains:
@@ -42,6 +52,17 @@ Add these to Vercel Project Settings -> Environment Variables:
 GROQ_API_KEY
 DEEPSEEK_API_KEY
 ```
+
+## Stripe checkout
+
+Create a Stripe product/price for the upgrade, then add:
+
+```text
+STRIPE_SECRET_KEY
+STRIPE_PRICE_ID
+```
+
+The checkout endpoint is `/api/create-checkout-session`. The purchase metadata includes the user id, `$3` credits, and the coming-soon benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
 
 ## Local preview
 

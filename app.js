@@ -68,6 +68,7 @@ const signOutButton = document.querySelector('#signOutButton');
 const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
 const creditStatus = document.querySelector('#creditStatus');
+const upgradeButton = document.querySelector('#upgradeButton');
 const modelButton = document.querySelector('#modelButton');
 const modelMenu = document.querySelector('#modelMenu');
 const selectedModelName = document.querySelector('#selectedModelName');
@@ -251,6 +252,14 @@ function renderMessages() {
     const item = document.createElement('div');
     item.className = `message ${message.role}`;
     item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : escapeHtml(message.model)}</span>${escapeHtml(message.text)}`;
+    if (message.action === 'upgrade') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'message-action';
+      button.textContent = 'Upgrade';
+      button.addEventListener('click', startUpgrade);
+      item.appendChild(button);
+    }
     messagesEl.appendChild(item);
   });
   messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -307,7 +316,8 @@ async function sendMessage(text) {
     chat.messages.push({
       role: 'assistant',
       model: 'ROTEX credits',
-      text: `You are out of credits for ${model.name}. Normal users refill to ${formatMoney(freeCreditAmount)} every 3 days. This model costs ${formatMoney(model.cost)} per message.`,
+      text: 'your out of credits, upgrade?',
+      action: 'upgrade',
     });
     persistState();
     render();
@@ -343,6 +353,27 @@ async function sendMessage(text) {
 
   persistState();
   render();
+}
+
+async function startUpgrade() {
+  try {
+    const response = await fetch('/api/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: currentUser?.uid || '',
+        email: currentUser?.email || '',
+      }),
+    });
+    const data = await response.json();
+    if (data.url) {
+      window.location.href = data.url;
+      return;
+    }
+    alert(data.message || 'Stripe is not configured yet. Make a Stripe product/price and send me the Price ID.');
+  } catch {
+    alert('Stripe checkout is not ready yet. Make the Stripe product and send me the Price ID.');
+  }
 }
 
 function formatMoney(value) {
@@ -403,4 +434,14 @@ googleButton.addEventListener('click', async () => {
 
 signOutButton.addEventListener('click', async () => {
   if (auth) await signOut(auth);
+});
+
+upgradeButton.addEventListener('click', startUpgrade);
+
+document.addEventListener('contextmenu', (event) => event.preventDefault());
+document.addEventListener('keydown', (event) => {
+  const key = event.key.toLowerCase();
+  if (key === 'f12' || (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key)) || (event.ctrlKey && key === 'u')) {
+    event.preventDefault();
+  }
 });

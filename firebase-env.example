@@ -6,3 +6,5 @@ FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 FIREBASE_APP_ID=your_app_id
 GROQ_API_KEY=your_groq_key
 DEEPSEEK_API_KEY=your_deepseek_key
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret
+STRIPE_PRICE_ID=price_your_upgrade_price_id

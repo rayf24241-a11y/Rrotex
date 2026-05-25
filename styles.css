@@ -104,6 +104,8 @@ button {
 .google-button,
 .signout-button,
 .send-button,
+.upgrade-button,
+.message-action,
 .model-select,
 .model-option {
   border: 1px solid transparent;
@@ -448,6 +450,19 @@ h1 {
   color: var(--bg);
   background: linear-gradient(135deg, var(--text), var(--green));
   box-shadow: 0 14px 32px rgba(128, 237, 153, 0.13);
+}
+
+.upgrade-button,
+.message-action {
+  padding: 10px 13px;
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--amber), var(--pink));
+  box-shadow: 0 14px 32px rgba(255, 107, 157, 0.14);
+}
+
+.message-action {
+  display: inline-flex;
+  margin-top: 12px;
 }
 
 @keyframes appIn {
