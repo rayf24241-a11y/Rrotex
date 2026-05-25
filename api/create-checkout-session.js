@@ -4,7 +4,8 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const testMode = process.env.STRIPE_MODE === 'test';
+  const hasTestKeys = Boolean(process.env.STRIPE_TEST_SECRET_KEY && process.env.STRIPE_TEST_PRICE_ID);
+  const testMode = process.env.STRIPE_MODE === 'test' || (process.env.STRIPE_MODE !== 'live' && hasTestKeys);
   const secretKey = testMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
   const priceId   = testMode ? process.env.STRIPE_TEST_PRICE_ID   : process.env.STRIPE_PRICE_ID;
 
@@ -53,5 +54,5 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  response.status(200).json({ configured: true, url: data.url });
+  response.status(200).json({ configured: true, mode: testMode ? 'test' : 'live', url: data.url });
 };

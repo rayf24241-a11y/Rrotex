@@ -4,7 +4,8 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const testMode  = process.env.STRIPE_MODE === 'test';
+  const hasTestKey = Boolean(process.env.STRIPE_TEST_SECRET_KEY);
+  const testMode  = process.env.STRIPE_MODE === 'test' || (process.env.STRIPE_MODE !== 'live' && hasTestKey);
   const secretKey = testMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
 
   if (!secretKey) {

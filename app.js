@@ -391,14 +391,6 @@ function closeAuthPage() {
 }
 
 function openAccountPage(focusUpgrade = false) {
-  if (!currentUser) {
-    openAuthPage(focusUpgrade ? 'upgrade' : 'account');
-    return;
-  }
-  if (needsProfile()) {
-    openAuthPage(focusUpgrade ? 'upgrade' : 'account', true);
-    return;
-  }
   authPage.hidden = true;
   appShell.hidden = true;
   accountPage.hidden = false;
@@ -913,7 +905,7 @@ function renderAccount() {
   const nickname = state.profile?.nickname || displayName;
   acctAvatar.textContent = currentUser ? nickname.trim().charAt(0).toUpperCase() || 'R' : '?';
   acctName.textContent = currentUser ? displayName : 'Not signed in';
-  acctEmail.textContent = currentUser?.email || 'Log in to save chats, credits, and Pro.';
+  acctEmail.textContent = currentUser?.email || 'Log in to save chats and Pro.';
   acctPlanBadge.textContent = state.pro ? 'Pro' : 'Normal';
   acctPlanBadge.classList.toggle('pro', state.pro);
   acctCreditDay.textContent = formatMoney(remainingDailyCredits());
@@ -1072,10 +1064,6 @@ async function sendMessage(text) {
 }
 
 async function startUpgrade() {
-  if (!currentUser) {
-    openAuthPage('upgrade');
-    return;
-  }
   openAccountPage(true);
 }
 
@@ -1575,7 +1563,7 @@ googleButton.addEventListener('click', async (event) => {
     openAccountPage();
     return;
   }
-  openAuthPage('account', Boolean(currentUser && needsProfile()));
+  openAccountPage();
 });
 
 signOutButton.addEventListener('click', async () => {
