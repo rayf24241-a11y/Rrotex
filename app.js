@@ -91,8 +91,6 @@ const acctAvatar = document.querySelector('#acctAvatar');
 const acctName = document.querySelector('#acctName');
 const acctEmail = document.querySelector('#acctEmail');
 const acctPlanBadge = document.querySelector('#acctPlanBadge');
-const acctCreditDay = document.querySelector('#acctCreditDay');
-const acctCreditMonth = document.querySelector('#acctCreditMonth');
 const acctUpgradeBlock = document.querySelector('#acctUpgradeBlock');
 const acctProActive = document.querySelector('#acctProActive');
 const accountSignOutBtn = document.querySelector('#accountSignOutBtn');
@@ -908,8 +906,6 @@ function renderAccount() {
   acctEmail.textContent = currentUser?.email || 'Log in to save chats and Pro.';
   acctPlanBadge.textContent = state.pro ? 'Pro' : 'Normal';
   acctPlanBadge.classList.toggle('pro', state.pro);
-  acctCreditDay.textContent = formatMoney(remainingDailyCredits());
-  acctCreditMonth.textContent = formatMoney(remainingMonthlyCredits());
   acctUpgradeBlock.hidden = false;
   checkoutButton.disabled = Boolean(state.pro);
   checkoutButton.textContent = state.pro ? 'Already have plan' : 'Buy Pro - $15 / month';

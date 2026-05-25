@@ -1027,33 +1027,12 @@ body:has(.account-page:target) .app-shell {
   background: linear-gradient(135deg, var(--green), var(--blue));
 }
 
-.acct-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.acct-stat,
 .acct-upgrade-block,
 .acct-pro-active {
   padding: 18px;
   background: rgba(19, 26, 36, 0.82);
   border: 1px solid var(--line);
   border-radius: 8px;
-}
-
-.acct-stat span {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.acct-stat strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 28px;
 }
 
 .upgrade-price {
@@ -1328,8 +1307,7 @@ body:has(.account-page:target) .app-shell {
     flex-direction: column;
   }
 
-  .acct-profile,
-  .acct-stats {
+  .acct-profile {
     grid-template-columns: 1fr;
   }
 
