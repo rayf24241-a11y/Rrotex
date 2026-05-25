@@ -669,6 +669,33 @@ h1 {
   grid-column: span 2;
 }
 
+.pc-code {
+  display: grid;
+  min-height: 92px;
+  place-items: center;
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--blue), var(--green));
+  border-radius: 8px;
+  font-size: 48px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+}
+
+.pc-input {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-align: center;
+}
+
 .upgrade-dialog::backdrop {
   background: rgba(0, 0, 0, 0.74);
   backdrop-filter: blur(8px);

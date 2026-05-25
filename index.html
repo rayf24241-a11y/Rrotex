@@ -59,17 +59,17 @@
               <strong>Google Drive</strong>
               <span>Docs, folders, and Drive files</span>
             </button>
-            <button class="connector-card" type="button" data-connect="OneDrive" data-provider="onedrive">
-              <strong>OneDrive</strong>
-              <span>Microsoft files and folders</span>
-            </button>
             <button class="connector-card" type="button" data-connect="GitHub" data-provider="github">
               <strong>GitHub</strong>
               <span>Repos, issues, and pull requests</span>
             </button>
+            <button class="connector-card" type="button" data-connect="PC" data-provider="pc">
+              <strong>Connect PC</strong>
+              <span>Pair your phone to your computer</span>
+            </button>
             <button class="connector-card all" type="button" data-connect="all" data-provider="all">
               <strong>Connect all</strong>
-              <span>Prepare Drive, OneDrive, and GitHub</span>
+              <span>Prepare Drive, GitHub, and PC</span>
             </button>
           </div>
         </section>
@@ -115,11 +115,27 @@
         <p class="upgrade-copy">Pick what ROTEX should ask for when computer mode needs access.</p>
         <div class="connect-grid">
           <button class="connect-option" type="button" data-connect="Google Drive">Google Drive</button>
-          <button class="connect-option" type="button" data-connect="OneDrive">OneDrive</button>
           <button class="connect-option" type="button" data-connect="GitHub">GitHub</button>
+          <button class="connect-option" type="button" data-connect="PC">Connect PC</button>
           <button class="connect-option all" type="button" data-connect="all">Connect all</button>
         </div>
         <div class="dialog-actions">
+          <button value="cancel" type="submit" class="secondary-action">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="connect-dialog" id="pcDialog">
+      <form method="dialog" class="connect-card">
+        <p class="eyebrow">Connect PC</p>
+        <h2>Pair with code</h2>
+        <p class="upgrade-copy" id="pcPairStatus">Make a 3 digit code on your phone, then type it on your PC from Settings > Share.</p>
+        <div class="pc-code" id="pcPairCode">---</div>
+        <input class="pc-input" id="pcCodeInput" inputmode="numeric" maxlength="3" placeholder="000" aria-label="3 digit PC code" />
+        <div class="dialog-actions">
+          <button id="makePcCodeButton" type="button" class="secondary-action">Make code</button>
+          <button id="pairPcButton" type="button" class="checkout-action">Connect</button>
+          <button id="disconnectPcButton" type="button" class="secondary-action">Disable</button>
           <button value="cancel" type="submit" class="secondary-action">Close</button>
         </div>
       </form>

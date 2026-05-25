@@ -30,7 +30,7 @@ Computer mode is available to everyone, but it has separate pricing:
 | Tex 0 (ICM) | `$0.040/message` |
 | Tex 1.5 (ICM) | `$0.070/message` |
 
-Computer mode asks the user to connect Google Drive, OneDrive, GitHub, or all of them before external-work actions. Direct file editing is disabled in the website chat.
+Computer mode asks the user to connect Google Drive, GitHub, Connect PC, or all of them before external-work actions. Direct PC file access requires a paired trusted PC helper; the website alone cannot read or edit local PC files.
 
 Free users can use computer mode a few times per day. Pro removes that heavier-use cap once payment/webhook activation is connected.
 
@@ -74,9 +74,6 @@ GITHUB_CLIENT_ID
 GITHUB_CLIENT_SECRET
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
-MICROSOFT_CLIENT_ID
-MICROSOFT_CLIENT_SECRET
-MICROSOFT_TENANT_ID
 ```
 
 Callback URLs:
@@ -84,8 +81,9 @@ Callback URLs:
 ```text
 https://www.rrotex.com/api/connect/github-callback
 https://www.rrotex.com/api/connect/google-drive-callback
-https://www.rrotex.com/api/connect/onedrive-callback
 ```
+
+Connect PC uses the in-app 3 digit pairing UI. Real phone-to-PC file access still needs a desktop helper app/server to run on the PC and approve file operations.
 
 ## Stripe checkout
 

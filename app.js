@@ -90,11 +90,19 @@ const upgradeDialog = document.querySelector('#upgradeDialog');
 const checkoutButton = document.querySelector('#checkoutButton');
 const connectDialog = document.querySelector('#connectDialog');
 const connectOptions = document.querySelectorAll('.connect-option');
+const pcDialog = document.querySelector('#pcDialog');
+const pcPairStatus = document.querySelector('#pcPairStatus');
+const pcPairCode = document.querySelector('#pcPairCode');
+const pcCodeInput = document.querySelector('#pcCodeInput');
+const makePcCodeButton = document.querySelector('#makePcCodeButton');
+const pairPcButton = document.querySelector('#pairPcButton');
+const disconnectPcButton = document.querySelector('#disconnectPcButton');
 
 const storageKey = 'rotex:web:v2';
 const freeCreditAmount = 0.3;
 const refillEveryMs = 3 * 24 * 60 * 60 * 1000;
 const freeComputerMessagesPerDay = 3;
+const connectableServices = ['Google Drive', 'GitHub', 'PC'];
 let state = loadState();
 let auth = null;
 let db = null;
@@ -154,11 +162,22 @@ function normalizeState(value) {
     computerMode: Boolean(value.computerMode),
     pro: Boolean(value.pro),
     computerUsage: normalizeComputerUsage(value.computerUsage),
-    computerConnections: Array.isArray(value.computerConnections) ? value.computerConnections : [],
+    computerConnections: Array.isArray(value.computerConnections)
+      ? value.computerConnections.filter((item) => connectableServices.includes(item))
+      : [],
+    pcBridge: normalizePcBridge(value.pcBridge),
     activeChatId: value.activeChatId || chats[0].id,
     credits: typeof value.credits === 'number' ? Math.max(value.credits, value.credits <= 0.003 ? freeCreditAmount : value.credits) : freeCreditAmount,
     nextRefillAt: typeof value.nextRefillAt === 'number' ? value.nextRefillAt : Date.now() + refillEveryMs,
     chats,
+  };
+}
+
+function normalizePcBridge(value) {
+  return {
+    code: typeof value?.code === 'string' ? value.code.slice(0, 3) : '',
+    connected: Boolean(value?.connected),
+    createdAt: typeof value?.createdAt === 'number' ? value.createdAt : 0,
   };
 }
 
@@ -364,10 +383,11 @@ function renderModeShell() {
   connectorCards.forEach((card) => {
     const value = card.dataset.connect;
     const active = value === 'all'
-      ? state.computerConnections.length === 3
+      ? connectableServices.every((item) => state.computerConnections.includes(item))
       : state.computerConnections.includes(value);
     card.classList.toggle('active', active);
   });
+  renderPcBridge();
 }
 
 function createChat() {
@@ -492,10 +512,39 @@ function renderConnectOptions() {
   connectOptions.forEach((button) => {
     const value = button.dataset.connect;
     const active = value === 'all'
-      ? state.computerConnections.length === 3
+      ? connectableServices.every((item) => state.computerConnections.includes(item))
       : state.computerConnections.includes(value);
     button.classList.toggle('active', active);
   });
+}
+
+function renderPcBridge() {
+  if (state.pcBridge.connected) {
+    pcPairStatus.textContent = 'PC connected. You can disable it anytime.';
+  } else if (state.pcBridge.code) {
+    pcPairStatus.textContent = 'Type this code on your PC from Settings > Share to finish pairing.';
+  } else {
+    pcPairStatus.textContent = 'Make a 3 digit code on your phone, then type it on your PC from Settings > Share.';
+  }
+  pcPairCode.textContent = state.pcBridge.code || '---';
+  disconnectPcButton.disabled = !state.pcBridge.connected && !state.pcBridge.code;
+}
+
+function openPcDialog() {
+  renderPcBridge();
+  if (!pcDialog.open) {
+    pcDialog.showModal();
+  }
+  pcCodeInput.focus();
+}
+
+function setConnection(value, enabled) {
+  if (enabled && !state.computerConnections.includes(value)) {
+    state.computerConnections = [...state.computerConnections, value];
+  }
+  if (!enabled) {
+    state.computerConnections = state.computerConnections.filter((item) => item !== value);
+  }
 }
 
 function escapeHtml(value) {
@@ -526,6 +575,9 @@ function closeComputerMode() {
   if (connectDialog.open) {
     connectDialog.close();
   }
+  if (pcDialog.open) {
+    pcDialog.close();
+  }
 }
 
 newChatButton.addEventListener('click', () => {
@@ -547,11 +599,14 @@ connectOptions.forEach((button) => {
   button.addEventListener('click', () => {
     const value = button.dataset.connect;
     if (value === 'all') {
-      state.computerConnections = ['Google Drive', 'OneDrive', 'GitHub'];
+      state.computerConnections = [...connectableServices];
+    } else if (value === 'PC') {
+      setConnection('PC', true);
+      openPcDialog();
     } else if (state.computerConnections.includes(value)) {
-      state.computerConnections = state.computerConnections.filter((item) => item !== value);
+      setConnection(value, false);
     } else {
-      state.computerConnections = [...state.computerConnections, value];
+      setConnection(value, true);
     }
     persistState();
     render();
@@ -563,9 +618,15 @@ connectorCards.forEach((button) => {
     const value = button.dataset.connect;
     const provider = button.dataset.provider;
     if (value === 'all') {
-      state.computerConnections = ['Google Drive', 'OneDrive', 'GitHub'];
-    } else if (!state.computerConnections.includes(value)) {
-      state.computerConnections = [...state.computerConnections, value];
+      state.computerConnections = [...connectableServices];
+    } else if (value === 'PC') {
+      setConnection('PC', true);
+      persistState();
+      render();
+      openPcDialog();
+      return;
+    } else {
+      setConnection(value, true);
     }
     persistState();
     render();
@@ -575,6 +636,40 @@ connectorCards.forEach((button) => {
     }
     await startProviderConnect(provider);
   });
+});
+
+makePcCodeButton.addEventListener('click', () => {
+  state.pcBridge = {
+    code: String(Math.floor(100 + Math.random() * 900)),
+    connected: false,
+    createdAt: Date.now(),
+  };
+  setConnection('PC', true);
+  persistState();
+  render();
+  openPcDialog();
+});
+
+pairPcButton.addEventListener('click', () => {
+  const typedCode = pcCodeInput.value.trim();
+  if (!state.pcBridge.code || typedCode !== state.pcBridge.code) {
+    pcPairStatus.textContent = 'That code does not match. Check the 3 digits and try again.';
+    return;
+  }
+  state.pcBridge.connected = true;
+  setConnection('PC', true);
+  persistState();
+  render();
+  openPcDialog();
+});
+
+disconnectPcButton.addEventListener('click', () => {
+  state.pcBridge = normalizePcBridge({});
+  setConnection('PC', false);
+  pcCodeInput.value = '';
+  persistState();
+  render();
+  openPcDialog();
 });
 
 async function startProviderConnect(provider) {

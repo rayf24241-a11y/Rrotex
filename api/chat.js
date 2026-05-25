@@ -54,7 +54,7 @@ module.exports = async function handler(request, response) {
       'You cannot create, edit, delete, rename, upload, download, or directly modify files from this website.',
       'If the user asks you to edit files, explain that direct file editing is disabled.',
       computerMode
-        ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive, OneDrive, GitHub, or Connect all'}. You may also mention future plugins. You still cannot modify files directly in this chat.`
+        ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive, GitHub, or Connect PC'}. You may also mention future plugins. You cannot access or modify PC files from the website unless the user's PC is paired through a trusted helper, and you must ask for approval before reading or changing files.`
         : 'Computer mode is off. Do not ask for external service access unless the user explicitly asks about connecting apps.',
     ].join(' '),
   });
