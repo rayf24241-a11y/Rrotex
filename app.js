@@ -105,8 +105,10 @@ const disconnectPcButton = document.querySelector('#disconnectPcButton');
 
 const storageKey = 'rotex:web:v2';
 const pendingActivationKey = 'rotex:pending-activation';
-const freeCreditAmount = 0.3;
-const refillEveryMs = 3 * 24 * 60 * 60 * 1000;
+const creditPlans = {
+  normal: { daily: 0.3, weekly: 0.9, monthly: 1.5 },
+  pro: { daily: 2.5, weekly: 5, monthly: 5 },
+};
 const freeComputerMessagesPerDay = 3;
 const connectableServices = ['Google Drive', 'GitHub', 'PC'];
 const deviceRole = detectDeviceRole();
@@ -164,20 +166,40 @@ function normalizeState(value) {
   const chats = Array.isArray(value.chats) && value.chats.length > 0
     ? value.chats
     : [{ id: firstChatId, title: 'New ROTEX chat', createdAt: Date.now(), messages: [] }];
+  const pro = Boolean(value.pro);
+  const creditUsage = normalizeCreditUsage(value.creditUsage, pro, value.credits);
 
   return {
     activeModel: value.activeModel || 'rod-1',
     computerMode: Boolean(value.computerMode),
-    pro: Boolean(value.pro),
+    pro,
+    creditUsage,
     computerUsage: normalizeComputerUsage(value.computerUsage),
     computerConnections: Array.isArray(value.computerConnections)
       ? value.computerConnections.filter((item) => connectableServices.includes(item))
       : [],
     pcBridge: normalizePcBridge(value.pcBridge),
     activeChatId: value.activeChatId || chats[0].id,
-    credits: typeof value.credits === 'number' ? Math.max(value.credits, value.credits <= 0.003 ? freeCreditAmount : value.credits) : freeCreditAmount,
-    nextRefillAt: typeof value.nextRefillAt === 'number' ? value.nextRefillAt : Date.now() + refillEveryMs,
+    credits: remainingMonthlyCredits(pro, creditUsage),
     chats,
+  };
+}
+
+function normalizeCreditUsage(value, pro, oldCredits) {
+  const plan = pro ? creditPlans.pro : creditPlans.normal;
+  const today = dayKey();
+  const week = weekKey();
+  const month = monthKey();
+  const legacyMonthSpent = typeof oldCredits === 'number'
+    ? Math.max(0, plan.monthly - Math.min(plan.monthly, Math.max(0, oldCredits)))
+    : 0;
+  return {
+    day: today,
+    week,
+    month,
+    daySpent: value?.day === today ? Math.max(0, Number(value.daySpent) || 0) : 0,
+    weekSpent: value?.week === week ? Math.max(0, Number(value.weekSpent) || 0) : 0,
+    monthSpent: value?.month === month ? Math.max(0, Number(value.monthSpent) || legacyMonthSpent) : 0,
   };
 }
 
@@ -210,9 +232,8 @@ function normalizeComputerUsage(value) {
 }
 
 function applyCreditRefill() {
-  if (Date.now() < state.nextRefillAt) return;
-  state.credits = freeCreditAmount;
-  state.nextRefillAt = Date.now() + refillEveryMs;
+  state.creditUsage = normalizeCreditUsage(state.creditUsage, state.pro, state.credits);
+  state.credits = remainingMonthlyCredits(state.pro, state.creditUsage);
 }
 
 function applyComputerUsageReset() {
@@ -348,7 +369,7 @@ function renderMessages() {
         <p class="eyebrow">Ready</p>
         <h2>${model.name}</h2>
         <p>${model.description}</p>
-        <p>${model.api}. Costs ${formatMoney(activeCost())} per message${state.computerMode ? ' in computer mode' : ''}. Normal users refill to ${formatMoney(freeCreditAmount)} every 3 days.</p>
+        <p>${model.api}. Costs ${formatMoney(activeCost())} per message${state.computerMode ? ' in computer mode' : ''}. Normal limits are ${formatMoney(creditPlans.normal.daily)} daily, ${formatMoney(creditPlans.normal.weekly)} weekly, and ${formatMoney(creditPlans.normal.monthly)} monthly.</p>
       </div>
     `;
     return;
@@ -379,7 +400,7 @@ function renderMessages() {
 function renderAccount() {
   applyCreditRefill();
   applyComputerUsageReset();
-  creditStatus.textContent = `${formatMoney(state.credits)} credits`;
+  creditStatus.textContent = `${formatMoney(remainingDailyCredits())} today / ${formatMoney(remainingMonthlyCredits())} month`;
   renderConnectOptions();
   renderModeShell();
   if (currentUser) {
@@ -462,7 +483,7 @@ async function sendMessage(text) {
     render();
     return;
   }
-  if (state.credits + 0.0000001 < cost) {
+  if (!canSpendCredits(cost)) {
     chat.messages.push({
       role: 'assistant',
       model: 'ROTEX credits',
@@ -474,7 +495,7 @@ async function sendMessage(text) {
     return;
   }
 
-  state.credits = Math.max(0, state.credits - cost);
+  spendCredits(cost);
   if (state.computerMode && !state.pro) {
     state.computerUsage.count += 1;
   }
@@ -564,8 +585,55 @@ function formatMoney(value) {
   return `$${Number(value).toFixed(3)}`;
 }
 
+function activeCreditPlan(pro = state.pro) {
+  return pro ? creditPlans.pro : creditPlans.normal;
+}
+
+function remainingDailyCredits(pro = state.pro, usage = state.creditUsage) {
+  const plan = activeCreditPlan(pro);
+  return Math.max(0, plan.daily - (Number(usage?.daySpent) || 0));
+}
+
+function remainingWeeklyCredits(pro = state.pro, usage = state.creditUsage) {
+  const plan = activeCreditPlan(pro);
+  return Math.max(0, plan.weekly - (Number(usage?.weekSpent) || 0));
+}
+
+function remainingMonthlyCredits(pro = state.pro, usage = state.creditUsage) {
+  const plan = activeCreditPlan(pro);
+  return Math.max(0, plan.monthly - (Number(usage?.monthSpent) || 0));
+}
+
+function canSpendCredits(cost) {
+  applyCreditRefill();
+  return (
+    remainingDailyCredits() + 0.0000001 >= cost &&
+    remainingWeeklyCredits() + 0.0000001 >= cost &&
+    remainingMonthlyCredits() + 0.0000001 >= cost
+  );
+}
+
+function spendCredits(cost) {
+  state.creditUsage.daySpent += cost;
+  state.creditUsage.weekSpent += cost;
+  state.creditUsage.monthSpent += cost;
+  state.credits = remainingMonthlyCredits();
+}
+
 function dayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function weekKey() {
+  const date = new Date();
+  const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const dayNumber = Math.floor((Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - start.getTime()) / 86400000) + 1;
+  const weekNumber = Math.ceil((dayNumber + start.getUTCDay()) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
+}
+
+function monthKey() {
+  return new Date().toISOString().slice(0, 7);
 }
 
 function renderConnectOptions() {

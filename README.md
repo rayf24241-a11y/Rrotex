@@ -10,7 +10,8 @@ Current web features:
 - ROTEX model drop-up beside the chat bar
 - Single-screen chatbot layout
 - Vercel ROTEX backend at `/api/chat`
-- Free user credits: `$0.300` every 3 days
+- Normal user credits: `$0.300` daily, `$0.900` weekly, `$1.500` monthly
+- Pro user credits: `$2.500` daily, `$5.000` monthly
 
 Model costs:
 
@@ -34,7 +35,7 @@ Computer mode asks the user to connect Google Drive, GitHub, Connect PC, or all 
 
 Free users can use computer mode a few times per day. Pro removes that heavier-use cap once payment/webhook activation is connected.
 
-When a user is out of credits, the app shows `your out of credits, upgrade?` with an Upgrade button.
+When a user hits a daily, weekly, or monthly credit limit, the app shows `your out of credits, upgrade?` with an Upgrade button.
 
 Upgrade benefits:
 
