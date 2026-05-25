@@ -1,13 +1,16 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import {
+  createUserWithEmailAndPassword,
   getAuth,
   GoogleAuthProvider,
   linkWithCredential,
   onAuthStateChanged,
   PhoneAuthProvider,
   RecaptchaVerifier,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  updateProfile,
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 import {
   doc,
@@ -83,6 +86,19 @@ const creditStatus = document.querySelector('#creditStatus');
 const upgradeButton = document.querySelector('#upgradeButton');
 const proPage = document.querySelector('#proPage');
 const closeProPageButton = document.querySelector('#closeProPageButton');
+const authPage = document.querySelector('#authPage');
+const closeAuthPageButton = document.querySelector('#closeAuthPageButton');
+const authTitle = document.querySelector('#authTitle');
+const authStatus = document.querySelector('#authStatus');
+const authGoogleButton = document.querySelector('#authGoogleButton');
+const authEmailInput = document.querySelector('#authEmailInput');
+const authCodeInput = document.querySelector('#authCodeInput');
+const sendEmailCodeButton = document.querySelector('#sendEmailCodeButton');
+const emailLoginButton = document.querySelector('#emailLoginButton');
+const profileFields = document.querySelector('#profileFields');
+const profileNameInput = document.querySelector('#profileNameInput');
+const profileNicknameInput = document.querySelector('#profileNicknameInput');
+const saveProfileButton = document.querySelector('#saveProfileButton');
 const chatPanel = document.querySelector('#chatPanel');
 const modeEyebrow = document.querySelector('#modeEyebrow');
 const modeTitle = document.querySelector('#modeTitle');
@@ -118,6 +134,7 @@ const skipPhoneButton = document.querySelector('#skipPhoneButton');
 
 const storageKey = 'rotex:web:v2';
 const pendingActivationKey = 'rotex:pending-activation';
+const pendingAuthReasonKey = 'rotex:pending-auth-reason';
 const creditPlans = {
   normal: { daily: 0.3, weekly: 0.9, monthly: 1.5 },
   limited: { daily: 0.1, weekly: 0.3, monthly: 0.5 },
@@ -134,6 +151,7 @@ let cloudReady = false;
 let saveTimer = null;
 let phoneVerifier = null;
 let phoneConfirmation = null;
+let authReason = localStorage.getItem(pendingAuthReasonKey) || 'account';
 
 initFirebase();
 applyPendingActivation();
@@ -159,6 +177,12 @@ async function initFirebase() {
       if (user) {
         await loadCloudState();
         await handleCheckoutReturn();
+        if (needsProfile()) {
+          openAuthPage(authReason, true);
+        } else if (authReason === 'upgrade') {
+          closeAuthPage();
+          await startUpgrade();
+        }
       } else {
         localStorage.removeItem(storageKey);
         state = normalizeState({});
@@ -200,6 +224,7 @@ function normalizeState(value) {
     pro,
     phoneVerified,
     phoneSkipped,
+    profile: normalizeProfile(value.profile),
     creditUsage,
     computerUsage: normalizeComputerUsage(value.computerUsage),
     computerConnections: Array.isArray(value.computerConnections)
@@ -209,6 +234,14 @@ function normalizeState(value) {
     activeChatId: value.activeChatId || chats[0].id,
     credits: remainingMonthlyCredits(pro, creditUsage),
     chats,
+  };
+}
+
+function normalizeProfile(value) {
+  return {
+    name: typeof value?.name === 'string' ? value.name.slice(0, 24) : '',
+    usernameKey: typeof value?.usernameKey === 'string' ? value.usernameKey.slice(0, 32) : '',
+    nickname: typeof value?.nickname === 'string' ? value.nickname.slice(0, 24) : '',
   };
 }
 
@@ -304,8 +337,153 @@ async function loadCloudState() {
   setCloudStatus('Synced');
 }
 
+function needsProfile() {
+  return currentUser && !state.profile?.usernameKey;
+}
+
+function openAuthPage(reason = 'account', forceProfile = false) {
+  authReason = reason;
+  localStorage.setItem(pendingAuthReasonKey, reason);
+  appShell.hidden = true;
+  proPage.hidden = true;
+  authPage.hidden = false;
+  window.location.hash = 'login';
+  authTitle.textContent = currentUser ? 'Finish account' : 'Log in first';
+  authStatus.textContent = currentUser
+    ? 'Pick a unique ROTEX name and nickname.'
+    : 'Choose Google or email so ROTEX can save credits, chats, and Pro.';
+  profileFields.hidden = !forceProfile && !needsProfile();
+  if (!profileFields.hidden) {
+    profileNameInput.value = state.profile?.name || currentUser?.displayName || '';
+    profileNicknameInput.value = state.profile?.nickname || '';
+    profileNameInput.focus();
+  } else {
+    authEmailInput.focus();
+  }
+}
+
+function closeAuthPage() {
+  authPage.hidden = true;
+  appShell.hidden = false;
+  localStorage.removeItem(pendingAuthReasonKey);
+  if (window.location.hash === '#login') {
+    history.pushState('', document.title, window.location.pathname + window.location.search);
+  }
+}
+
+async function signInWithGoogleFromAuth() {
+  if (!auth) {
+    authStatus.textContent = 'Firebase is not configured yet. Add Firebase env vars in Vercel.';
+    return;
+  }
+  try {
+    authStatus.textContent = 'Opening Google login...';
+    await signInWithPopup(auth, new GoogleAuthProvider());
+  } catch (error) {
+    authStatus.textContent = firebaseAuthMessage(error, 'Google login could not start.');
+  }
+}
+
+function sendEmailCodeNotice() {
+  const email = authEmailInput.value.trim();
+  if (!email.includes('@')) {
+    authStatus.textContent = 'Enter your email first.';
+    return;
+  }
+  authStatus.textContent = 'Use a private 6+ character code. New emails create an account; existing emails log in with the same code.';
+  authCodeInput.focus();
+}
+
+async function continueEmailLogin() {
+  if (!auth) {
+    authStatus.textContent = 'Firebase is not configured yet. Add Firebase env vars in Vercel.';
+    return;
+  }
+  const email = authEmailInput.value.trim();
+  const code = authCodeInput.value.trim();
+  if (!email.includes('@')) {
+    authStatus.textContent = 'Enter a real email.';
+    return;
+  }
+  if (code.length < 6) {
+    authStatus.textContent = 'Your email code needs at least 6 characters.';
+    return;
+  }
+  try {
+    emailLoginButton.disabled = true;
+    authStatus.textContent = 'Checking email account...';
+    await signInWithEmailAndPassword(auth, email, code);
+  } catch (error) {
+    if (error?.code !== 'auth/invalid-credential' && error?.code !== 'auth/user-not-found') {
+      authStatus.textContent = firebaseAuthMessage(error, 'Email login failed.');
+      emailLoginButton.disabled = false;
+      return;
+    }
+    try {
+      authStatus.textContent = 'Creating email account...';
+      await createUserWithEmailAndPassword(auth, email, code);
+    } catch (createError) {
+      authStatus.textContent = firebaseAuthMessage(createError, 'Email signup failed. If this email exists, use its original code.');
+    }
+  } finally {
+    emailLoginButton.disabled = false;
+  }
+}
+
+async function saveProfile() {
+  if (!currentUser || !db) {
+    authStatus.textContent = 'Log in first.';
+    return;
+  }
+  const name = profileNameInput.value.trim();
+  const nickname = profileNicknameInput.value.trim();
+  const usernameKey = normalizeUsername(name);
+  if (!usernameKey || usernameKey.length < 3) {
+    authStatus.textContent = 'Pick a ROTEX name with at least 3 letters or numbers.';
+    return;
+  }
+  if (!nickname || nickname.length < 2) {
+    authStatus.textContent = 'Pick a nickname too.';
+    return;
+  }
+  try {
+    saveProfileButton.disabled = true;
+    const usernameRef = doc(db, 'usernames', usernameKey);
+    const usernameSnap = await getDoc(usernameRef);
+    if (usernameSnap.exists() && usernameSnap.data()?.uid !== currentUser.uid) {
+      authStatus.textContent = 'Somebody already has that ROTEX name. Pick another.';
+      return;
+    }
+    await setDoc(usernameRef, {
+      uid: currentUser.uid,
+      name,
+      nickname,
+      updatedAt: serverTimestamp(),
+    });
+    state.profile = { name, usernameKey, nickname };
+    await updateProfile(currentUser, { displayName: name });
+    persistState();
+    authStatus.textContent = 'Account ready.';
+    if (authReason === 'upgrade') {
+      closeAuthPage();
+      await startUpgrade();
+    } else {
+      closeAuthPage();
+      render();
+    }
+  } catch (error) {
+    authStatus.textContent = firebaseAuthMessage(error, 'Could not save that profile.');
+  } finally {
+    saveProfileButton.disabled = false;
+  }
+}
+
+function normalizeUsername(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 32);
+}
+
 function shouldAskPhone() {
-  return currentUser && !state.pro && !state.phoneVerified && !state.phoneSkipped;
+  return currentUser && !needsProfile() && authPage.hidden && !state.pro && !state.phoneVerified && !state.phoneSkipped;
 }
 
 function openPhoneDialog() {
@@ -425,6 +603,15 @@ function firebaseAuthMessage(error, fallback) {
   }
   if (code === 'auth/popup-closed-by-user') {
     return 'Login was closed before it finished.';
+  }
+  if (code === 'auth/email-already-in-use') {
+    return 'That email already has a ROTEX account. Use the original email code to log in.';
+  }
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+    return 'That email code is not right for this account.';
+  }
+  if (code === 'auth/weak-password') {
+    return 'Use an email code with at least 6 characters.';
   }
   if (code === 'auth/invalid-action-code') {
     return 'Firebase said the requested action is invalid. Refresh, use the live domain, and check authorized domains.';
@@ -559,7 +746,7 @@ function renderAccount() {
   renderConnectOptions();
   renderModeShell();
   if (currentUser) {
-    googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
+    googleButtonText.textContent = state.profile?.nickname || state.profile?.name || currentUser.displayName || currentUser.email || 'Google account';
     planStatus.textContent = state.pro ? 'Pro' : 'Normal';
     planStatus.hidden = false;
     phoneVerifyButton.hidden = state.pro || state.phoneVerified;
@@ -635,14 +822,7 @@ async function sendMessage(text) {
   if (!clean || !chat) return;
 
   if (!currentUser) {
-    alert('Log in with Google to use ROTEX credits and chat.');
-    if (auth) {
-      try {
-        await signInWithPopup(auth, new GoogleAuthProvider());
-      } catch (error) {
-        alert(firebaseAuthMessage(error, 'Google login could not start.'));
-      }
-    }
+    openAuthPage('account');
     return;
   }
 
@@ -719,7 +899,16 @@ async function sendMessage(text) {
 }
 
 async function startUpgrade() {
+  if (!currentUser) {
+    openAuthPage('upgrade');
+    return;
+  }
+  if (needsProfile()) {
+    openAuthPage('upgrade', true);
+    return;
+  }
   appShell.hidden = true;
+  authPage.hidden = true;
   proPage.hidden = false;
   window.location.hash = 'pro';
 }
@@ -748,7 +937,11 @@ function deleteChat(chatId) {
 
 async function continueCheckout() {
   if (!currentUser) {
-    alert('Log in with Google before upgrading so ROTEX can apply Pro to your account.');
+    openAuthPage('upgrade');
+    return;
+  }
+  if (needsProfile()) {
+    openAuthPage('upgrade', true);
     return;
   }
   try {
@@ -1202,21 +1395,18 @@ messageInput.addEventListener('keydown', (event) => {
 });
 
 googleButton.addEventListener('click', async () => {
-  if (!auth) {
-    alert('Firebase is not configured yet. Add the Firebase env vars in Vercel first.');
-    return;
-  }
-  try {
-    await signInWithPopup(auth, new GoogleAuthProvider());
-  } catch (error) {
-    alert(firebaseAuthMessage(error, 'Google login could not start.'));
-  }
+  openAuthPage('account', Boolean(currentUser && needsProfile()));
 });
 
 signOutButton.addEventListener('click', async () => {
   if (auth) await signOut(auth);
 });
 
+closeAuthPageButton.addEventListener('click', closeAuthPage);
+authGoogleButton.addEventListener('click', signInWithGoogleFromAuth);
+sendEmailCodeButton.addEventListener('click', sendEmailCodeNotice);
+emailLoginButton.addEventListener('click', continueEmailLogin);
+saveProfileButton.addEventListener('click', saveProfile);
 phoneVerifyButton.addEventListener('click', openPhoneDialog);
 sendPhoneCodeButton.addEventListener('click', sendPhoneCode);
 confirmPhoneCodeButton.addEventListener('click', confirmPhoneCode);
@@ -1224,6 +1414,10 @@ skipPhoneButton.addEventListener('click', skipPhoneVerification);
 upgradeButton.addEventListener('click', startUpgrade);
 closeProPageButton.addEventListener('click', closeProPage);
 checkoutButton.addEventListener('click', continueCheckout);
+
+if (window.location.hash === '#login') {
+  openAuthPage('account');
+}
 
 if (window.location.hash === '#pro') {
   startUpgrade();

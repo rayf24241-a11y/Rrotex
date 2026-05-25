@@ -114,6 +114,35 @@
       </div>
     </section>
 
+    <section class="auth-page" id="authPage" hidden>
+      <div class="auth-shell">
+        <button class="dialog-x" id="closeAuthPageButton" type="button" aria-label="Close">X</button>
+        <p class="eyebrow">ROTEX account</p>
+        <h2 id="authTitle">Log in first</h2>
+        <p class="upgrade-copy" id="authStatus">Choose Google or email so ROTEX can save credits, chats, and Pro.</p>
+
+        <button class="auth-google" id="authGoogleButton" type="button">
+          <span class="google-mark">G</span>
+          <span>Log in with Google</span>
+        </button>
+
+        <div class="auth-divider">or</div>
+
+        <div class="auth-fields">
+          <input class="auth-input" id="authEmailInput" type="email" autocomplete="email" placeholder="Email" />
+          <input class="auth-input" id="authCodeInput" type="password" autocomplete="one-time-code" placeholder="Email code" />
+          <button class="secondary-action" id="sendEmailCodeButton" type="button">Send code</button>
+          <button class="checkout-action" id="emailLoginButton" type="button">Continue with email</button>
+        </div>
+
+        <div class="profile-fields" id="profileFields" hidden>
+          <input class="auth-input" id="profileNameInput" maxlength="24" autocomplete="name" placeholder="Pick your ROTEX name" />
+          <input class="auth-input" id="profileNicknameInput" maxlength="24" placeholder="Pick a nickname" />
+          <button class="checkout-action" id="saveProfileButton" type="button">Finish account</button>
+        </div>
+      </div>
+    </section>
+
     <dialog class="connect-dialog" id="connectDialog">
       <form method="dialog" class="connect-card">
         <button class="dialog-x" id="connectCloseButton" type="submit" value="cancel" aria-label="Close">X</button>

@@ -804,7 +804,8 @@ h1 {
   line-height: 1.45;
 }
 
-.pro-page {
+.pro-page,
+.auth-page {
   display: grid;
   min-height: 100vh;
   padding: clamp(18px, 4vw, 52px);
@@ -819,7 +820,12 @@ h1 {
   display: none;
 }
 
-.pro-shell {
+.auth-page[hidden] {
+  display: none;
+}
+
+.pro-shell,
+.auth-shell {
   position: relative;
   display: grid;
   gap: 16px;
@@ -836,6 +842,70 @@ h1 {
   margin: 0;
   font-size: clamp(46px, 8vw, 88px);
   line-height: 0.95;
+}
+
+.auth-shell {
+  width: min(560px, 100%);
+}
+
+.auth-shell h2 {
+  margin: 0;
+  font-size: clamp(38px, 7vw, 66px);
+  line-height: 0.95;
+}
+
+.auth-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 54px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-weight: 950;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--quiet);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.auth-fields,
+.profile-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-input {
+  min-height: 52px;
+  padding: 13px 14px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  outline: none;
+}
+
+.auth-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.12);
 }
 
 .upgrade-copy {
