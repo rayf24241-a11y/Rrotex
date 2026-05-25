@@ -10,7 +10,7 @@ module.exports = async function handler(request, response) {
   const testPriceId = cleanEnv(process.env.STRIPE_TEST_PRICE_ID);
   const hasTestKeys = Boolean(testSecretKey && testPriceId);
   const hasLiveKeys = Boolean(liveSecretKey && livePriceId);
-  const testMode = process.env.STRIPE_MODE === 'test' || (!hasLiveKeys && hasTestKeys);
+  const testMode = !hasLiveKeys && (process.env.STRIPE_MODE === 'test' || hasTestKeys);
   const secretKey = testMode ? testSecretKey : liveSecretKey;
   const priceId = testMode ? testPriceId : livePriceId;
 

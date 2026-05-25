@@ -8,7 +8,7 @@ module.exports = async function handler(request, response) {
   const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
   const hasTestKey = Boolean(testSecretKey);
   const hasLiveKey = Boolean(liveSecretKey);
-  const testMode  = process.env.STRIPE_MODE === 'test' || (!hasLiveKey && hasTestKey);
+  const testMode  = !hasLiveKey && (process.env.STRIPE_MODE === 'test' || hasTestKey);
   const secretKey = testMode ? testSecretKey : liveSecretKey;
 
   if (!secretKey) {
