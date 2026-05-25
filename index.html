@@ -97,14 +97,13 @@
       <div class="pro-shell">
         <button class="dialog-x" id="closeProPageButton" type="button" aria-label="Close">X</button>
         <p class="eyebrow">ROTEX Pro</p>
-        <h2>ROTEX Pro</h2>
-        <p class="upgrade-copy">Get more room for heavier ROTEX work, more access, and more plugins.</p>
-        <div class="upgrade-price">$15 <span>/ month</span></div>
+        <h2>Pro plan</h2>
+        <div class="upgrade-price">$15 <span>/ monthly</span></div>
         <ul class="upgrade-list">
-          <li>$5 in credits</li>
-          <li>Better models</li>
-          <li>Computer mode</li>
-          <li>More plugins</li>
+          <li>More models</li>
+          <li>More computer mode</li>
+          <li>More access</li>
+          <li>More merges</li>
         </ul>
         <div class="dialog-actions">
           <a class="secondary-action download-app-link" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
@@ -113,7 +112,7 @@
       </div>
     </section>
 
-    <section class="auth-page" id="authPage">
+    <section class="auth-page" id="authPage" hidden>
       <div class="auth-shell">
         <button class="dialog-x" id="closeAuthPageButton" type="button" aria-label="Close">X</button>
         <p class="eyebrow">ROTEX account</p>
@@ -198,47 +197,6 @@
       </form>
     </dialog>
 
-    <script>
-      window.addEventListener('DOMContentLoaded', () => {
-        const appShell = document.querySelector('#appShell');
-        const authPage = document.querySelector('#authPage');
-        const proPage = document.querySelector('#proPage');
-        const loginButton = document.querySelector('#googleButton');
-        const upgradeButton = document.querySelector('#upgradeButton');
-        const closeAuthButton = document.querySelector('#closeAuthPageButton');
-        const methodStep = document.querySelector('#authMethodStep');
-        const emailStep = document.querySelector('#authEmailStep');
-        const codeStep = document.querySelector('#authCodeStep');
-        const chooseEmailButton = document.querySelector('#chooseEmailButton');
-        const backToEmailButton = document.querySelector('#backToEmailButton');
-
-        function showLogin() {
-          if (!appShell || !authPage) return;
-          appShell.hidden = true;
-          if (proPage) proPage.hidden = true;
-          authPage.hidden = false;
-          if (methodStep) methodStep.hidden = false;
-          if (emailStep) emailStep.hidden = true;
-          if (codeStep) codeStep.hidden = true;
-          window.location.hash = 'authPage';
-        }
-
-        loginButton?.addEventListener('click', showLogin);
-        upgradeButton?.addEventListener('click', showLogin);
-        closeAuthButton?.addEventListener('click', () => {
-          authPage.hidden = true;
-          appShell.hidden = false;
-        });
-        chooseEmailButton?.addEventListener('click', () => {
-          if (methodStep) methodStep.hidden = true;
-          if (emailStep) emailStep.hidden = false;
-        });
-        backToEmailButton?.addEventListener('click', () => {
-          if (codeStep) codeStep.hidden = true;
-          if (emailStep) emailStep.hidden = false;
-        });
-      });
-    </script>
-    <script type="module" src="./app.js?v=20260525-4"></script>
+    <script type="module" src="./app.js?v=20260525-5"></script>
   </body>
 </html>
