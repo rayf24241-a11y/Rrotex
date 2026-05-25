@@ -42,6 +42,15 @@ const models = [
     description: 'Harder tasks that need more reasoning, planning, and careful answers.',
   },
   {
+    id: 'rod-brain',
+    name: 'Rod brain',
+    short: 'Smart help',
+    api: 'Claude Haiku 4.5',
+    cost: 0.004,
+    computerCost: 0.012,
+    description: 'Smarter everyday help powered by Haiku for Stripe, planning, and careful answers.',
+  },
+  {
     id: 'tex-0',
     name: 'Tex 0',
     short: 'Code',
@@ -58,6 +67,16 @@ const models = [
     cost: 0.015,
     computerCost: 0.07,
     description: 'Complex code, larger builds, deeper architecture, and tougher fixes.',
+  },
+  {
+    id: 'tex-2-5',
+    name: 'Tex 2.5',
+    short: 'Pro code',
+    api: 'Claude Opus 4.7',
+    cost: 0.035,
+    computerCost: 0.12,
+    proOnly: true,
+    description: 'Pro-only hardest code, Stripe, architecture, and deep debugging powered by Opus.',
   },
   {
     id: 'treesearch-q',
@@ -817,6 +836,10 @@ function activeModel() {
   return models.find((model) => model.id === state.activeModel) || models[0];
 }
 
+function isModelLocked(model) {
+  return Boolean(model?.proOnly && !state.pro);
+}
+
 function activeCost() {
   const model = activeModel();
   return state.computerMode ? (model.computerCost ?? model.cost) : model.cost;
@@ -828,7 +851,12 @@ function computerMessagesLeft() {
 }
 
 function ensureComputerModel() {
-  if (!state.computerMode || activeModel().computerCost !== null) return;
+  const model = activeModel();
+  if (isModelLocked(model)) {
+    state.activeModel = 'rod-brain';
+    return;
+  }
+  if (!state.computerMode || model.computerCost !== null) return;
   state.activeModel = 'rod-thinking';
 }
 
@@ -844,13 +872,20 @@ function renderModelMenu() {
   modelMenu.innerHTML = '';
 
   models.forEach((item) => {
-    const disabled = state.computerMode && item.computerCost === null;
+    const proLocked = isModelLocked(item);
+    const disabled = proLocked || (state.computerMode && item.computerCost === null);
     const price = state.computerMode ? item.computerCost : item.cost;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `model-option${item.id === state.activeModel ? ' active' : ''}${disabled ? ' disabled' : ''}`;
-    button.innerHTML = `<strong>${item.name}</strong><span>${item.description}</span><span>${disabled ? 'Not in computer mode' : `${formatMoney(price)} per message${state.computerMode ? ' ICM' : ''}`}</span>`;
+    const status = proLocked ? 'Pro only' : disabled ? 'Not in computer mode' : `${formatMoney(price)} per message${state.computerMode ? ' ICM' : ''}`;
+    button.innerHTML = `<strong>${item.name}${item.proOnly ? '<em>Pro only</em>' : ''}</strong><span>${item.description}</span><span>${status}</span>`;
     button.addEventListener('click', () => {
+      if (proLocked) {
+        closeModelMenu();
+        startUpgrade();
+        return;
+      }
       if (disabled) return;
       state.activeModel = item.id;
       closeModelMenu();
@@ -1145,6 +1180,17 @@ async function sendMessage(text) {
   ensureComputerModel();
   const model = activeModel();
   const cost = activeCost();
+  if (isModelLocked(model)) {
+    chat.messages.push({
+      role: 'assistant',
+      model: 'ROTEX Pro',
+      text: `${model.name} is Pro only. Upgrade?`,
+      action: 'upgrade',
+    });
+    persistState();
+    render();
+    return;
+  }
   if (state.computerMode && !state.pro && computerMessagesLeft() <= 0) {
     chat.messages.push({
       role: 'assistant',

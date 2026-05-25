@@ -15,6 +15,14 @@ const MODELS = {
     temperature: 0.55,
     maxTokens: 1100,
   },
+  'rod-brain': {
+    name: 'Rod brain',
+    provider: 'anthropic',
+    providerModel: process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-3-5-haiku-latest',
+    purpose: 'smart everyday help',
+    temperature: 0.45,
+    maxTokens: 1100,
+  },
   'tex-0': {
     name: 'Tex 0',
     provider: 'deepseek',
@@ -30,6 +38,14 @@ const MODELS = {
     purpose: 'complex code',
     temperature: 0.25,
     maxTokens: 1600,
+  },
+  'tex-2-5': {
+    name: 'Tex 2.5',
+    provider: 'anthropic',
+    providerModel: process.env.CLAUDE_OPUS_MODEL || process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1-20250805',
+    purpose: 'pro complex code',
+    temperature: 0.25,
+    maxTokens: 1800,
   },
   'treesearch-q': {
     name: 'Treesearch _ q',
@@ -85,16 +101,26 @@ module.exports = async function handler(request, response) {
   }
 
   try {
-    const text = selected.provider === 'deepseek'
-      ? await callOpenAiCompatible({
+    let text = '';
+    if (selected.provider === 'anthropic') {
+      text = await callAnthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
+        model: selected.providerModel,
+        messages: cleanMessages,
+        temperature: selected.temperature,
+        maxTokens: selected.maxTokens,
+      });
+    } else if (selected.provider === 'deepseek') {
+      text = await callOpenAiCompatible({
         apiKey: process.env.DEEPSEEK_API_KEY,
         baseUrl: 'https://api.deepseek.com/chat/completions',
         model: selected.providerModel,
         messages: cleanMessages,
         temperature: selected.temperature,
         maxTokens: selected.maxTokens,
-      })
-      : await callOpenAiCompatible({
+      });
+    } else {
+      text = await callOpenAiCompatible({
         apiKey: process.env.GROQ_API_KEY,
         baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
         model: selected.providerModel,
@@ -102,12 +128,13 @@ module.exports = async function handler(request, response) {
         temperature: selected.temperature,
         maxTokens: selected.maxTokens,
       });
+    }
 
     response.status(200).json({ model: selected.name, text });
   } catch (error) {
     response.status(500).json({
       error: 'backend_unavailable',
-      text: `${selected.name} is set to ${selected.providerModel}, but the server key is missing or the provider failed. Add GROQ_API_KEY and DEEPSEEK_API_KEY in Vercel.`,
+      text: `${selected.name} is set to ${selected.providerModel}, but the server key is missing or the provider failed. Add GROQ_API_KEY, DEEPSEEK_API_KEY, and ANTHROPIC_API_KEY or CLAUDE_API_KEY in Vercel.`,
     });
   }
 };
@@ -183,4 +210,47 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
 
   const data = await providerResponse.json();
   return data.choices?.[0]?.message?.content || 'No response text returned.';
+}
+
+async function callAnthropic({ apiKey, model, messages, temperature = 0.7, maxTokens = 900 }) {
+  if (!apiKey) {
+    throw new Error('Missing Anthropic key');
+  }
+
+  const system = messages
+    .filter((message) => message.role === 'system')
+    .map((message) => message.content)
+    .join('\n\n');
+  const chatMessages = messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
+
+  const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      system,
+      messages: chatMessages.length ? chatMessages : [{ role: 'user', content: 'Hello' }],
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!providerResponse.ok) {
+    const body = await providerResponse.text();
+    throw new Error(body);
+  }
+
+  const data = await providerResponse.json();
+  return Array.isArray(data.content)
+    ? data.content.map((part) => part.text || '').join('').trim()
+    : 'No response text returned.';
 }

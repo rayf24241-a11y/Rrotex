@@ -702,6 +702,25 @@ h1 {
   border-color: transparent;
 }
 
+.model-option strong {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.model-option em {
+  padding: 3px 7px;
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--green), var(--blue));
+  border-radius: 999px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .model-option.active,
 .model-option:hover {
   color: var(--text);
@@ -1125,7 +1144,7 @@ body:has(.account-page:target) .app-shell {
 .acct-upgrade-block {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  min-height: clamp(720px, 86vh, 940px);
+  min-height: clamp(560px, 66vh, 700px);
   align-content: start;
   padding: clamp(22px, 4vw, 34px);
   background: rgba(19, 26, 36, 0.82);
@@ -1135,12 +1154,12 @@ body:has(.account-page:target) .app-shell {
 
 .acct-upgrade-block .upgrade-price {
   display: flex;
-  min-height: 128px;
+  min-height: 82px;
   align-items: flex-end;
   gap: 12px;
-  margin: 6px 0 22px;
+  margin: 6px 0 16px;
   padding-bottom: 10px;
-  font-size: clamp(64px, 10vw, 112px);
+  font-size: clamp(54px, 7vw, 82px);
   font-weight: 950;
   line-height: 0.95;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -1154,19 +1173,21 @@ body:has(.account-page:target) .app-shell {
 
 .acct-upgrade-block .upgrade-list {
   display: grid;
-  gap: 16px;
-  margin: 0 0 24px;
+  gap: 10px;
+  margin: 0 0 18px;
   padding-left: 20px;
   color: var(--muted);
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.35;
 }
 
 .stripe-ai-card {
   display: grid;
-  gap: 14px;
-  margin-bottom: 28px;
-  padding: 16px;
+  gap: 10px;
+  max-height: 260px;
+  margin-bottom: 18px;
+  padding: 10px;
+  overflow: auto;
   background: rgba(8, 12, 18, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
@@ -1181,8 +1202,8 @@ body:has(.account-page:target) .app-shell {
 .stripe-ai-models span {
   display: grid;
   gap: 4px;
-  min-height: 58px;
-  padding: 12px;
+  min-height: 42px;
+  padding: 9px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--line);
@@ -1208,11 +1229,11 @@ body:has(.account-page:target) .app-shell {
   grid-template-columns: minmax(160px, 1.4fr) minmax(88px, 0.7fr) minmax(116px, 1fr);
   gap: 12px;
   align-items: center;
-  min-height: 38px;
-  padding: 9px 12px;
+  min-height: 28px;
+  padding: 6px 9px;
   color: var(--muted);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .stripe-ai-table > div:first-child {
@@ -1493,7 +1514,7 @@ body:has(.account-page:target) .app-shell {
   }
 
   .acct-upgrade-block {
-    min-height: 760px;
+    min-height: 600px;
   }
 
   .stripe-ai-models,
