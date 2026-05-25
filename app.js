@@ -76,6 +76,8 @@ const messagesEl = document.querySelector('#messages');
 const composer = document.querySelector('#composer');
 const messageInput = document.querySelector('#messageInput');
 const newChatButton = document.querySelector('#newChatButton');
+const teamupEntry = document.querySelector('#teamupEntry');
+const teamupCreditStatus = document.querySelector('#teamupCreditStatus');
 const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
 const signOutButton = document.querySelector('#signOutButton');
@@ -146,6 +148,13 @@ const confirmPhoneCodeButton = document.querySelector('#confirmPhoneCodeButton')
 const skipPhoneButton = document.querySelector('#skipPhoneButton');
 const newComputerChatButton = document.querySelector('#newComputerChatButton');
 const computerChatList = document.querySelector('#computerChatList');
+const personalityDialog = document.querySelector('#personalityDialog');
+const personalityOptions = document.querySelectorAll('.personality-option');
+const teamupDialog = document.querySelector('#teamupDialog');
+const teamupStatus = document.querySelector('#teamupStatus');
+const teamupBotA = document.querySelector('#teamupBotA');
+const teamupBotB = document.querySelector('#teamupBotB');
+const makeTeamupRoomButton = document.querySelector('#makeTeamupRoomButton');
 
 const storageKey = 'rotex:web:v2';
 const pendingActivationKey = 'rotex:pending-activation';
@@ -156,7 +165,14 @@ const creditPlans = {
   pro: { daily: 2.5, weekly: 5, monthly: 5 },
 };
 const freeComputerMessagesPerDay = 3;
+const weeklyTeamupTokens = 10000;
 const connectableServices = ['Google Drive', 'GitHub', 'PC'];
+const personalities = {
+  normal: 'Normal: direct, useful, friendly, no big intro.',
+  fast: 'Fast: short answers first, no fluff.',
+  coder: 'Coder: practical implementation help, precise steps, code when useful.',
+  chill: 'Chill: casual, simple, but still helpful.',
+};
 const deviceRole = detectDeviceRole();
 let state = loadState();
 let auth = null;
@@ -251,6 +267,8 @@ function normalizeState(value) {
     profile: normalizeProfile(value.profile),
     creditUsage,
     computerUsage: normalizeComputerUsage(value.computerUsage),
+    teamupUsage: normalizeTeamupUsage(value.teamupUsage),
+    teamupRooms: Array.isArray(value.teamupRooms) ? value.teamupRooms.slice(0, 1).map(normalizeTeamupRoom).filter(Boolean) : [],
     computerConnections: Array.isArray(value.computerConnections)
       ? value.computerConnections.filter((item) => connectableServices.includes(item))
       : [],
@@ -259,6 +277,13 @@ function normalizeState(value) {
     credits: Math.max(0, plan.monthly - (Number(creditUsage.monthSpent) || 0)),
     chats,
   };
+}
+
+function normalizeTeamupRoom(value) {
+  const botA = models.some((model) => model.id === value?.botA) ? value.botA : 'rod-thinking';
+  const botB = models.some((model) => model.id === value?.botB) ? value.botB : 'tex-0';
+  if (botA === botB) return { id: value?.id || crypto.randomUUID(), botA, botB: botA === 'tex-0' ? 'rod-thinking' : 'tex-0' };
+  return { id: value?.id || crypto.randomUUID(), botA, botB };
 }
 
 function normalizeProfile(value) {
@@ -315,6 +340,14 @@ function normalizeComputerUsage(value) {
   return { day: today, count: Number(value.count) || 0 };
 }
 
+function normalizeTeamupUsage(value) {
+  const week = weekKey();
+  if (!value || value.week !== week) {
+    return { week, spent: 0 };
+  }
+  return { week, spent: Math.max(0, Number(value.spent) || 0) };
+}
+
 function applyCreditRefill() {
   state.creditUsage = normalizeCreditUsage(state.creditUsage, state.pro, state.credits, state);
   state.credits = remainingMonthlyCredits(state.pro, state.creditUsage);
@@ -322,6 +355,7 @@ function applyCreditRefill() {
 
 function applyComputerUsageReset() {
   state.computerUsage = normalizeComputerUsage(state.computerUsage);
+  state.teamupUsage = normalizeTeamupUsage(state.teamupUsage);
 }
 
 function persistState() {
@@ -810,7 +844,7 @@ function renderChats() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'chat-item';
-    button.innerHTML = `<span>${escapeHtml(chat.title)}</span><small>${chat.messages.length}</small>`;
+    button.innerHTML = `<span>${escapeHtml(chat.title)}</span><small>${chat.teamup ? 'teamup' : chat.personality || chat.messages.length}</small>`;
     button.addEventListener('click', () => {
       state.activeChatId = chat.id;
       closeComputerMode();
@@ -839,9 +873,9 @@ function renderMessages() {
   if (!chat || chat.messages.length === 0) {
     messagesEl.innerHTML = `
       <div class="empty-state">
-        <p class="eyebrow">Ready</p>
+        <p class="eyebrow">${chat?.teamup ? 'Teamup room' : 'Ready'}</p>
         <h2>${model.name}</h2>
-        <p>${model.description}</p>
+        <p>${chat?.teamup ? 'Two ROTEX bots will answer together in this mini room.' : model.description}</p>
         <p>${model.name} is built for ${model.short.toLowerCase()}${state.computerMode ? ' in computer mode' : ''}. Costs ${formatMoney(activeCost())} per message. Free limits are ${formatMoney(activeFreePlan().daily)} daily, ${formatMoney(activeFreePlan().weekly)} weekly, and ${formatMoney(activeFreePlan().monthly)} monthly.</p>
       </div>
     `;
@@ -899,6 +933,7 @@ function renderAccount() {
   }
 
   if (!accountPage) return;
+  teamupCreditStatus.textContent = `${remainingTeamupTokens().toLocaleString()} weekly tokens`;
   const displayName = state.profile?.name || currentUser?.displayName || currentUser?.email || 'Not signed in';
   const nickname = state.profile?.nickname || displayName;
   acctAvatar.textContent = currentUser ? nickname.trim().charAt(0).toUpperCase() || 'R' : '?';
@@ -942,11 +977,24 @@ function renderComputerChats() {
 function render() {
   applyCreditRefill();
   applyComputerUsageReset();
+  populateTeamupSelectors();
   renderModelMenu();
   renderChats();
   renderMessages();
   renderAccount();
   renderComputerChats();
+}
+
+function populateTeamupSelectors() {
+  if (!teamupBotA || teamupBotA.options.length) return;
+  models.forEach((model) => {
+    const optionA = new Option(model.name, model.id);
+    const optionB = new Option(model.name, model.id);
+    teamupBotA.add(optionA);
+    teamupBotB.add(optionB);
+  });
+  teamupBotA.value = 'rod-thinking';
+  teamupBotB.value = 'tex-0';
 }
 
 function renderModeShell() {
@@ -970,12 +1018,13 @@ function renderModeShell() {
   renderPcBridge();
 }
 
-function createChat() {
+function createChat(personality = 'normal') {
   const id = crypto.randomUUID();
   state.chats.unshift({
     id,
-    title: 'New ROTEX chat',
+    title: `${personality[0].toUpperCase()}${personality.slice(1)} chat`,
     createdAt: Date.now(),
+    personality,
     messages: [],
   });
   state.activeChatId = id;
@@ -984,10 +1033,57 @@ function createChat() {
   messageInput.focus();
 }
 
+function createTeamupRoom() {
+  if (!state.pro) {
+    teamupStatus.textContent = 'Teamup rooms are Pro only. Upgrade first.';
+    startUpgrade();
+    return;
+  }
+  if (state.teamupRooms.length >= 1) {
+    teamupStatus.textContent = 'Pro includes 1 mini private teamup room. Opening your room.';
+    const room = state.teamupRooms[0];
+    const existing = state.chats.find((chat) => chat.teamup?.id === room.id);
+    if (existing) {
+      state.activeChatId = existing.id;
+    } else {
+      const chat = { id: crypto.randomUUID(), title: 'Teamup room', createdAt: Date.now(), teamup: room, messages: [] };
+      state.chats.unshift(chat);
+      state.activeChatId = chat.id;
+    }
+    teamupDialog.close();
+    persistState();
+    render();
+    return;
+  }
+  const botA = teamupBotA.value;
+  let botB = teamupBotB.value;
+  if (botA === botB) {
+    botB = botA === 'tex-0' ? 'rod-thinking' : 'tex-0';
+  }
+  const room = { id: crypto.randomUUID(), botA, botB };
+  const chat = {
+    id: crypto.randomUUID(),
+    title: 'Teamup room',
+    createdAt: Date.now(),
+    teamup: room,
+    messages: [],
+  };
+  state.teamupRooms = [room];
+  state.chats.unshift(chat);
+  state.activeChatId = chat.id;
+  teamupDialog.close();
+  persistState();
+  render();
+}
+
 async function sendMessage(text) {
   const chat = activeChat();
   const clean = text.trim();
   if (!clean || !chat) return;
+  if (chat.teamup) {
+    await sendTeamupMessage(chat, clean);
+    return;
+  }
 
   if (shouldAskPhone()) {
     openPhoneDialog();
@@ -1048,6 +1144,7 @@ async function sendMessage(text) {
         computerMode: state.computerMode,
         computerConnections: state.computerConnections,
         pcBridge: state.pcBridge,
+        personality: personalities[chat.personality || 'normal'],
         messages: chat.messages.filter((message) => message.text !== 'Thinking...'),
       }),
     });
@@ -1059,6 +1156,62 @@ async function sendMessage(text) {
 
   persistState();
   render();
+}
+
+async function sendTeamupMessage(chat, clean) {
+  if (!state.pro) {
+    chat.messages.push({ role: 'assistant', model: 'ROTEX Pro', text: 'Teamup rooms are Pro only. Upgrade?', action: 'upgrade' });
+    persistState();
+    render();
+    return;
+  }
+  applyComputerUsageReset();
+  const tokenCost = estimateTeamupTokens(clean);
+  if (remainingTeamupTokens() < tokenCost) {
+    chat.messages.push({ role: 'assistant', model: 'Teamup credits', text: 'Teamup tokens are out for this week. They refill to 10,000 next week.' });
+    persistState();
+    render();
+    return;
+  }
+  state.teamupUsage.spent += tokenCost;
+  chat.messages.push({ role: 'user', text: clean, model: 'You' });
+  if (chat.title === 'Teamup room') {
+    chat.title = clean.length > 30 ? `${clean.slice(0, 30)}...` : clean;
+  }
+  const botA = models.find((model) => model.id === chat.teamup.botA) || models[1];
+  const botB = models.find((model) => model.id === chat.teamup.botB) || models[2];
+  const pendingA = { role: 'assistant', model: botA.name, text: 'Thinking...' };
+  const pendingB = { role: 'assistant', model: botB.name, text: 'Thinking...' };
+  chat.messages.push(pendingA, pendingB);
+  persistState();
+  render();
+
+  await Promise.all([
+    fillTeamupReply(chat, pendingA, botA, botB, clean),
+    fillTeamupReply(chat, pendingB, botB, botA, clean),
+  ]);
+  persistState();
+  render();
+}
+
+async function fillTeamupReply(chat, pending, selfModel, partnerModel, clean) {
+  try {
+    const authToken = currentUser ? await currentUser.getIdToken() : '';
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        authToken,
+        model: selfModel.id,
+        personality: `Teamup mini room. You are ${selfModel.name}. Work with ${partnerModel.name}. Be useful, concise, and do not introduce yourself unless asked. Respond to: ${clean}`,
+        messages: chat.messages.filter((message) => message.text !== 'Thinking...').slice(-10),
+      }),
+    });
+    const data = await response.json();
+    pending.text = data.text || `${selfModel.name} had no response.`;
+  } catch {
+    pending.text = `${selfModel.name} could not respond yet.`;
+  }
 }
 
 async function startUpgrade() {
@@ -1175,6 +1328,23 @@ function remainingWeeklyCredits(pro = state.pro, usage = state.creditUsage) {
 function remainingMonthlyCredits(pro = state.pro, usage = state.creditUsage) {
   const plan = activeCreditPlan(pro);
   return Math.max(0, plan.monthly - (Number(usage?.monthSpent) || 0));
+}
+
+function remainingTeamupTokens() {
+  state.teamupUsage = normalizeTeamupUsage(state.teamupUsage);
+  return Math.max(0, weeklyTeamupTokens - (Number(state.teamupUsage.spent) || 0));
+}
+
+function estimateTeamupTokens(text) {
+  const lower = text.toLowerCase();
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  if (/\b(architecture|complex|hard|full|entire|system|deploy)\b/.test(lower)) {
+    return Math.min(4000, Math.max(800, words * 24));
+  }
+  if (/\b(repo|github|file|app|code|debug|build|fix|edit|implement)\b/.test(lower)) {
+    return Math.min(700, Math.max(100, words * 10));
+  }
+  return Math.min(50, Math.max(1, Math.ceil(words * 2)));
 }
 
 function canSpendCredits(cost) {
@@ -1360,8 +1530,28 @@ function closeComputerMode() {
 
 newChatButton.addEventListener('click', () => {
   closeComputerMode();
-  createChat();
+  personalityDialog.showModal();
 });
+
+personalityOptions.forEach((button) => {
+  button.addEventListener('click', () => {
+    closeComputerMode();
+    createChat(button.dataset.personality || 'normal');
+    personalityDialog.close();
+  });
+});
+
+teamupEntry.addEventListener('click', () => {
+  closeComputerMode();
+  populateTeamupSelectors();
+  teamupStatus.textContent = state.pro
+    ? `Pro teamup ready. ${remainingTeamupTokens().toLocaleString()} weekly tokens left.`
+    : 'Teamup rooms are Pro only.';
+  teamupDialog.showModal();
+});
+
+makeTeamupRoomButton.addEventListener('click', createTeamupRoom);
+
 modelButton.addEventListener('click', toggleModelMenu);
 computerEntry.addEventListener('click', () => {
   state.computerMode = !state.computerMode;

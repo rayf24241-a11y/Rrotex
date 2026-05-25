@@ -47,7 +47,7 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const { authToken = '', model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {} } = request.body || {};
+  const { authToken = '', model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {}, personality = '' } = request.body || {};
   // Auth is optional — logged-in users get cloud sync, guests can still chat
   const authResult = await verifyFirebaseToken(authToken);
 
@@ -64,6 +64,8 @@ module.exports = async function handler(request, response) {
     role: 'system',
     content: [
       'You are a ROTEX web assistant.',
+      'Chat naturally. Do not start with a giant capability list, identity speech, or "I am your assistant" intro unless the user asks what you can do. Keep normal answers short and useful.',
+      personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
       'You CAN generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files — never just paste raw code when a file was asked for.',
       'You cannot directly access, read, or modify files already on the user\'s device.',
       computerMode

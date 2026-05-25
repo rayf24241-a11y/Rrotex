@@ -105,6 +105,7 @@ button {
 .google-button,
 .signout-button,
 .computer-entry,
+.teamup-entry,
 .send-button,
 .upgrade-button,
 .message-action,
@@ -161,8 +162,31 @@ button {
   opacity: 0.8;
 }
 
+.teamup-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  min-height: 64px;
+  padding: 13px 14px;
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--amber), var(--pink));
+  border: 1px solid transparent;
+  border-radius: 10px;
+  text-align: left;
+  font-weight: 950;
+}
+
+.teamup-entry small {
+  color: rgba(6, 7, 11, 0.72);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .new-chat:hover,
 .google-button:hover,
+.teamup-entry:hover,
 .send-button:hover,
 .model-select:hover,
 .model-option:hover {
@@ -840,6 +864,34 @@ h1 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.personality-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.teamup-pickers {
+  display: grid;
+  gap: 12px;
+}
+
+.teamup-pickers label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.teamup-pickers select {
+  min-height: 46px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
 }
 
 .connect-option {
