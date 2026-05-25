@@ -870,14 +870,53 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.teamup-card {
+  width: min(620px, calc(100vw - 28px));
+  gap: 18px;
+  padding: 28px;
+  background:
+    linear-gradient(145deg, rgba(35, 44, 59, 0.96), rgba(11, 15, 23, 0.98)),
+    rgba(13, 17, 24, 0.98);
+}
+
+.teamup-hero {
+  display: grid;
+  gap: 8px;
+  padding-right: 46px;
+}
+
+.teamup-hero h2 {
+  font-size: clamp(34px, 7vw, 58px);
+}
+
 .teamup-pickers {
   display: grid;
   gap: 12px;
 }
 
-.teamup-pickers label {
+.teamup-slot {
   display: grid;
-  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 260px);
+  gap: 14px;
+  align-items: center;
+  min-height: 86px;
+  padding: 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.teamup-slot span {
+  display: grid;
+  gap: 4px;
+}
+
+.teamup-slot strong {
+  font-size: 17px;
+}
+
+.teamup-slot small {
   color: var(--muted);
   font-size: 12px;
   font-weight: 900;
@@ -892,6 +931,10 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   outline: none;
+}
+
+.teamup-pickers select option:disabled {
+  color: #6c7482;
 }
 
 .connect-option {
@@ -1079,15 +1122,18 @@ body:has(.account-page:target) .app-shell {
   background: linear-gradient(135deg, var(--green), var(--blue));
 }
 
-.acct-upgrade-block,
-.acct-pro-active {
+.acct-upgrade-block {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: clamp(520px, 64vh, 720px);
+  align-content: start;
   padding: clamp(22px, 4vw, 34px);
   background: rgba(19, 26, 36, 0.82);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
 
-.upgrade-price {
+.acct-upgrade-block .upgrade-price {
   display: flex;
   min-height: 128px;
   align-items: flex-end;
@@ -1100,23 +1146,26 @@ body:has(.account-page:target) .app-shell {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.upgrade-price span {
+.acct-upgrade-block .upgrade-price span {
   color: var(--muted);
   padding-bottom: 12px;
   font-size: 20px;
 }
 
-.upgrade-list {
+.acct-upgrade-block .upgrade-list {
   display: grid;
-  gap: 12px;
-  margin: 0 0 24px;
+  gap: 16px;
+  margin: 0 0 32px;
   padding-left: 20px;
   color: var(--muted);
+  font-size: 18px;
+  line-height: 1.35;
 }
 
 .acct-buy-btn {
   width: 100%;
   min-height: 54px;
+  margin-top: auto;
   color: #130e00;
   background: linear-gradient(135deg, var(--amber), var(--pink));
   box-shadow: 0 18px 44px rgba(255, 107, 157, 0.18);
@@ -1379,6 +1428,10 @@ body:has(.account-page:target) .app-shell {
     flex-direction: column;
   }
 
+  .acct-upgrade-block {
+    min-height: 520px;
+  }
+
   .composer {
     grid-template-columns: 1fr;
   }
@@ -1390,5 +1443,10 @@ body:has(.account-page:target) .app-shell {
   .model-select {
     min-height: 52px;
     width: 100%;
+  }
+
+  .personality-grid,
+  .teamup-slot {
+    grid-template-columns: 1fr;
   }
 }

@@ -944,7 +944,7 @@ function renderAccount() {
   acctUpgradeBlock.hidden = false;
   checkoutButton.disabled = Boolean(state.pro);
   checkoutButton.textContent = state.pro ? 'Already have plan' : 'Buy Pro - $15 / month';
-  acctProActive.hidden = !state.pro;
+  if (acctProActive) acctProActive.hidden = true;
   accountSignOutBtn.hidden = !currentUser;
 }
 
@@ -986,15 +986,36 @@ function render() {
 }
 
 function populateTeamupSelectors() {
-  if (!teamupBotA || teamupBotA.options.length) return;
-  models.forEach((model) => {
-    const optionA = new Option(model.name, model.id);
-    const optionB = new Option(model.name, model.id);
-    teamupBotA.add(optionA);
-    teamupBotB.add(optionB);
+  if (!teamupBotA || !teamupBotB) return;
+  if (!teamupBotA.options.length) {
+    models.forEach((model) => {
+      const optionA = new Option(model.name, model.id);
+      const optionB = new Option(model.name, model.id);
+      teamupBotA.add(optionA);
+      teamupBotB.add(optionB);
+    });
+    teamupBotA.value = 'rod-thinking';
+    teamupBotB.value = 'tex-0';
+  }
+  updateTeamupSelectors();
+}
+
+function updateTeamupSelectors(changed = '') {
+  if (!teamupBotA || !teamupBotB) return;
+  const fallback = models.find((model) => model.id !== teamupBotA.value)?.id || models[0]?.id;
+  if (teamupBotA.value === teamupBotB.value) {
+    if (changed === 'bot-b') {
+      teamupBotA.value = models.find((model) => model.id !== teamupBotB.value)?.id || models[0]?.id;
+    } else if (fallback) {
+      teamupBotB.value = fallback;
+    }
+  }
+  [...teamupBotA.options].forEach((option) => {
+    option.disabled = option.value === teamupBotB.value;
   });
-  teamupBotA.value = 'rod-thinking';
-  teamupBotB.value = 'tex-0';
+  [...teamupBotB.options].forEach((option) => {
+    option.disabled = option.value === teamupBotA.value;
+  });
 }
 
 function renderModeShell() {
@@ -1056,9 +1077,11 @@ function createTeamupRoom() {
     return;
   }
   const botA = teamupBotA.value;
-  let botB = teamupBotB.value;
+  const botB = teamupBotB.value;
   if (botA === botB) {
-    botB = botA === 'tex-0' ? 'rod-thinking' : 'tex-0';
+    teamupStatus.textContent = 'Pick two different models for a teamup room.';
+    updateTeamupSelectors();
+    return;
   }
   const room = { id: crypto.randomUUID(), botA, botB };
   const chat = {
@@ -1551,6 +1574,8 @@ teamupEntry.addEventListener('click', () => {
 });
 
 makeTeamupRoomButton.addEventListener('click', createTeamupRoom);
+teamupBotA.addEventListener('change', () => updateTeamupSelectors('bot-a'));
+teamupBotB.addEventListener('change', () => updateTeamupSelectors('bot-b'));
 
 modelButton.addEventListener('click', toggleModelMenu);
 computerEntry.addEventListener('click', () => {

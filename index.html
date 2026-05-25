@@ -134,11 +134,6 @@
           <button id="checkoutButton" type="button" class="acct-buy-btn">Buy Pro — $15 / month →</button>
         </div>
 
-        <div class="acct-pro-active" id="acctProActive" hidden>
-          <p class="eyebrow" style="color:var(--green)">Pro is active</p>
-          <p>All Pro features are unlocked on your account.</p>
-        </div>
-
         <div class="acct-footer">
           <a class="secondary-action" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
           <button class="acct-signout" id="accountSignOutBtn" type="button">Sign out</button>
@@ -217,14 +212,28 @@
     </dialog>
 
     <dialog class="connect-dialog" id="teamupDialog">
-      <form method="dialog" class="connect-card">
+      <form method="dialog" class="connect-card teamup-card">
         <button class="dialog-x" type="submit" value="cancel" aria-label="Close">X</button>
-        <p class="eyebrow">Teamup</p>
-        <h2>Make teamup room</h2>
-        <p class="upgrade-copy" id="teamupStatus">Pro includes 1 mini private room, 2 bot spots, and 10,000 weekly teamup tokens.</p>
+        <div class="teamup-hero">
+          <p class="eyebrow">Teamup</p>
+          <h2>Make teamup room</h2>
+          <p class="upgrade-copy" id="teamupStatus">Pick two different ROTEX models. They answer together in one private mini room.</p>
+        </div>
         <div class="teamup-pickers">
-          <label>Bot 1<select id="teamupBotA"></select></label>
-          <label>Bot 2<select id="teamupBotB"></select></label>
+          <label class="teamup-slot">
+            <span>
+              <strong>Bot 1</strong>
+              <small>Lead voice</small>
+            </span>
+            <select id="teamupBotA"></select>
+          </label>
+          <label class="teamup-slot">
+            <span>
+              <strong>Bot 2</strong>
+              <small>Second brain</small>
+            </span>
+            <select id="teamupBotB"></select>
+          </label>
         </div>
         <div class="dialog-actions">
           <button id="makeTeamupRoomButton" type="button" class="checkout-action">Make teamup room</button>
