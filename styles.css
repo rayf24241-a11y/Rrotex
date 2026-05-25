@@ -177,7 +177,8 @@ button {
   display: grid;
   gap: 8px;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 2px;
 }
 
@@ -185,6 +186,7 @@ button {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
+  min-width: 0;
   min-height: 48px;
   padding: 10px 12px;
   color: var(--muted);
@@ -203,12 +205,15 @@ button {
 }
 
 .chat-item span {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .chat-item small {
+  flex-shrink: 0;
   color: var(--quiet);
 }
 
