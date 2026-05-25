@@ -993,14 +993,6 @@ async function sendMessage(text) {
 }
 
 async function startUpgrade() {
-  if (!currentUser) {
-    openAuthPage('upgrade');
-    return;
-  }
-  if (needsProfile()) {
-    openAuthPage('upgrade', true);
-    return;
-  }
   appShell.hidden = true;
   authPage.hidden = true;
   proPage.hidden = false;
@@ -1513,9 +1505,9 @@ sendEmailCodeButton.addEventListener('click', sendEmailCodeNotice);
 emailLoginButton.addEventListener('click', continueEmailLogin);
 backToEmailButton.addEventListener('click', () => showAuthStep('email'));
 saveProfileButton.addEventListener('click', saveProfile);
-sendPhoneCodeButton.addEventListener('click', sendPhoneCode);
-confirmPhoneCodeButton.addEventListener('click', confirmPhoneCode);
-skipPhoneButton.addEventListener('click', skipPhoneVerification);
+sendPhoneCodeButton?.addEventListener('click', sendPhoneCode);
+confirmPhoneCodeButton?.addEventListener('click', confirmPhoneCode);
+skipPhoneButton?.addEventListener('click', skipPhoneVerification);
 upgradeButton.addEventListener('click', startUpgrade);
 closeProPageButton.addEventListener('click', closeProPage);
 checkoutButton.addEventListener('click', continueCheckout);
