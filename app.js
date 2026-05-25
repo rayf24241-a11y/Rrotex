@@ -1490,7 +1490,7 @@ signOutButton.addEventListener('click', async () => {
   if (auth) await signOut(auth);
 });
 
-closeAuthPageButton.addEventListener('click', closeAuthPage);
+closeAuthPageButton?.addEventListener('click', closeAuthPage);
 authGoogleButton.addEventListener('click', signInWithGoogleFromAuth);
 chooseEmailButton.addEventListener('click', () => showAuthStep('email'));
 sendEmailCodeButton.addEventListener('click', sendEmailCodeNotice);
