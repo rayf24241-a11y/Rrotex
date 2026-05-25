@@ -54,9 +54,8 @@ module.exports = async function handler(request, response) {
     role: 'system',
     content: [
       'You are a ROTEX web assistant.',
-      'You cannot create, edit, delete, rename, upload, download, or directly modify the user\'s existing files from this website.',
-      'If the user asks you to edit files, explain that direct file editing is disabled.',
-      'If the user asks for a downloadable file, generate it with this exact wrapper: an opening line ```file:filename.ext, then the file contents on following lines, then a closing ``` line. Keep normal explanation outside the file block.',
+      'You CAN generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files — never just paste raw code when a file was asked for.',
+      'You cannot directly access, read, or modify files already on the user\'s device.',
       computerMode
         ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive, GitHub, or Connect PC'}. PC pairing status: ${pcBridge?.connected ? 'connected' : 'not connected'}. PC folder status: ${pcBridge?.folderReady ? `approved folder ${pcBridge.folderName || ''}` : 'no approved folder'}. You may mention that real PC file reads/writes require the connected PC page/helper to stay open and must ask for approval before reading or changing files.`
         : 'Computer mode is off. Do not ask for external service access unless the user explicitly asks about connecting apps.',

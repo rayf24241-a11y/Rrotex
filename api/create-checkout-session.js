@@ -4,22 +4,24 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  const priceId = process.env.STRIPE_PRICE_ID;
+  const testMode = process.env.STRIPE_MODE === 'test';
+  const secretKey = testMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
+  const priceId   = testMode ? process.env.STRIPE_TEST_PRICE_ID   : process.env.STRIPE_PRICE_ID;
 
   if (!secretKey || !priceId) {
     response.status(200).json({
       configured: false,
-      message: 'Stripe is not configured yet. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID in Vercel.',
+      message: 'Stripe is not configured. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID in Vercel.',
     });
     return;
   }
 
   const { uid = '', email = '' } = request.body || {};
   if (!uid) {
-    response.status(401).json({ error: 'login_required', message: 'Log in with Google before upgrading.' });
+    response.status(401).json({ error: 'login_required', message: 'Log in before upgrading.' });
     return;
   }
+
   const origin = request.headers.origin || 'https://www.rrotex.com';
   const body = new URLSearchParams({
     mode: 'subscription',
@@ -29,13 +31,9 @@ module.exports = async function handler(request, response) {
     cancel_url: origin,
     client_reference_id: uid,
     'metadata[uid]': uid,
-    'metadata[credits]': '5',
-    'metadata[benefits]': '$5 credits, better models, computer mode, more plugins',
   });
 
-  if (email) {
-    body.set('customer_email', email);
-  }
+  if (email) body.set('customer_email', email);
 
   const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',

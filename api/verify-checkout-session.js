@@ -4,24 +4,24 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const testMode  = process.env.STRIPE_MODE === 'test';
+  const secretKey = testMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
+
   if (!secretKey) {
-    response.status(200).json({
-      verified: false,
-      message: 'Stripe is not configured yet. Add STRIPE_SECRET_KEY in Vercel.',
-    });
+    response.status(200).json({ verified: false, message: 'Stripe is not configured.' });
     return;
   }
 
   const { sessionId = '', uid = '' } = request.body || {};
   if (!sessionId || !uid) {
-    response.status(400).json({ verified: false, message: 'Missing checkout session or user.' });
+    response.status(400).json({ verified: false, message: 'Missing session or user.' });
     return;
   }
 
-  const stripeResponse = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
-    headers: { Authorization: `Bearer ${secretKey}` },
-  });
+  const stripeResponse = await fetch(
+    `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    { headers: { Authorization: `Bearer ${secretKey}` } },
+  );
 
   const session = await stripeResponse.json();
   if (!stripeResponse.ok) {
@@ -39,7 +39,6 @@ module.exports = async function handler(request, response) {
   response.status(200).json({
     verified: true,
     pro: true,
-    credits: Number(session.metadata?.credits || 5),
     subscriptionId: session.subscription || '',
   });
 };
