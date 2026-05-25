@@ -198,6 +198,47 @@
       </form>
     </dialog>
 
-    <script type="module" src="./app.js"></script>
+    <script>
+      window.addEventListener('DOMContentLoaded', () => {
+        const appShell = document.querySelector('#appShell');
+        const authPage = document.querySelector('#authPage');
+        const proPage = document.querySelector('#proPage');
+        const loginButton = document.querySelector('#googleButton');
+        const upgradeButton = document.querySelector('#upgradeButton');
+        const closeAuthButton = document.querySelector('#closeAuthPageButton');
+        const methodStep = document.querySelector('#authMethodStep');
+        const emailStep = document.querySelector('#authEmailStep');
+        const codeStep = document.querySelector('#authCodeStep');
+        const chooseEmailButton = document.querySelector('#chooseEmailButton');
+        const backToEmailButton = document.querySelector('#backToEmailButton');
+
+        function showLogin() {
+          if (!appShell || !authPage) return;
+          appShell.hidden = true;
+          if (proPage) proPage.hidden = true;
+          authPage.hidden = false;
+          if (methodStep) methodStep.hidden = false;
+          if (emailStep) emailStep.hidden = true;
+          if (codeStep) codeStep.hidden = true;
+          window.location.hash = 'login';
+        }
+
+        loginButton?.addEventListener('click', showLogin);
+        upgradeButton?.addEventListener('click', showLogin);
+        closeAuthButton?.addEventListener('click', () => {
+          authPage.hidden = true;
+          appShell.hidden = false;
+        });
+        chooseEmailButton?.addEventListener('click', () => {
+          if (methodStep) methodStep.hidden = true;
+          if (emailStep) emailStep.hidden = false;
+        });
+        backToEmailButton?.addEventListener('click', () => {
+          if (codeStep) codeStep.hidden = true;
+          if (emailStep) emailStep.hidden = false;
+        });
+      });
+    </script>
+    <script type="module" src="./app.js?v=20260525-3"></script>
   </body>
 </html>
