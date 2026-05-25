@@ -134,7 +134,7 @@ module.exports = async function handler(request, response) {
   } catch (error) {
     response.status(500).json({
       error: 'backend_unavailable',
-      text: `${selected.name} is set to ${selected.providerModel}, but the server key is missing or the provider failed. Add GROQ_API_KEY, DEEPSEEK_API_KEY, and ANTHROPIC_API_KEY or CLAUDE_API_KEY in Vercel.`,
+      text: `${selected.name} is not ready yet because a ROTEX backend key is missing or failed. Check the server environment keys in Vercel.`,
     });
   }
 };
