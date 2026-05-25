@@ -733,6 +733,16 @@ h1 {
   text-align: center;
 }
 
+.pc-folder {
+  padding: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .upgrade-dialog::backdrop {
   background: rgba(0, 0, 0, 0.74);
   backdrop-filter: blur(8px);

@@ -70,6 +70,7 @@ const newChatButton = document.querySelector('#newChatButton');
 const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
 const signOutButton = document.querySelector('#signOutButton');
+const pcShareButton = document.querySelector('#pcShareButton');
 const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
 const creditStatus = document.querySelector('#creditStatus');
@@ -94,8 +95,10 @@ const pcDialog = document.querySelector('#pcDialog');
 const pcPairStatus = document.querySelector('#pcPairStatus');
 const pcPairCode = document.querySelector('#pcPairCode');
 const pcCodeInput = document.querySelector('#pcCodeInput');
+const pcFolderStatus = document.querySelector('#pcFolderStatus');
 const makePcCodeButton = document.querySelector('#makePcCodeButton');
 const pairPcButton = document.querySelector('#pairPcButton');
+const choosePcFolderButton = document.querySelector('#choosePcFolderButton');
 const disconnectPcButton = document.querySelector('#disconnectPcButton');
 
 const storageKey = 'rotex:web:v2';
@@ -179,7 +182,10 @@ function normalizePcBridge(value) {
   return {
     code: typeof value?.code === 'string' ? value.code.slice(0, 3) : '',
     connected: Boolean(value?.connected),
+    folderName: typeof value?.folderName === 'string' ? value.folderName.slice(0, 120) : '',
+    folderReady: Boolean(value?.folderReady),
     createdAt: typeof value?.createdAt === 'number' ? value.createdAt : 0,
+    pairedAt: typeof value?.pairedAt === 'number' ? value.pairedAt : 0,
   };
 }
 
@@ -467,6 +473,7 @@ async function sendMessage(text) {
         model: model.id,
         computerMode: state.computerMode,
         computerConnections: state.computerConnections,
+        pcBridge: state.pcBridge,
         messages: chat.messages.filter((message) => message.text !== 'Thinking...'),
       }),
     });
@@ -527,13 +534,17 @@ function renderConnectOptions() {
 
 function renderPcBridge() {
   if (state.pcBridge.connected) {
-    pcPairStatus.textContent = 'PC connected. You can disable it anytime.';
+    pcPairStatus.textContent = 'PC connected. Keep this page open on the PC when you want ROTEX to work with approved files.';
   } else if (state.pcBridge.code) {
     pcPairStatus.textContent = 'Type this code on your PC from Settings > Share to finish pairing.';
   } else {
     pcPairStatus.textContent = 'Make a 3 digit code on your phone, then type it on your PC from Settings > Share.';
   }
   pcPairCode.textContent = state.pcBridge.code || '---';
+  pcFolderStatus.textContent = state.pcBridge.folderReady
+    ? `Approved PC folder: ${state.pcBridge.folderName || 'selected folder'}`
+    : 'No PC folder approved yet. On the PC, connect first, then choose a folder.';
+  choosePcFolderButton.disabled = !state.pcBridge.connected;
   disconnectPcButton.disabled = !state.pcBridge.connected && !state.pcBridge.code;
 }
 
@@ -727,11 +738,35 @@ pairPcButton.addEventListener('click', () => {
     return;
   }
   state.pcBridge.connected = true;
+  state.pcBridge.pairedAt = Date.now();
   activateService('PC', false);
   announceActivation('PC');
   persistState();
   render();
   openPcDialog();
+});
+
+choosePcFolderButton.addEventListener('click', async () => {
+  if (!state.pcBridge.connected) {
+    pcPairStatus.textContent = 'Connect this PC with the 3 digit code first.';
+    return;
+  }
+  if (!window.showDirectoryPicker) {
+    pcPairStatus.textContent = 'Folder access needs desktop Chrome or Edge. This browser cannot approve a PC folder.';
+    return;
+  }
+  try {
+    const folder = await window.showDirectoryPicker({ mode: 'readwrite' });
+    state.pcBridge.folderName = folder.name;
+    state.pcBridge.folderReady = true;
+    activateService('PC', false);
+    announceActivation(`PC folder ${folder.name}`);
+    persistState();
+    render();
+    openPcDialog();
+  } catch (error) {
+    pcPairStatus.textContent = 'Folder approval was cancelled.';
+  }
 });
 
 disconnectPcButton.addEventListener('click', () => {
@@ -740,6 +775,10 @@ disconnectPcButton.addEventListener('click', () => {
   pcCodeInput.value = '';
   persistState();
   render();
+  openPcDialog();
+});
+
+pcShareButton.addEventListener('click', () => {
   openPcDialog();
 });
 

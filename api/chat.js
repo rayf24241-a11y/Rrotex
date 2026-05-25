@@ -37,7 +37,7 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const { model = 'rod-1', messages = [], computerMode = false, computerConnections = [] } = request.body || {};
+  const { model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {} } = request.body || {};
   const selected = MODELS[model] || MODELS['rod-1'];
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
@@ -55,7 +55,7 @@ module.exports = async function handler(request, response) {
       'If the user asks you to edit files, explain that direct file editing is disabled.',
       'If the user asks for a downloadable file, generate it with this exact wrapper: an opening line ```file:filename.ext, then the file contents on following lines, then a closing ``` line. Keep normal explanation outside the file block.',
       computerMode
-        ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive, GitHub, or Connect PC'}. You may also mention future plugins. You cannot access or modify PC files from the website unless the user's PC is paired through a trusted helper, and you must ask for approval before reading or changing files.`
+        ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive, GitHub, or Connect PC'}. PC pairing status: ${pcBridge?.connected ? 'connected' : 'not connected'}. PC folder status: ${pcBridge?.folderReady ? `approved folder ${pcBridge.folderName || ''}` : 'no approved folder'}. You may mention that real PC file reads/writes require the connected PC page/helper to stay open and must ask for approval before reading or changing files.`
         : 'Computer mode is off. Do not ask for external service access unless the user explicitly asks about connecting apps.',
     ].join(' '),
   });

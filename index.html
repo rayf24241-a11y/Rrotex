@@ -24,6 +24,7 @@
         <div class="chat-list" id="chatList"></div>
 
         <div class="account-panel">
+          <button class="signout-button" id="pcShareButton" type="button">Settings / Share</button>
           <button class="google-button" id="googleButton" type="button">
             <span class="google-mark">G</span>
             <span id="googleButtonText">Log in or sign up</span>
@@ -134,9 +135,11 @@
         <p class="upgrade-copy" id="pcPairStatus">Make a 3 digit code on your phone, then type it on your PC from Settings > Share.</p>
         <div class="pc-code" id="pcPairCode">---</div>
         <input class="pc-input" id="pcCodeInput" inputmode="numeric" maxlength="3" placeholder="000" aria-label="3 digit PC code" />
+        <div class="pc-folder" id="pcFolderStatus">No PC folder approved yet.</div>
         <div class="dialog-actions">
           <button id="makePcCodeButton" type="button" class="secondary-action">Make code</button>
           <button id="pairPcButton" type="button" class="checkout-action">Connect</button>
+          <button id="choosePcFolderButton" type="button" class="secondary-action">Choose folder</button>
           <button id="disconnectPcButton" type="button" class="secondary-action">Disable</button>
           <button value="cancel" type="submit" class="secondary-action">Close</button>
         </div>
