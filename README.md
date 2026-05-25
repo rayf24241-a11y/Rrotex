@@ -6,11 +6,22 @@ Current web features:
 
 - Sidebar chat list
 - Local saved chats
-- Google login/sign-up placeholder
-- ROTEX model picker
-- Pro plan section
+- Firebase Google login and Firestore chat sync when configured
+- ROTEX model drop-up beside the chat bar
+- Single-screen chatbot layout
+- Vercel ROTEX backend stub at `/api/chat`
 
-The Google button currently creates a local test profile. Real Google cloud saving needs Firebase, Supabase, or a backend auth/database setup.
+## Firebase Auth
+
+Create a Firebase web app, enable Google Auth, create a Firestore database, and add these domains in Firebase Authentication authorized domains:
+
+```text
+rrotex.com
+www.rrotex.com
+rrotex.vercel.app
+```
+
+Add the values from `firebase-env.example` to Vercel Project Settings -> Environment Variables, then redeploy.
 
 ## Local preview
 

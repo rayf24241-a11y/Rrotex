@@ -1,31 +1,36 @@
 :root {
   color-scheme: dark;
-  --bg: #08090d;
-  --panel: #11151d;
-  --panel-2: #171c26;
-  --panel-3: #202735;
-  --line: #303948;
-  --text: #f4f7fb;
-  --muted: #95a4b7;
-  --quiet: #627084;
+  --bg: #06070b;
+  --sidebar: #0d1118;
+  --panel: #131a24;
+  --panel-2: #1b2431;
+  --line: #2c3748;
+  --text: #f5f8fc;
+  --muted: #9cadc1;
+  --quiet: #647386;
   --blue: #4cc9f0;
   --green: #80ed99;
   --pink: #ff6b9d;
   --amber: #ffd166;
+  --shadow: rgba(0, 0, 0, 0.36);
 }
 
 * {
   box-sizing: border-box;
 }
 
-html {
-  scroll-behavior: smooth;
+html,
+body {
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(76, 201, 240, 0.11), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(128, 237, 153, 0.08), transparent 24%),
+    var(--bg);
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -36,8 +41,7 @@ a {
 }
 
 button,
-textarea,
-input {
+textarea {
   font: inherit;
 }
 
@@ -47,29 +51,31 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  min-height: 100vh;
+  grid-template-columns: 306px minmax(0, 1fr);
+  height: 100vh;
+  animation: appIn 520ms ease both;
 }
 
 .sidebar {
-  position: sticky;
-  top: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  height: 100vh;
+  min-height: 0;
   padding: 18px;
-  background: #0c0f15;
+  background: rgba(13, 17, 24, 0.94);
   border-right: 1px solid var(--line);
+  box-shadow: 18px 0 60px var(--shadow);
+  backdrop-filter: blur(18px);
 }
 
 .brand,
-.topbar,
-.model-button,
 .chat-item,
 .google-button,
-.price-row,
-.dialog-actions {
+.topbar,
+.composer,
+.model-select,
+.status-pill,
+.signout-button {
   display: flex;
   align-items: center;
 }
@@ -82,45 +88,80 @@ button {
 
 .brand-mark {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   place-items: center;
-  border: 1px solid var(--line);
-  background: var(--text);
   color: var(--bg);
+  background: linear-gradient(135deg, var(--text), var(--blue));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(76, 201, 240, 0.25);
 }
 
 .new-chat,
 .google-button,
-.composer button,
-.checkout-button,
-.dialog-actions button,
-.upgrade-link {
+.signout-button,
+.send-button,
+.model-select,
+.model-option {
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 10px;
   font-weight: 850;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .new-chat {
   width: 100%;
-  padding: 12px 14px;
-  margin-top: 14px;
-  background: var(--text);
+  padding: 13px 14px;
+  margin-top: 10px;
   color: var(--bg);
+  background: linear-gradient(135deg, var(--text), var(--blue));
+  box-shadow: 0 16px 34px rgba(76, 201, 240, 0.16);
+}
+
+.new-chat:hover,
+.google-button:hover,
+.send-button:hover,
+.model-select:hover,
+.model-option:hover {
+  transform: translateY(-1px);
 }
 
 .sidebar-label {
-  margin-top: 8px;
   color: var(--quiet);
-  font-size: 12px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 950;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+}
+
+.usage-card {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.usage-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.usage-grid strong {
+  color: var(--green);
+  font-size: 11px;
+  text-align: right;
 }
 
 .chat-list {
   display: grid;
   gap: 8px;
+  min-height: 0;
   overflow: auto;
   padding-right: 2px;
 }
@@ -129,20 +170,21 @@ button {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
   padding: 10px 12px;
   color: var(--muted);
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 12px;
 }
 
 .chat-item:hover,
 .chat-item.active {
   color: var(--text);
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.055);
   border-color: var(--line);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
 }
 
 .chat-item span {
@@ -157,13 +199,14 @@ button {
 
 .account-panel {
   display: grid;
-  gap: 10px;
+  gap: 9px;
   margin-top: auto;
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
 
-.google-button {
+.google-button,
+.signout-button {
   justify-content: center;
   gap: 10px;
   width: 100%;
@@ -171,6 +214,11 @@ button {
   color: var(--text);
   background: var(--panel);
   border-color: var(--line);
+}
+
+.signout-button {
+  color: var(--muted);
+  background: transparent;
 }
 
 .google-mark {
@@ -194,109 +242,71 @@ button {
 
 .chat-panel {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
-  min-height: 100vh;
+  height: 100vh;
 }
 
 .topbar {
   justify-content: space-between;
   gap: 20px;
-  padding: 24px clamp(18px, 4vw, 44px) 16px;
-  border-bottom: 1px solid var(--line);
+  padding: 24px clamp(18px, 4vw, 44px) 18px;
+  border-bottom: 1px solid rgba(44, 55, 72, 0.72);
 }
 
 .eyebrow {
   margin: 0 0 8px;
   color: var(--green);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
 h1,
 h2,
-h3,
 p {
   margin-top: 0;
 }
 
 h1 {
   margin-bottom: 0;
-  font-size: clamp(30px, 5vw, 58px);
-  line-height: 0.95;
+  font-size: clamp(32px, 5vw, 62px);
+  line-height: 0.94;
   letter-spacing: 0;
 }
 
-h2 {
-  margin-bottom: 14px;
-  font-size: clamp(34px, 5vw, 64px);
-  line-height: 0.96;
-  letter-spacing: 0;
-}
-
-.upgrade-link {
-  padding: 11px 14px;
-  background: var(--blue);
-  color: var(--bg);
-}
-
-.model-strip {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 14px clamp(18px, 4vw, 44px);
-  border-bottom: 1px solid var(--line);
-}
-
-.model-button {
-  flex: 0 0 auto;
-  gap: 10px;
-  min-width: 174px;
-  padding: 11px 12px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  text-align: left;
-}
-
-.model-button.active {
-  color: var(--bg);
-  background: var(--blue);
-  border-color: var(--blue);
-}
-
-.model-button strong {
-  display: block;
-  font-size: 13px;
-}
-
-.model-button span {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  color: inherit;
-  opacity: 0.78;
+.status-pill {
+  gap: 8px;
+  padding: 9px 12px;
+  color: var(--green);
+  background: rgba(128, 237, 153, 0.08);
+  border: 1px solid rgba(128, 237, 153, 0.24);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .messages {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
   overflow: auto;
-  padding: 24px clamp(18px, 4vw, 44px);
+  padding: 26px clamp(18px, 4vw, 44px);
 }
 
 .empty-state {
   max-width: 680px;
   margin: auto;
   text-align: center;
+  animation: floatIn 520ms ease both;
 }
 
 .empty-state h2 {
   margin-bottom: 12px;
+  font-size: clamp(36px, 6vw, 72px);
+  line-height: 0.95;
 }
 
 .empty-state p {
@@ -306,22 +316,24 @@ h2 {
 }
 
 .message {
-  max-width: min(760px, 88%);
+  max-width: min(780px, 88%);
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 16px;
   line-height: 1.55;
+  animation: messageIn 220ms ease both;
 }
 
 .message.user {
   align-self: flex-end;
-  background: #12313b;
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.2), rgba(76, 201, 240, 0.07));
   border-color: rgba(76, 201, 240, 0.45);
 }
 
 .message.assistant {
   align-self: flex-start;
-  background: var(--panel);
+  background: rgba(19, 26, 36, 0.92);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
 }
 
 .message-meta {
@@ -329,199 +341,165 @@ h2 {
   margin-bottom: 6px;
   color: var(--green);
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   padding: 14px clamp(18px, 4vw, 44px) 20px;
-  border-top: 1px solid var(--line);
-  background: rgba(8, 9, 13, 0.88);
+  border-top: 1px solid rgba(44, 55, 72, 0.72);
+  background: rgba(6, 7, 11, 0.86);
+  backdrop-filter: blur(16px);
+}
+
+.model-select-wrap {
+  position: relative;
+  align-self: stretch;
+}
+
+.model-select {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 172px;
+  height: 100%;
+  padding: 9px 12px;
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+.model-select small {
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.model-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  width: min(340px, calc(100vw - 36px));
+  padding: 10px;
+  background: rgba(13, 17, 24, 0.98);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.model-menu.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.model-option {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  color: var(--muted);
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+.model-option.active,
+.model-option:hover {
+  color: var(--text);
+  background: rgba(76, 201, 240, 0.09);
+  border-color: rgba(76, 201, 240, 0.28);
+}
+
+.model-option span {
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .composer textarea {
   width: 100%;
-  max-height: 150px;
-  min-height: 48px;
-  resize: vertical;
-  padding: 13px 14px;
+  max-height: 140px;
+  min-height: 52px;
+  resize: none;
+  padding: 15px 15px;
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 14px;
   outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .composer textarea:focus {
   border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.12);
 }
 
-.composer button {
+.send-button {
   min-width: 92px;
   padding: 0 18px;
-  background: var(--text);
   color: var(--bg);
+  background: linear-gradient(135deg, var(--text), var(--green));
+  box-shadow: 0 14px 32px rgba(128, 237, 153, 0.13);
 }
 
-.models-section,
-.pro-section {
-  padding: clamp(54px, 8vw, 110px) clamp(18px, 5vw, 72px);
-  border-top: 1px solid var(--line);
+@keyframes appIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.section-heading {
-  margin-bottom: 24px;
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.model-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.model-card {
-  min-height: 220px;
-  padding: 22px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-}
-
-.model-card.wide {
-  grid-column: span 2;
-  background: var(--panel-2);
-}
-
-.model-number {
-  color: var(--blue);
-  font-weight: 950;
-}
-
-.model-card h3 {
-  margin: 46px 0 10px;
-  font-size: 24px;
-}
-
-.model-card p,
-.pro-copy,
-.dialog-copy {
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.pro-section {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
-  gap: clamp(26px, 6vw, 80px);
-  align-items: start;
-  background: #0e1016;
-}
-
-.price-panel {
-  padding: 28px;
-  background: var(--text);
-  color: var(--bg);
-}
-
-.price-row {
-  gap: 10px;
-  margin-bottom: 24px;
-}
-
-.price {
-  font-size: 64px;
-  font-weight: 950;
-  line-height: 0.9;
-}
-
-.period {
-  padding-bottom: 8px;
-  color: #4a5564;
-  font-weight: 850;
-}
-
-.price-panel ul {
-  display: grid;
-  gap: 12px;
-  margin: 0 0 26px;
-  padding-left: 20px;
-  font-weight: 850;
-}
-
-.checkout-button {
-  width: 100%;
-  padding: 13px 18px;
-  background: var(--bg);
-  color: var(--text);
-}
-
-.login-dialog {
-  width: min(460px, calc(100vw - 30px));
-  padding: 0;
-  color: var(--text);
-  background: transparent;
-  border: 0;
-}
-
-.login-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.72);
-}
-
-.login-card {
-  display: grid;
-  gap: 14px;
-  padding: 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-}
-
-.login-card h2 {
-  margin-bottom: 0;
-  font-size: 32px;
-}
-
-.login-card label {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.login-card input {
-  width: 100%;
-  padding: 12px 13px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-
-.dialog-actions {
-  justify-content: end;
-  gap: 10px;
-}
-
-.dialog-actions button {
-  padding: 11px 14px;
-  color: var(--bg);
-  background: var(--text);
-}
-
-.dialog-actions .secondary-button {
-  color: var(--text);
-  background: transparent;
-  border-color: var(--line);
-}
-
-@media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: 1fr;
+@media (max-width: 920px) {
+  body {
+    overflow: auto;
   }
 
-  .sidebar {
-    position: relative;
+  .app-shell {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .sidebar,
+  .chat-panel {
     height: auto;
     min-height: 0;
   }
@@ -535,13 +513,12 @@ h2 {
     min-width: 180px;
   }
 
-  .model-grid,
-  .pro-section {
-    grid-template-columns: 1fr 1fr;
+  .messages {
+    min-height: 56vh;
   }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 650px) {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -551,12 +528,8 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .model-grid,
-  .pro-section {
-    grid-template-columns: 1fr;
-  }
-
-  .model-card.wide {
-    grid-column: auto;
+  .model-select {
+    min-height: 52px;
+    width: 100%;
   }
 }

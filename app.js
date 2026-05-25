@@ -1,79 +1,172 @@
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+import {
+  doc,
+  getDoc,
+  getFirestore,
+  serverTimestamp,
+  setDoc,
+} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
 const models = [
   {
     id: 'rod-1',
     name: 'Rod _ 1',
     short: 'Everyday',
+    api: 'Groq llama-3.1-8b-instant',
+    limit: '~23k normal chats with $3 Groq',
     description: 'Everyday tasks, quick answers, normal chat, and simple work.',
   },
   {
     id: 'rod-thinking',
     name: 'Rod thinking',
     short: 'Hard tasks',
+    api: 'Groq llama-3.3-70b-versatile',
+    limit: '~2.1k normal chats with $3 Groq',
     description: 'Harder tasks that need more reasoning, planning, and careful answers.',
   },
   {
     id: 'tex-0',
     name: 'Tex 0',
     short: 'Code',
+    api: 'DeepSeek chat',
+    limit: '~1.4k normal chats with $2 DeepSeek',
     description: 'Code help, debugging, implementation, and file-aware project work.',
   },
   {
     id: 'tex-1-5',
     name: 'Tex 1.5',
     short: 'Complex code',
+    api: 'DeepSeek chat/reasoner',
+    limit: '600-1.4k normal chats with $2 DeepSeek',
     description: 'Complex code, larger builds, deeper architecture, and tougher fixes.',
   },
   {
     id: 'treesearch-q',
     name: 'Treesearch _ q',
     short: 'Research',
+    api: 'DeepSeek reasoner',
+    limit: '~700 normal chats with $2 DeepSeek',
     description: 'Research mode for searching, comparing, and explaining. It cannot create files.',
   },
 ];
 
 const chatList = document.querySelector('#chatList');
 const messagesEl = document.querySelector('#messages');
-const modelStrip = document.querySelector('#modelStrip');
 const composer = document.querySelector('#composer');
 const messageInput = document.querySelector('#messageInput');
 const newChatButton = document.querySelector('#newChatButton');
 const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
-const loginDialog = document.querySelector('#loginDialog');
-const emailInput = document.querySelector('#emailInput');
-const saveLoginButton = document.querySelector('#saveLoginButton');
+const signOutButton = document.querySelector('#signOutButton');
 const saveStatus = document.querySelector('#saveStatus');
-const checkoutButton = document.querySelector('#checkoutButton');
+const syncStatus = document.querySelector('#syncStatus');
+const modelButton = document.querySelector('#modelButton');
+const modelMenu = document.querySelector('#modelMenu');
+const selectedModelName = document.querySelector('#selectedModelName');
+const selectedModelShort = document.querySelector('#selectedModelShort');
 
-const storageKey = 'rotex:web:v1';
+const storageKey = 'rotex:web:v2';
 let state = loadState();
+let auth = null;
+let db = null;
+let currentUser = null;
+let cloudReady = false;
+let saveTimer = null;
+
+initFirebase();
+render();
+
+async function initFirebase() {
+  try {
+    const response = await fetch('/api/firebase-config');
+    const config = await response.json();
+    if (!config.configured) {
+      setCloudStatus('Local mode');
+      return;
+    }
+
+    const app = initializeApp(config.firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    cloudReady = true;
+    setCloudStatus('Firebase ready');
+
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      if (user) {
+        await loadCloudState();
+      }
+      render();
+    });
+  } catch (error) {
+    console.warn('Firebase unavailable:', error);
+    setCloudStatus('Local mode');
+  }
+}
 
 function loadState() {
   const saved = localStorage.getItem(storageKey);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      return normalizeState(JSON.parse(saved));
     } catch {}
   }
+  return normalizeState({});
+}
 
+function normalizeState(value) {
   const firstChatId = crypto.randomUUID();
+  const chats = Array.isArray(value.chats) && value.chats.length > 0
+    ? value.chats
+    : [{ id: firstChatId, title: 'New ROTEX chat', createdAt: Date.now(), messages: [] }];
+
   return {
-    userEmail: '',
-    activeModel: 'rod-1',
-    activeChatId: firstChatId,
-    chats: [
-      {
-        id: firstChatId,
-        title: 'New ROTEX chat',
-        createdAt: Date.now(),
-        messages: [],
-      },
-    ],
+    activeModel: value.activeModel || 'rod-1',
+    activeChatId: value.activeChatId || chats[0].id,
+    chats,
   };
 }
 
-function saveState() {
+function persistState() {
   localStorage.setItem(storageKey, JSON.stringify(state));
+  if (!currentUser || !db) return;
+
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(async () => {
+    try {
+      await setDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'), {
+        ...state,
+        updatedAt: serverTimestamp(),
+      });
+      setCloudStatus('Saved');
+    } catch (error) {
+      console.error(error);
+      setCloudStatus('Save failed');
+    }
+  }, 450);
+}
+
+async function loadCloudState() {
+  if (!currentUser || !db) return;
+  setCloudStatus('Syncing');
+  const snap = await getDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'));
+  if (snap.exists()) {
+    state = normalizeState(snap.data());
+    localStorage.setItem(storageKey, JSON.stringify(state));
+  } else {
+    await setDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'), {
+      ...state,
+      updatedAt: serverTimestamp(),
+    });
+  }
+  setCloudStatus('Synced');
 }
 
 function activeChat() {
@@ -84,19 +177,28 @@ function activeModel() {
   return models.find((model) => model.id === state.activeModel) || models[0];
 }
 
-function renderModels() {
-  modelStrip.innerHTML = '';
-  models.forEach((model) => {
+function setCloudStatus(text) {
+  syncStatus.textContent = text;
+}
+
+function renderModelMenu() {
+  const model = activeModel();
+  selectedModelName.textContent = model.name;
+  selectedModelShort.textContent = model.short;
+  modelMenu.innerHTML = '';
+
+  models.forEach((item) => {
     const button = document.createElement('button');
-    button.className = `model-button${model.id === state.activeModel ? ' active' : ''}`;
     button.type = 'button';
-    button.innerHTML = `<div><strong>${model.name}</strong><span>${model.short}</span></div>`;
+    button.className = `model-option${item.id === state.activeModel ? ' active' : ''}`;
+    button.innerHTML = `<strong>${item.name}</strong><span>${item.description}</span><span>${item.limit}</span>`;
     button.addEventListener('click', () => {
-      state.activeModel = model.id;
-      saveState();
+      state.activeModel = item.id;
+      closeModelMenu();
+      persistState();
       render();
     });
-    modelStrip.appendChild(button);
+    modelMenu.appendChild(button);
   });
 }
 
@@ -106,10 +208,10 @@ function renderChats() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `chat-item${chat.id === state.activeChatId ? ' active' : ''}`;
-    button.innerHTML = `<span>${chat.title}</span><small>${chat.messages.length}</small>`;
+    button.innerHTML = `<span>${escapeHtml(chat.title)}</span><small>${chat.messages.length}</small>`;
     button.addEventListener('click', () => {
       state.activeChatId = chat.id;
-      saveState();
+      persistState();
       render();
     });
     chatList.appendChild(button);
@@ -118,14 +220,16 @@ function renderChats() {
 
 function renderMessages() {
   const chat = activeChat();
+  const model = activeModel();
   messagesEl.innerHTML = '';
 
   if (!chat || chat.messages.length === 0) {
     messagesEl.innerHTML = `
       <div class="empty-state">
         <p class="eyebrow">Ready</p>
-        <h2>${activeModel().name}</h2>
-        <p>${activeModel().description}</p>
+        <h2>${model.name}</h2>
+        <p>${model.description}</p>
+        <p>${model.api} - ${model.limit}. No model is infinite.</p>
       </div>
     `;
     return;
@@ -134,24 +238,30 @@ function renderMessages() {
   chat.messages.forEach((message) => {
     const item = document.createElement('div');
     item.className = `message ${message.role}`;
-    item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : message.model}</span>${escapeHtml(message.text)}`;
+    item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : escapeHtml(message.model)}</span>${escapeHtml(message.text)}`;
     messagesEl.appendChild(item);
   });
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 function renderAccount() {
-  if (state.userEmail) {
-    googleButtonText.textContent = state.userEmail;
-    saveStatus.textContent = 'Signed in test profile. Chats save locally under this browser.';
-  } else {
+  if (currentUser) {
+    googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
+    signOutButton.hidden = false;
+    saveStatus.textContent = `Chats sync with Firebase for ${currentUser.email || 'this account'}.`;
+  } else if (cloudReady) {
     googleButtonText.textContent = 'Log in or sign up';
-    saveStatus.textContent = 'Chats save on this device until Google sync is connected.';
+    signOutButton.hidden = true;
+    saveStatus.textContent = 'Sign in with Google to save chats with Firebase.';
+  } else {
+    googleButtonText.textContent = 'Firebase not configured';
+    signOutButton.hidden = true;
+    saveStatus.textContent = 'Add Firebase env vars in Vercel to enable Google login.';
   }
 }
 
 function render() {
-  renderModels();
+  renderModelMenu();
   renderChats();
   renderMessages();
   renderAccount();
@@ -166,12 +276,12 @@ function createChat() {
     messages: [],
   });
   state.activeChatId = id;
-  saveState();
+  persistState();
   render();
   messageInput.focus();
 }
 
-function sendMessage(text) {
+async function sendMessage(text) {
   const chat = activeChat();
   const model = activeModel();
   const clean = text.trim();
@@ -179,21 +289,36 @@ function sendMessage(text) {
 
   chat.messages.push({ role: 'user', text: clean, model: 'You' });
   if (chat.title === 'New ROTEX chat') {
-    chat.title = clean.length > 28 ? `${clean.slice(0, 28)}...` : clean;
+    chat.title = clean.length > 32 ? `${clean.slice(0, 32)}...` : clean;
+  }
+  persistState();
+  render();
+
+  const pending = { role: 'assistant', model: model.name, text: 'Thinking...' };
+  chat.messages.push(pending);
+  render();
+
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model.id,
+        messages: chat.messages.filter((message) => message.text !== 'Thinking...'),
+      }),
+    });
+    const data = await response.json();
+    pending.text = data.text || 'ROTEX backend is online, but no response came back.';
+  } catch (error) {
+    pending.text = 'ROTEX backend could not respond yet. Check Vercel env keys when real AI is connected.';
   }
 
-  chat.messages.push({
-    role: 'assistant',
-    model: model.name,
-    text: `${model.name} is selected for this chat. The live ROTEX backend is the next step, so this web demo is saving the conversation shell right now.`,
-  });
-
-  saveState();
+  persistState();
   render();
 }
 
 function escapeHtml(value) {
-  return value
+  return String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -201,7 +326,27 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function toggleModelMenu() {
+  const open = !modelMenu.classList.contains('open');
+  modelMenu.classList.toggle('open', open);
+  modelMenu.setAttribute('aria-hidden', String(!open));
+  modelButton.setAttribute('aria-expanded', String(open));
+}
+
+function closeModelMenu() {
+  modelMenu.classList.remove('open');
+  modelMenu.setAttribute('aria-hidden', 'true');
+  modelButton.setAttribute('aria-expanded', 'false');
+}
+
 newChatButton.addEventListener('click', createChat);
+modelButton.addEventListener('click', toggleModelMenu);
+
+document.addEventListener('click', (event) => {
+  if (!modelMenu.contains(event.target) && !modelButton.contains(event.target)) {
+    closeModelMenu();
+  }
+});
 
 composer.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -216,23 +361,14 @@ messageInput.addEventListener('keydown', (event) => {
   }
 });
 
-googleButton.addEventListener('click', () => {
-  emailInput.value = state.userEmail;
-  loginDialog.showModal();
-  emailInput.focus();
+googleButton.addEventListener('click', async () => {
+  if (!auth) {
+    alert('Firebase is not configured yet. Add the Firebase env vars in Vercel first.');
+    return;
+  }
+  await signInWithPopup(auth, new GoogleAuthProvider());
 });
 
-saveLoginButton.addEventListener('click', () => {
-  const email = emailInput.value.trim();
-  if (!email) return;
-  state.userEmail = email;
-  saveState();
-  loginDialog.close();
-  render();
+signOutButton.addEventListener('click', async () => {
+  if (auth) await signOut(auth);
 });
-
-checkoutButton.addEventListener('click', () => {
-  alert('Stripe test checkout will connect through the backend next.');
-});
-
-render();

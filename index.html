@@ -13,15 +13,30 @@
           <span class="brand-mark">R</span>
           <span>ROTEX</span>
         </a>
+
         <button class="new-chat" id="newChatButton" type="button">New chat</button>
+
+        <section class="usage-card" aria-label="Model usage estimates">
+          <div class="sidebar-label">Usage</div>
+          <div class="usage-grid">
+            <span>Rod _ 1</span><strong>~23k / $3</strong>
+            <span>Rod thinking</span><strong>~2.1k / $3</strong>
+            <span>Tex 0</span><strong>~1.4k / $2</strong>
+            <span>Tex 1.5</span><strong>600-1.4k / $2</strong>
+            <span>Treesearch _ q</span><strong>~700 / $2</strong>
+          </div>
+        </section>
+
         <div class="sidebar-label">Chats</div>
         <div class="chat-list" id="chatList"></div>
+
         <div class="account-panel">
           <button class="google-button" id="googleButton" type="button">
             <span class="google-mark">G</span>
             <span id="googleButtonText">Log in or sign up</span>
           </button>
-          <p id="saveStatus">Chats save on this device until Google sync is connected.</p>
+          <button class="signout-button" id="signOutButton" type="button" hidden>Sign out</button>
+          <p id="saveStatus">Chats save on this device until Firebase is configured.</p>
         </div>
       </aside>
 
@@ -31,89 +46,25 @@
             <p class="eyebrow">ROTEX web</p>
             <h1>Chat with ROTEX</h1>
           </div>
-          <a class="upgrade-link" href="#pro">Upgrade</a>
+          <div class="status-pill" id="syncStatus">Local mode</div>
         </header>
-
-        <section class="model-strip" id="modelStrip" aria-label="ROTEX models"></section>
 
         <section class="messages" id="messages" aria-live="polite"></section>
 
         <form class="composer" id="composer">
+          <div class="model-select-wrap">
+            <button class="model-select" id="modelButton" type="button" aria-expanded="false">
+              <span id="selectedModelName">Rod _ 1</span>
+              <small id="selectedModelShort">Everyday</small>
+            </button>
+            <div class="model-menu" id="modelMenu" aria-hidden="true"></div>
+          </div>
           <textarea id="messageInput" rows="1" placeholder="Message ROTEX..."></textarea>
-          <button type="submit">Send</button>
+          <button class="send-button" type="submit">Send</button>
         </form>
       </section>
     </main>
 
-    <section class="models-section" id="models">
-      <div class="section-heading">
-        <p class="eyebrow">Model family</p>
-        <h2>ROTEX models</h2>
-      </div>
-      <div class="model-grid">
-        <article class="model-card">
-          <span class="model-number">01</span>
-          <h3>Rod _ 1</h3>
-          <p>Everyday tasks, quick answers, normal chat, and simple work.</p>
-        </article>
-        <article class="model-card">
-          <span class="model-number">02</span>
-          <h3>Rod thinking</h3>
-          <p>Harder tasks that need more reasoning, planning, and careful answers.</p>
-        </article>
-        <article class="model-card">
-          <span class="model-number">03</span>
-          <h3>Tex 0</h3>
-          <p>Code help, debugging, implementation, and file-aware project work.</p>
-        </article>
-        <article class="model-card">
-          <span class="model-number">04</span>
-          <h3>Tex 1.5</h3>
-          <p>Complex code, larger builds, deeper architecture, and tougher fixes.</p>
-        </article>
-        <article class="model-card wide">
-          <span class="model-number">05</span>
-          <h3>Treesearch _ q</h3>
-          <p>Research mode for searching, comparing, and explaining. It cannot create files.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="pro-section" id="pro">
-      <div>
-        <p class="eyebrow">Upgrade</p>
-        <h2>Pro plan</h2>
-        <p class="pro-copy">Built for the real ROTEX rollout when Stripe checkout goes live.</p>
-      </div>
-      <div class="price-panel">
-        <div class="price-row">
-          <span class="price">$15</span>
-          <span class="period">monthly</span>
-        </div>
-        <ul>
-          <li>More models</li>
-          <li>More computer mode</li>
-          <li>More access</li>
-          <li>More merges</li>
-        </ul>
-        <button class="checkout-button" id="checkoutButton" type="button">Test checkout later</button>
-      </div>
-    </section>
-
-    <dialog class="login-dialog" id="loginDialog">
-      <form method="dialog" class="login-card">
-        <p class="eyebrow">Google account</p>
-        <h2>Log in or sign up</h2>
-        <p class="dialog-copy">For now this creates a local test profile. Real Google cloud saves need Firebase, Supabase, or a backend.</p>
-        <label for="emailInput">Google email</label>
-        <input id="emailInput" type="email" placeholder="you@gmail.com" />
-        <div class="dialog-actions">
-          <button value="cancel" type="submit" class="secondary-button">Cancel</button>
-          <button id="saveLoginButton" value="default" type="button">Continue</button>
-        </div>
-      </form>
-    </dialog>
-
-    <script src="./app.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
