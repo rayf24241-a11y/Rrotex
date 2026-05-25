@@ -54,6 +54,8 @@ class RotexPcApp(tk.Tk):
         return {
             "installed": False,
             "logged_in": False,
+            "login_method": "",
+            "email": "",
             "github_connected": False,
             "root": str(HOME),
             "messages": [],
@@ -166,6 +168,15 @@ class RotexPcApp(tk.Tk):
         self.side_button(sidebar, "Connect GitHub", self.connect_github, PANEL).pack(fill="x", pady=6)
         self.side_button(sidebar, "Choose file root", self.choose_root, PANEL).pack(fill="x", pady=6)
 
+        self.account_panel = tk.Frame(sidebar, bg="#0a0e15", padx=12, pady=12, highlightbackground=LINE, highlightthickness=1)
+        self.account_panel.pack(side="bottom", fill="x", pady=(18, 0))
+        self.account_name = tk.Label(self.account_panel, text="", bg="#0a0e15", fg=TEXT, font=("Segoe UI", 10, "bold"), anchor="w")
+        self.account_name.pack(fill="x")
+        self.account_subtitle = tk.Label(self.account_panel, text="", bg="#0a0e15", fg=MUTED, font=("Segoe UI", 9), anchor="w", wraplength=218, justify="left")
+        self.account_subtitle.pack(fill="x", pady=(3, 10))
+        self.login_button = self.side_button(self.account_panel, "Email or Google", self.show_login_dialog, PANEL)
+        self.login_button.pack(fill="x")
+
         tk.Label(sidebar, text="LOCAL ACCESS", bg=SIDEBAR, fg=QUIET, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(28, 8))
         self.safety_text = tk.Label(
             sidebar,
@@ -233,6 +244,14 @@ class RotexPcApp(tk.Tk):
     def render(self):
         root = Path(self.state_data.get("root") or HOME)
         self.root_label.config(text=str(root))
+        logged_in = self.state_data.get("logged_in")
+        method = self.state_data.get("login_method") or "pc"
+        email = self.state_data.get("email") or "Local PC account"
+        self.account_name.config(text=email if logged_in else "Not signed in")
+        self.account_subtitle.config(
+            text=f"Signed in with {method}. Local computer mode is ready." if logged_in else "Choose email or Google for the PC app."
+        )
+        self.login_button.config(text="Switch account" if logged_in else "Email or Google")
         self.status_label.config(
             text="GitHub connected" if self.state_data.get("github_connected") else "GitHub optional. Local PC files are ready."
         )
@@ -338,6 +357,64 @@ class RotexPcApp(tk.Tk):
     def open_bot_browser(self):
         webbrowser.open(f"{APP_URL}/#account")
         messagebox.showinfo("ROTEX PC", "Opened ROTEX in its own browser window. Keep this PC app open for local file context.")
+
+    def show_login_dialog(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("ROTEX PC login")
+        dialog.geometry("520x360")
+        dialog.minsize(500, 340)
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        card = tk.Frame(dialog, bg=SIDEBAR, padx=26, pady=24, highlightbackground=LINE, highlightthickness=1)
+        card.pack(fill="both", expand=True, padx=18, pady=18)
+        tk.Label(card, text="ROTEX PC", bg=SIDEBAR, fg=GREEN, font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        tk.Label(card, text="Email or Google for PC app?", bg=SIDEBAR, fg=TEXT, font=("Segoe UI", 26, "bold")).pack(anchor="w", pady=(4, 10))
+        tk.Label(
+            card,
+            text="This signs into the desktop workspace. Website login can still happen in the browser.",
+            bg=SIDEBAR,
+            fg=MUTED,
+            wraplength=430,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 18))
+
+        email_input = tk.Entry(card, bg=PANEL_2, fg=TEXT, insertbackground=TEXT, relief="flat", font=("Segoe UI", 12))
+        email_input.insert(0, self.state_data.get("email") or "")
+        email_input.pack(fill="x", ipady=10, pady=(0, 12))
+
+        actions = tk.Frame(card, bg=SIDEBAR)
+        actions.pack(fill="x")
+        self.action_button(actions, "Continue with email", lambda: self.finish_email_login(dialog, email_input), GREEN).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self.action_button(actions, "Continue with Google", lambda: self.finish_google_login(dialog), BLUE).pack(side="left", fill="x", expand=True, padx=(6, 0))
+
+        tk.Label(
+            card,
+            text="Local access stays on this PC. ROTEX should ask before changing files.",
+            bg=SIDEBAR,
+            fg=QUIET,
+            wraplength=430,
+            justify="left",
+        ).pack(anchor="w", pady=(18, 0))
+
+    def finish_email_login(self, dialog, email_input):
+        email = email_input.get().strip()
+        if "@" not in email:
+            messagebox.showerror("ROTEX PC", "Enter an email first.")
+            return
+        self.state_data.update({"logged_in": True, "login_method": "email", "email": email})
+        self.save_state()
+        dialog.destroy()
+        self.render()
+
+    def finish_google_login(self, dialog):
+        self.state_data.update({"logged_in": True, "login_method": "Google", "email": "Google account"})
+        self.save_state()
+        webbrowser.open(f"{APP_URL}/#authPage")
+        dialog.destroy()
+        self.render()
+        messagebox.showinfo("ROTEX PC", "Google login opened in your browser. The PC app is marked ready.")
 
     def connect_github(self):
         self.state_data["github_connected"] = True
