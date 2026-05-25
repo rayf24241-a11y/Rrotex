@@ -10,7 +10,7 @@ Current web features:
 - ROTEX model drop-up beside the chat bar
 - Single-screen chatbot layout
 - Vercel ROTEX backend at `/api/chat`
-- Free user credits: `$0.003` every 3 days
+- Free user credits: `$0.300` every 3 days
 
 Model costs:
 

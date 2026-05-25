@@ -74,7 +74,7 @@ const selectedModelName = document.querySelector('#selectedModelName');
 const selectedModelShort = document.querySelector('#selectedModelShort');
 
 const storageKey = 'rotex:web:v2';
-const freeCreditAmount = 0.003;
+const freeCreditAmount = 0.3;
 const refillEveryMs = 3 * 24 * 60 * 60 * 1000;
 let state = loadState();
 let auth = null;
@@ -133,7 +133,7 @@ function normalizeState(value) {
   return {
     activeModel: value.activeModel || 'rod-1',
     activeChatId: value.activeChatId || chats[0].id,
-    credits: typeof value.credits === 'number' ? value.credits : freeCreditAmount,
+    credits: typeof value.credits === 'number' ? Math.max(value.credits, value.credits <= 0.003 ? freeCreditAmount : value.credits) : freeCreditAmount,
     nextRefillAt: typeof value.nextRefillAt === 'number' ? value.nextRefillAt : Date.now() + refillEveryMs,
     chats,
   };
