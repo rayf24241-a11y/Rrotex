@@ -103,10 +103,10 @@ button {
 .new-chat,
 .google-button,
 .signout-button,
+.computer-entry,
 .send-button,
 .upgrade-button,
 .message-action,
-.computer-toggle,
 .checkout-action,
 .secondary-action,
 .model-select,
@@ -124,6 +124,37 @@ button {
   color: var(--bg);
   background: linear-gradient(135deg, var(--text), var(--blue));
   box-shadow: 0 16px 34px rgba(76, 201, 240, 0.16);
+}
+
+.computer-entry {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  min-height: 64px;
+  padding: 13px 14px;
+  color: var(--text);
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.13), rgba(128, 237, 153, 0.08));
+  border-color: rgba(76, 201, 240, 0.26);
+  text-align: left;
+}
+
+.computer-entry small {
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.computer-entry.active {
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--blue), var(--green));
+  border-color: transparent;
+  box-shadow: 0 16px 36px rgba(76, 201, 240, 0.18);
+}
+
+.computer-entry.active small {
+  color: var(--bg);
+  opacity: 0.8;
 }
 
 .new-chat:hover,
@@ -260,6 +291,13 @@ h1 {
   letter-spacing: 0;
 }
 
+.mode-subtitle {
+  max-width: 520px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .status-pill {
   gap: 8px;
   padding: 9px 12px;
@@ -295,6 +333,56 @@ h1 {
   min-height: 0;
   overflow: auto;
   padding: 26px clamp(18px, 4vw, 44px);
+}
+
+.computer-panel {
+  background:
+    linear-gradient(135deg, rgba(76, 201, 240, 0.08), transparent 36%),
+    linear-gradient(225deg, rgba(128, 237, 153, 0.08), transparent 32%);
+}
+
+.computer-panel .messages {
+  padding-top: 18px;
+}
+
+.computer-workspace {
+  display: none;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 0 clamp(18px, 4vw, 44px) 18px;
+}
+
+.computer-workspace.active {
+  display: grid;
+}
+
+.workspace-panel {
+  padding: 16px;
+  background: rgba(19, 26, 36, 0.72);
+  border: 1px solid rgba(76, 201, 240, 0.22);
+  border-radius: 18px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.18);
+}
+
+.workspace-panel p:last-child {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.connection-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connection-chip {
+  padding: 10px 12px;
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--blue), var(--green));
+  border: 0;
+  border-radius: 999px;
+  font-weight: 900;
 }
 
 .empty-state {
@@ -349,27 +437,12 @@ h1 {
 
 .composer {
   position: relative;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   padding: 14px clamp(18px, 4vw, 44px) 20px;
   border-top: 1px solid rgba(44, 55, 72, 0.72);
   background: rgba(6, 7, 11, 0.86);
   backdrop-filter: blur(16px);
-}
-
-.computer-toggle {
-  min-width: 106px;
-  padding: 0 13px;
-  color: var(--muted);
-  background: var(--panel);
-  border-color: var(--line);
-}
-
-.computer-toggle.active {
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--blue), var(--green));
-  border-color: transparent;
-  box-shadow: 0 14px 32px rgba(76, 201, 240, 0.16);
 }
 
 .model-option.disabled {
@@ -690,6 +763,10 @@ h1 {
   }
 
   .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-workspace.active {
     grid-template-columns: 1fr;
   }
 

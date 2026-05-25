@@ -74,11 +74,18 @@ const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
 const creditStatus = document.querySelector('#creditStatus');
 const upgradeButton = document.querySelector('#upgradeButton');
+const chatPanel = document.querySelector('#chatPanel');
+const modeEyebrow = document.querySelector('#modeEyebrow');
+const modeTitle = document.querySelector('#modeTitle');
+const modeSubtitle = document.querySelector('#modeSubtitle');
+const computerEntry = document.querySelector('#computerEntry');
+const computerEntrySub = document.querySelector('#computerEntrySub');
+const computerWorkspace = document.querySelector('#computerWorkspace');
+const connectionRow = document.querySelector('#connectionRow');
 const modelButton = document.querySelector('#modelButton');
 const modelMenu = document.querySelector('#modelMenu');
 const selectedModelName = document.querySelector('#selectedModelName');
 const selectedModelShort = document.querySelector('#selectedModelShort');
-const computerToggle = document.querySelector('#computerToggle');
 const upgradeDialog = document.querySelector('#upgradeDialog');
 const checkoutButton = document.querySelector('#checkoutButton');
 const connectDialog = document.querySelector('#connectDialog');
@@ -319,12 +326,8 @@ function renderAccount() {
   applyCreditRefill();
   applyComputerUsageReset();
   creditStatus.textContent = `${formatMoney(state.credits)} credits`;
-  computerToggle.classList.toggle('active', state.computerMode);
-  computerToggle.setAttribute('aria-pressed', String(state.computerMode));
-  computerToggle.textContent = state.computerMode
-    ? `Computer${state.computerConnections.length ? `: ${state.computerConnections.length}` : ''}`
-    : 'Computer';
   renderConnectOptions();
+  renderModeShell();
   if (currentUser) {
     googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
     signOutButton.hidden = false;
@@ -347,6 +350,31 @@ function render() {
   renderChats();
   renderMessages();
   renderAccount();
+}
+
+function renderModeShell() {
+  chatPanel.classList.toggle('computer-panel', state.computerMode);
+  computerWorkspace.classList.toggle('active', state.computerMode);
+  computerEntry.classList.toggle('active', state.computerMode);
+  computerEntry.setAttribute('aria-pressed', String(state.computerMode));
+  modeEyebrow.textContent = state.computerMode ? 'ROTEX computer' : 'ROTEX web';
+  modeTitle.textContent = state.computerMode ? 'Computer mode' : 'Chat with ROTEX';
+  modeSubtitle.textContent = state.computerMode
+    ? 'A separate workspace for app connections, approvals, and heavier computer work.'
+    : 'Fast chat, code, and research with ROTEX.';
+  computerEntrySub.textContent = state.computerMode
+    ? `${computerMessagesLeft()} free today`
+    : 'Connect apps';
+  connectionRow.innerHTML = '';
+  const connections = state.computerConnections.length ? state.computerConnections : ['Choose apps'];
+  connections.forEach((connection) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'connection-chip';
+    item.textContent = connection;
+    item.addEventListener('click', () => connectDialog.showModal());
+    connectionRow.appendChild(item);
+  });
 }
 
 function createChat() {
@@ -499,9 +527,12 @@ function closeModelMenu() {
   modelButton.setAttribute('aria-expanded', 'false');
 }
 
-newChatButton.addEventListener('click', createChat);
+newChatButton.addEventListener('click', () => {
+  state.computerMode = false;
+  createChat();
+});
 modelButton.addEventListener('click', toggleModelMenu);
-computerToggle.addEventListener('click', () => {
+computerEntry.addEventListener('click', () => {
   state.computerMode = !state.computerMode;
   ensureComputerModel();
   if (state.computerMode && state.computerConnections.length === 0) {

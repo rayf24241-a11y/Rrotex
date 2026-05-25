@@ -15,6 +15,10 @@
         </a>
 
         <button class="new-chat" id="newChatButton" type="button">New chat</button>
+        <button class="computer-entry" id="computerEntry" type="button" aria-pressed="false">
+          <span>Computer mode</span>
+          <small id="computerEntrySub">Connect apps</small>
+        </button>
 
         <div class="sidebar-label">Chats</div>
         <div class="chat-list" id="chatList"></div>
@@ -29,11 +33,12 @@
         </div>
       </aside>
 
-      <section class="chat-panel">
+      <section class="chat-panel" id="chatPanel">
         <header class="topbar">
           <div>
-            <p class="eyebrow">ROTEX web</p>
-            <h1>Chat with ROTEX</h1>
+            <p class="eyebrow" id="modeEyebrow">ROTEX web</p>
+            <h1 id="modeTitle">Chat with ROTEX</h1>
+            <p class="mode-subtitle" id="modeSubtitle">Fast chat, code, and research with ROTEX.</p>
           </div>
           <div class="top-actions">
             <button class="upgrade-button" id="upgradeButton" type="button">Upgrade</button>
@@ -43,11 +48,18 @@
         </header>
 
         <section class="messages" id="messages" aria-live="polite"></section>
+        <section class="computer-workspace" id="computerWorkspace" aria-label="Computer mode workspace">
+          <div class="workspace-panel">
+            <p class="eyebrow">Connections</p>
+            <div class="connection-row" id="connectionRow"></div>
+          </div>
+          <div class="workspace-panel">
+            <p class="eyebrow">Mode rules</p>
+            <p>ROTEX can ask for Google Drive, OneDrive, GitHub, or all connections before external work. Direct file editing stays disabled.</p>
+          </div>
+        </section>
 
         <form class="composer" id="composer">
-          <button class="computer-toggle" id="computerToggle" type="button" aria-pressed="false">
-            Computer
-          </button>
           <div class="model-select-wrap">
             <button class="model-select" id="modelButton" type="button" aria-expanded="false">
               <span id="selectedModelName">Rod _ 1</span>
