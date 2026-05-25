@@ -816,6 +816,19 @@ h1 {
     var(--bg);
 }
 
+.auth-page {
+  display: none;
+}
+
+.auth-page:target,
+.auth-page:not([hidden]) {
+  display: grid;
+}
+
+body:has(.auth-page:target) .app-shell {
+  display: none;
+}
+
 .pro-page[hidden] {
   display: none;
 }

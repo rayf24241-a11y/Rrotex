@@ -350,7 +350,7 @@ function openAuthPage(reason = 'account', forceProfile = false) {
   appShell.hidden = true;
   proPage.hidden = true;
   authPage.hidden = false;
-  window.location.hash = 'login';
+  window.location.hash = 'authPage';
   if (currentUser && (forceProfile || needsProfile())) {
     showAuthStep('profile');
     return;
@@ -362,7 +362,7 @@ function closeAuthPage() {
   authPage.hidden = true;
   appShell.hidden = false;
   localStorage.removeItem(pendingAuthReasonKey);
-  if (window.location.hash === '#login') {
+  if (window.location.hash === '#authPage') {
     history.pushState('', document.title, window.location.pathname + window.location.search);
   }
 }
@@ -1481,7 +1481,8 @@ messageInput.addEventListener('keydown', (event) => {
   }
 });
 
-googleButton.addEventListener('click', async () => {
+googleButton.addEventListener('click', async (event) => {
+  event.preventDefault();
   openAuthPage('account', Boolean(currentUser && needsProfile()));
 });
 
@@ -1503,7 +1504,7 @@ upgradeButton.addEventListener('click', startUpgrade);
 closeProPageButton.addEventListener('click', closeProPage);
 checkoutButton.addEventListener('click', continueCheckout);
 
-if (window.location.hash === '#login') {
+if (window.location.hash === '#authPage' || window.location.hash === '#login') {
   openAuthPage('account');
 }
 
