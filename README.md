@@ -65,6 +65,28 @@ GROQ_API_KEY
 DEEPSEEK_API_KEY
 ```
 
+## Computer mode connectors
+
+The UI starts real OAuth redirects when these are configured:
+
+```text
+GITHUB_CLIENT_ID
+GITHUB_CLIENT_SECRET
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+MICROSOFT_CLIENT_ID
+MICROSOFT_CLIENT_SECRET
+MICROSOFT_TENANT_ID
+```
+
+Callback URLs:
+
+```text
+https://www.rrotex.com/api/connect/github-callback
+https://www.rrotex.com/api/connect/google-drive-callback
+https://www.rrotex.com/api/connect/onedrive-callback
+```
+
 ## Stripe checkout
 
 Create a Stripe product/price for the upgrade, then add:
@@ -74,7 +96,7 @@ STRIPE_SECRET_KEY
 STRIPE_PRICE_ID
 ```
 
-The checkout endpoint is `/api/create-checkout-session`. The purchase metadata includes the user id, `$3` credits, and the coming-soon benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
+The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id, `$3` credits, and the coming-soon benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
 
 ## Local preview
 

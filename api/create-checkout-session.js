@@ -18,7 +18,7 @@ module.exports = async function handler(request, response) {
   const { uid = '', email = '' } = request.body || {};
   const origin = request.headers.origin || 'https://www.rrotex.com';
   const body = new URLSearchParams({
-    mode: 'payment',
+    mode: 'subscription',
     'line_items[0][price]': priceId,
     'line_items[0][quantity]': '1',
     success_url: `${origin}/?upgraded=1`,

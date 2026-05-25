@@ -81,7 +81,7 @@ const modeSubtitle = document.querySelector('#modeSubtitle');
 const computerEntry = document.querySelector('#computerEntry');
 const computerEntrySub = document.querySelector('#computerEntrySub');
 const computerWorkspace = document.querySelector('#computerWorkspace');
-const connectionRow = document.querySelector('#connectionRow');
+const connectorCards = document.querySelectorAll('.connector-card');
 const modelButton = document.querySelector('#modelButton');
 const modelMenu = document.querySelector('#modelMenu');
 const selectedModelName = document.querySelector('#selectedModelName');
@@ -365,15 +365,12 @@ function renderModeShell() {
   computerEntrySub.textContent = state.computerMode
     ? `${computerMessagesLeft()} free today`
     : 'Connect apps';
-  connectionRow.innerHTML = '';
-  const connections = state.computerConnections.length ? state.computerConnections : ['Choose apps'];
-  connections.forEach((connection) => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'connection-chip';
-    item.textContent = connection;
-    item.addEventListener('click', () => connectDialog.showModal());
-    connectionRow.appendChild(item);
+  connectorCards.forEach((card) => {
+    const value = card.dataset.connect;
+    const active = value === 'all'
+      ? state.computerConnections.length === 3
+      : state.computerConnections.includes(value);
+    card.classList.toggle('active', active);
   });
 }
 
@@ -556,6 +553,39 @@ connectOptions.forEach((button) => {
     render();
   });
 });
+
+connectorCards.forEach((button) => {
+  button.addEventListener('click', async () => {
+    const value = button.dataset.connect;
+    const provider = button.dataset.provider;
+    if (value === 'all') {
+      state.computerConnections = ['Google Drive', 'OneDrive', 'GitHub'];
+    } else if (!state.computerConnections.includes(value)) {
+      state.computerConnections = [...state.computerConnections, value];
+    }
+    persistState();
+    render();
+    if (provider === 'all') {
+      connectDialog.showModal();
+      return;
+    }
+    await startProviderConnect(provider);
+  });
+});
+
+async function startProviderConnect(provider) {
+  try {
+    const response = await fetch(`/api/connect/${provider}`);
+    const data = await response.json();
+    if (data.url) {
+      window.location.href = data.url;
+      return;
+    }
+    alert(data.message || `${provider} is not configured yet.`);
+  } catch {
+    alert(`${provider} connect is not ready yet.`);
+  }
+}
 
 document.addEventListener('click', (event) => {
   if (!modelMenu.contains(event.target) && !modelButton.contains(event.target)) {
