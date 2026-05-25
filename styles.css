@@ -934,7 +934,16 @@ h1 {
   display: grid;
 }
 
+.account-page:target,
+.account-page:not([hidden]) {
+  display: grid;
+}
+
 body:has(.auth-page:target) .app-shell {
+  display: none;
+}
+
+body:has(.account-page:target) .app-shell {
   display: none;
 }
 

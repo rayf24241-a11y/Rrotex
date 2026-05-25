@@ -844,7 +844,7 @@ function renderMessages() {
         <p class="eyebrow">Ready</p>
         <h2>${model.name}</h2>
         <p>${model.description}</p>
-        <p>${model.api}. Costs ${formatMoney(activeCost())} per message${state.computerMode ? ' in computer mode' : ''}. Free limits are ${formatMoney(activeFreePlan().daily)} daily, ${formatMoney(activeFreePlan().weekly)} weekly, and ${formatMoney(activeFreePlan().monthly)} monthly.</p>
+        <p>${model.name} is built for ${model.short.toLowerCase()}${state.computerMode ? ' in computer mode' : ''}. Costs ${formatMoney(activeCost())} per message. Free limits are ${formatMoney(activeFreePlan().daily)} daily, ${formatMoney(activeFreePlan().weekly)} weekly, and ${formatMoney(activeFreePlan().monthly)} monthly.</p>
       </div>
     `;
     return;
@@ -1530,6 +1530,18 @@ async function startProviderConnect(provider) {
 }
 
 document.addEventListener('click', (event) => {
+  const profileLink = event.target.closest?.('#googleButton');
+  if (profileLink) {
+    event.preventDefault();
+    openAccountPage();
+    return;
+  }
+  const upgradeClick = event.target.closest?.('#upgradeButton, .message-action');
+  if (upgradeClick) {
+    event.preventDefault();
+    openAccountPage(true);
+    return;
+  }
   if (!modelMenu.contains(event.target) && !modelButton.contains(event.target)) {
     closeModelMenu();
   }
@@ -1559,10 +1571,6 @@ messageInput.addEventListener('keydown', (event) => {
 
 googleButton.addEventListener('click', async (event) => {
   event.preventDefault();
-  if (currentUser && !needsProfile()) {
-    openAccountPage();
-    return;
-  }
   openAccountPage();
 });
 
@@ -1596,6 +1604,15 @@ if (window.location.hash === '#authPage' || window.location.hash === '#login') {
 if (window.location.hash === '#pro' || window.location.hash === '#account') {
   startUpgrade();
 }
+
+window.addEventListener('hashchange', () => {
+  if (window.location.hash === '#account' || window.location.hash === '#pro') {
+    startUpgrade();
+  }
+  if (window.location.hash === '#authPage' || window.location.hash === '#login') {
+    openAuthPage('account');
+  }
+});
 
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 document.addEventListener('keydown', (event) => {
