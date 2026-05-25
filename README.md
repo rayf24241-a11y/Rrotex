@@ -9,7 +9,18 @@ Current web features:
 - Firebase Google login and Firestore chat sync when configured
 - ROTEX model drop-up beside the chat bar
 - Single-screen chatbot layout
-- Vercel ROTEX backend stub at `/api/chat`
+- Vercel ROTEX backend at `/api/chat`
+- Free user credits: `$0.003` every 3 days
+
+Model costs:
+
+| Model | Backend | Cost |
+| --- | --- | ---: |
+| Rod _ 1 | Groq `llama-3.1-8b-instant` | `$0.001/message` |
+| Rod thinking | Groq `llama-3.3-70b-versatile` | `$0.004/message` |
+| Tex 0 | DeepSeek `deepseek-chat` | `$0.007/message` |
+| Tex 1.5 | DeepSeek `deepseek-chat` | `$0.015/message` |
+| Treesearch _ q | Groq `llama-3.3-70b-versatile` | `$0.002/message` |
 
 ## Firebase Auth
 
@@ -22,6 +33,15 @@ rrotex.vercel.app
 ```
 
 Add the values from `firebase-env.example` to Vercel Project Settings -> Environment Variables, then redeploy.
+
+## AI backend keys
+
+Add these to Vercel Project Settings -> Environment Variables:
+
+```text
+GROQ_API_KEY
+DEEPSEEK_API_KEY
+```
 
 ## Local preview
 

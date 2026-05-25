@@ -1,27 +1,32 @@
 const MODELS = {
   'rod-1': {
     name: 'Rod _ 1',
-    api: 'Groq llama-3.1-8b-instant',
+    provider: 'groq',
+    providerModel: 'llama-3.1-8b-instant',
     purpose: 'everyday tasks',
   },
   'rod-thinking': {
     name: 'Rod thinking',
-    api: 'Groq llama-3.3-70b-versatile',
+    provider: 'groq',
+    providerModel: 'llama-3.3-70b-versatile',
     purpose: 'harder tasks',
   },
   'tex-0': {
     name: 'Tex 0',
-    api: 'DeepSeek chat',
+    provider: 'deepseek',
+    providerModel: 'deepseek-chat',
     purpose: 'code',
   },
   'tex-1-5': {
     name: 'Tex 1.5',
-    api: 'DeepSeek chat/reasoner',
+    provider: 'deepseek',
+    providerModel: 'deepseek-chat',
     purpose: 'complex code',
   },
   'treesearch-q': {
     name: 'Treesearch _ q',
-    api: 'DeepSeek reasoner',
+    provider: 'groq',
+    providerModel: 'llama-3.3-70b-versatile',
     purpose: 'research only',
   },
 };
@@ -34,10 +39,69 @@ module.exports = async function handler(request, response) {
 
   const { model = 'rod-1', messages = [] } = request.body || {};
   const selected = MODELS[model] || MODELS['rod-1'];
-  const lastUser = [...messages].reverse().find((message) => message.role === 'user');
+  const cleanMessages = messages
+    .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
+    .slice(-18)
+    .map((message) => ({
+      role: message.role,
+      content: String(message.text || message.content || '').slice(0, 8000),
+    }));
 
-  response.status(200).json({
-    model: selected.name,
-    text: `${selected.name} is routed for ${selected.purpose} through ${selected.api}. Real provider keys are the next backend step. You said: "${String(lastUser?.text || '').slice(0, 240)}"`,
-  });
+  if (model === 'treesearch-q') {
+    cleanMessages.unshift({
+      role: 'system',
+      content: 'You are Treesearch _ q. Focus on research, comparison, and explanation. Do not create, edit, delete, or rename files.',
+    });
+  }
+
+  try {
+    const text = selected.provider === 'deepseek'
+      ? await callOpenAiCompatible({
+        apiKey: process.env.DEEPSEEK_API_KEY,
+        baseUrl: 'https://api.deepseek.com/chat/completions',
+        model: selected.providerModel,
+        messages: cleanMessages,
+      })
+      : await callOpenAiCompatible({
+        apiKey: process.env.GROQ_API_KEY,
+        baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+        model: selected.providerModel,
+        messages: cleanMessages,
+      });
+
+    response.status(200).json({ model: selected.name, text });
+  } catch (error) {
+    response.status(500).json({
+      error: 'backend_unavailable',
+      text: `${selected.name} is set to ${selected.providerModel}, but the server key is missing or the provider failed. Add GROQ_API_KEY and DEEPSEEK_API_KEY in Vercel.`,
+    });
+  }
 };
+
+async function callOpenAiCompatible({ apiKey, baseUrl, model, messages }) {
+  if (!apiKey) {
+    throw new Error('Missing provider key');
+  }
+
+  const providerResponse = await fetch(baseUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.7,
+      max_tokens: 900,
+    }),
+  });
+
+  if (!providerResponse.ok) {
+    const body = await providerResponse.text();
+    throw new Error(body);
+  }
+
+  const data = await providerResponse.json();
+  return data.choices?.[0]?.message?.content || 'No response text returned.';
+}

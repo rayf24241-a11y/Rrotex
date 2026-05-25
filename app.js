@@ -20,7 +20,7 @@ const models = [
     name: 'Rod _ 1',
     short: 'Everyday',
     api: 'Groq llama-3.1-8b-instant',
-    limit: '~23k normal chats with $3 Groq',
+    cost: 0.001,
     description: 'Everyday tasks, quick answers, normal chat, and simple work.',
   },
   {
@@ -28,7 +28,7 @@ const models = [
     name: 'Rod thinking',
     short: 'Hard tasks',
     api: 'Groq llama-3.3-70b-versatile',
-    limit: '~2.1k normal chats with $3 Groq',
+    cost: 0.004,
     description: 'Harder tasks that need more reasoning, planning, and careful answers.',
   },
   {
@@ -36,7 +36,7 @@ const models = [
     name: 'Tex 0',
     short: 'Code',
     api: 'DeepSeek chat',
-    limit: '~1.4k normal chats with $2 DeepSeek',
+    cost: 0.007,
     description: 'Code help, debugging, implementation, and file-aware project work.',
   },
   {
@@ -44,15 +44,15 @@ const models = [
     name: 'Tex 1.5',
     short: 'Complex code',
     api: 'DeepSeek chat/reasoner',
-    limit: '600-1.4k normal chats with $2 DeepSeek',
+    cost: 0.015,
     description: 'Complex code, larger builds, deeper architecture, and tougher fixes.',
   },
   {
     id: 'treesearch-q',
     name: 'Treesearch _ q',
     short: 'Research',
-    api: 'DeepSeek reasoner',
-    limit: '~700 normal chats with $2 DeepSeek',
+    api: 'Groq llama-3.3-70b-versatile',
+    cost: 0.002,
     description: 'Research mode for searching, comparing, and explaining. It cannot create files.',
   },
 ];
@@ -67,12 +67,15 @@ const googleButtonText = document.querySelector('#googleButtonText');
 const signOutButton = document.querySelector('#signOutButton');
 const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
+const creditStatus = document.querySelector('#creditStatus');
 const modelButton = document.querySelector('#modelButton');
 const modelMenu = document.querySelector('#modelMenu');
 const selectedModelName = document.querySelector('#selectedModelName');
 const selectedModelShort = document.querySelector('#selectedModelShort');
 
 const storageKey = 'rotex:web:v2';
+const freeCreditAmount = 0.003;
+const refillEveryMs = 3 * 24 * 60 * 60 * 1000;
 let state = loadState();
 let auth = null;
 let db = null;
@@ -130,11 +133,20 @@ function normalizeState(value) {
   return {
     activeModel: value.activeModel || 'rod-1',
     activeChatId: value.activeChatId || chats[0].id,
+    credits: typeof value.credits === 'number' ? value.credits : freeCreditAmount,
+    nextRefillAt: typeof value.nextRefillAt === 'number' ? value.nextRefillAt : Date.now() + refillEveryMs,
     chats,
   };
 }
 
+function applyCreditRefill() {
+  if (Date.now() < state.nextRefillAt) return;
+  state.credits = freeCreditAmount;
+  state.nextRefillAt = Date.now() + refillEveryMs;
+}
+
 function persistState() {
+  applyCreditRefill();
   localStorage.setItem(storageKey, JSON.stringify(state));
   if (!currentUser || !db) return;
 
@@ -191,7 +203,7 @@ function renderModelMenu() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `model-option${item.id === state.activeModel ? ' active' : ''}`;
-    button.innerHTML = `<strong>${item.name}</strong><span>${item.description}</span><span>${item.limit}</span>`;
+    button.innerHTML = `<strong>${item.name}</strong><span>${item.description}</span><span>${formatMoney(item.cost)} per message</span>`;
     button.addEventListener('click', () => {
       state.activeModel = item.id;
       closeModelMenu();
@@ -229,7 +241,7 @@ function renderMessages() {
         <p class="eyebrow">Ready</p>
         <h2>${model.name}</h2>
         <p>${model.description}</p>
-        <p>${model.api} - ${model.limit}. No model is infinite.</p>
+        <p>${model.api}. Costs ${formatMoney(model.cost)} per message. Normal users refill to ${formatMoney(freeCreditAmount)} every 3 days.</p>
       </div>
     `;
     return;
@@ -245,6 +257,8 @@ function renderMessages() {
 }
 
 function renderAccount() {
+  applyCreditRefill();
+  creditStatus.textContent = `${formatMoney(state.credits)} credits`;
   if (currentUser) {
     googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
     signOutButton.hidden = false;
@@ -261,6 +275,7 @@ function renderAccount() {
 }
 
 function render() {
+  applyCreditRefill();
   renderModelMenu();
   renderChats();
   renderMessages();
@@ -287,6 +302,19 @@ async function sendMessage(text) {
   const clean = text.trim();
   if (!clean || !chat) return;
 
+  applyCreditRefill();
+  if (state.credits + 0.0000001 < model.cost) {
+    chat.messages.push({
+      role: 'assistant',
+      model: 'ROTEX credits',
+      text: `You are out of credits for ${model.name}. Normal users refill to ${formatMoney(freeCreditAmount)} every 3 days. This model costs ${formatMoney(model.cost)} per message.`,
+    });
+    persistState();
+    render();
+    return;
+  }
+
+  state.credits = Math.max(0, state.credits - model.cost);
   chat.messages.push({ role: 'user', text: clean, model: 'You' });
   if (chat.title === 'New ROTEX chat') {
     chat.title = clean.length > 32 ? `${clean.slice(0, 32)}...` : clean;
@@ -315,6 +343,10 @@ async function sendMessage(text) {
 
   persistState();
   render();
+}
+
+function formatMoney(value) {
+  return `$${Number(value).toFixed(3)}`;
 }
 
 function escapeHtml(value) {

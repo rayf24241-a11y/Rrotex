@@ -72,9 +72,11 @@ button {
 .chat-item,
 .google-button,
 .topbar,
+.top-actions,
 .composer,
 .model-select,
 .status-pill,
+.credit-pill,
 .signout-button {
   display: flex;
   align-items: center;
@@ -133,29 +135,6 @@ button {
   font-weight: 950;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-}
-
-.usage-card {
-  display: grid;
-  gap: 10px;
-  padding: 13px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-
-.usage-grid {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px 10px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.usage-grid strong {
-  color: var(--green);
-  font-size: 11px;
-  text-align: right;
 }
 
 .chat-list {
@@ -282,6 +261,23 @@ h1 {
   color: var(--green);
   background: rgba(128, 237, 153, 0.08);
   border: 1px solid rgba(128, 237, 153, 0.24);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.top-actions {
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.credit-pill {
+  gap: 8px;
+  padding: 9px 12px;
+  color: var(--amber);
+  background: rgba(255, 209, 102, 0.08);
+  border: 1px solid rgba(255, 209, 102, 0.24);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 900;

@@ -16,17 +16,6 @@
 
         <button class="new-chat" id="newChatButton" type="button">New chat</button>
 
-        <section class="usage-card" aria-label="Model usage estimates">
-          <div class="sidebar-label">Usage</div>
-          <div class="usage-grid">
-            <span>Rod _ 1</span><strong>~23k / $3</strong>
-            <span>Rod thinking</span><strong>~2.1k / $3</strong>
-            <span>Tex 0</span><strong>~1.4k / $2</strong>
-            <span>Tex 1.5</span><strong>600-1.4k / $2</strong>
-            <span>Treesearch _ q</span><strong>~700 / $2</strong>
-          </div>
-        </section>
-
         <div class="sidebar-label">Chats</div>
         <div class="chat-list" id="chatList"></div>
 
@@ -46,7 +35,10 @@
             <p class="eyebrow">ROTEX web</p>
             <h1>Chat with ROTEX</h1>
           </div>
-          <div class="status-pill" id="syncStatus">Local mode</div>
+          <div class="top-actions">
+            <div class="credit-pill" id="creditStatus">$0.003 credits</div>
+            <div class="status-pill" id="syncStatus">Local mode</div>
+          </div>
         </header>
 
         <section class="messages" id="messages" aria-live="polite"></section>
