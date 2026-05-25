@@ -81,6 +81,8 @@ const selectedModelShort = document.querySelector('#selectedModelShort');
 const computerToggle = document.querySelector('#computerToggle');
 const upgradeDialog = document.querySelector('#upgradeDialog');
 const checkoutButton = document.querySelector('#checkoutButton');
+const connectDialog = document.querySelector('#connectDialog');
+const connectOptions = document.querySelectorAll('.connect-option');
 
 const storageKey = 'rotex:web:v2';
 const freeCreditAmount = 0.3;
@@ -145,6 +147,7 @@ function normalizeState(value) {
     computerMode: Boolean(value.computerMode),
     pro: Boolean(value.pro),
     computerUsage: normalizeComputerUsage(value.computerUsage),
+    computerConnections: Array.isArray(value.computerConnections) ? value.computerConnections : [],
     activeChatId: value.activeChatId || chats[0].id,
     credits: typeof value.credits === 'number' ? Math.max(value.credits, value.credits <= 0.003 ? freeCreditAmount : value.credits) : freeCreditAmount,
     nextRefillAt: typeof value.nextRefillAt === 'number' ? value.nextRefillAt : Date.now() + refillEveryMs,
@@ -318,6 +321,10 @@ function renderAccount() {
   creditStatus.textContent = `${formatMoney(state.credits)} credits`;
   computerToggle.classList.toggle('active', state.computerMode);
   computerToggle.setAttribute('aria-pressed', String(state.computerMode));
+  computerToggle.textContent = state.computerMode
+    ? `Computer${state.computerConnections.length ? `: ${state.computerConnections.length}` : ''}`
+    : 'Computer';
+  renderConnectOptions();
   if (currentUser) {
     googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
     signOutButton.hidden = false;
@@ -411,6 +418,7 @@ async function sendMessage(text) {
       body: JSON.stringify({
         model: model.id,
         computerMode: state.computerMode,
+        computerConnections: state.computerConnections,
         messages: chat.messages.filter((message) => message.text !== 'Thinking...'),
       }),
     });
@@ -459,6 +467,16 @@ function dayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function renderConnectOptions() {
+  connectOptions.forEach((button) => {
+    const value = button.dataset.connect;
+    const active = value === 'all'
+      ? state.computerConnections.length === 3
+      : state.computerConnections.includes(value);
+    button.classList.toggle('active', active);
+  });
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -486,8 +504,26 @@ modelButton.addEventListener('click', toggleModelMenu);
 computerToggle.addEventListener('click', () => {
   state.computerMode = !state.computerMode;
   ensureComputerModel();
+  if (state.computerMode && state.computerConnections.length === 0) {
+    connectDialog.showModal();
+  }
   persistState();
   render();
+});
+
+connectOptions.forEach((button) => {
+  button.addEventListener('click', () => {
+    const value = button.dataset.connect;
+    if (value === 'all') {
+      state.computerConnections = ['Google Drive', 'OneDrive', 'GitHub'];
+    } else if (state.computerConnections.includes(value)) {
+      state.computerConnections = state.computerConnections.filter((item) => item !== value);
+    } else {
+      state.computerConnections = [...state.computerConnections, value];
+    }
+    persistState();
+    render();
+  });
 });
 
 document.addEventListener('click', (event) => {

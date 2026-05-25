@@ -81,6 +81,23 @@
       </form>
     </dialog>
 
+    <dialog class="connect-dialog" id="connectDialog">
+      <form method="dialog" class="connect-card">
+        <p class="eyebrow">Computer mode</p>
+        <h2>Connect apps</h2>
+        <p class="upgrade-copy">Pick what ROTEX should ask for when computer mode needs access.</p>
+        <div class="connect-grid">
+          <button class="connect-option" type="button" data-connect="Google Drive">Google Drive</button>
+          <button class="connect-option" type="button" data-connect="OneDrive">OneDrive</button>
+          <button class="connect-option" type="button" data-connect="GitHub">GitHub</button>
+          <button class="connect-option all" type="button" data-connect="all">Connect all</button>
+        </div>
+        <div class="dialog-actions">
+          <button value="cancel" type="submit" class="secondary-action">Close</button>
+        </div>
+      </form>
+    </dialog>
+
     <script type="module" src="./app.js"></script>
   </body>
 </html>

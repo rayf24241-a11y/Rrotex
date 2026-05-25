@@ -30,7 +30,7 @@ Computer mode is available to everyone, but it has separate pricing:
 | Tex 0 (ICM) | `$0.040/message` |
 | Tex 1.5 (ICM) | `$0.070/message` |
 
-Computer mode can ask the user to connect Google Drive, GitHub, OneDrive, and other plugins/services. Direct file editing is disabled in the website chat.
+Computer mode asks the user to connect Google Drive, OneDrive, GitHub, or all of them before external-work actions. Direct file editing is disabled in the website chat.
 
 Free users can use computer mode a few times per day. Pro removes that heavier-use cap once payment/webhook activation is connected.
 
