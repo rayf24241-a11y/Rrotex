@@ -107,6 +107,7 @@ const syncStatus = document.querySelector('#syncStatus');
 const creditStatus = document.querySelector('#creditStatus');
 const upgradeButton = document.querySelector('#upgradeButton');
 const accountPage = document.querySelector('#accountPage');
+const accountBackBtn = document.querySelector('#accountBackBtn');
 const closeAccountBtn = document.querySelector('#closeAccountBtn');
 const acctAvatar = document.querySelector('#acctAvatar');
 const acctName = document.querySelector('#acctName');
@@ -1911,6 +1912,7 @@ accountSignOutBtn?.addEventListener('click', async () => {
 
 closeAuthPageButton?.addEventListener('click', closeAuthPage);
 closeAccountBtn?.addEventListener('click', closeAccountPage);
+accountBackBtn?.addEventListener('click', closeAccountPage);
 authGoogleButton.addEventListener('click', signInWithGoogleFromAuth);
 chooseEmailButton.addEventListener('click', () => showAuthStep('email'));
 sendEmailCodeButton.addEventListener('click', sendEmailCodeNotice);

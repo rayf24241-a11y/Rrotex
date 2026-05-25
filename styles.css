@@ -1097,6 +1097,22 @@ body:has(.account-page:target) .app-shell {
   border-color: var(--line);
 }
 
+.acct-back {
+  justify-self: start;
+  min-height: 38px;
+  padding: 0 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.acct-back:hover {
+  border-color: rgba(76, 201, 240, 0.42);
+}
+
 .acct-profile {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
