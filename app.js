@@ -438,6 +438,9 @@ async function sendEmailCodeNotice() {
     emailCodeToken = data.token;
     authCodeInput.value = '';
     showAuthStep('code');
+    if (data.devCode) {
+      authStatus.textContent = `${data.message} Code: ${data.devCode}`;
+    }
   } catch {
     authStatus.textContent = 'Email codes are not ready yet.';
   } finally {

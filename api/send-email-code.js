@@ -14,17 +14,20 @@ module.exports = async function handler(request, response) {
 
   const resendKey = process.env.RESEND_API_KEY;
   const emailFrom = process.env.EMAIL_FROM || 'ROTEX <onboarding@resend.dev>';
-  if (!resendKey) {
-    response.status(503).json({
-      error: 'email_not_configured',
-      message: 'Email codes need RESEND_API_KEY in Vercel.',
-    });
-    return;
-  }
 
   const code = String(crypto.randomInt(100000, 1000000));
   const expiresAt = Date.now() + 10 * 60 * 1000;
   const token = signPayload({ email, codeHash: hash(code), expiresAt });
+
+  if (!resendKey) {
+    response.status(200).json({
+      ok: true,
+      token,
+      devCode: code,
+      message: 'Email sender is not configured yet, so ROTEX is showing the test code on screen.',
+    });
+    return;
+  }
 
   const emailResponse = await fetch('https://api.resend.com/emails', {
     method: 'POST',
