@@ -1,18 +1,18 @@
 :root {
   color-scheme: dark;
-  --bg: #06070b;
-  --sidebar: #0d1118;
-  --panel: #131a24;
-  --panel-2: #1b2431;
-  --line: #2c3748;
-  --text: #f5f8fc;
-  --muted: #9cadc1;
-  --quiet: #647386;
-  --blue: #4cc9f0;
-  --green: #80ed99;
-  --pink: #ff6b9d;
-  --amber: #ffd166;
-  --shadow: rgba(0, 0, 0, 0.36);
+  --bg: #212121;
+  --sidebar: #171717;
+  --panel: #2f2f2f;
+  --panel-2: #3a3a3a;
+  --line: #3f3f3f;
+  --text: #ececec;
+  --muted: #b4b4b4;
+  --quiet: #8b8b8b;
+  --blue: #8ea7ff;
+  --green: #d8d0bf;
+  --pink: #d7c7a8;
+  --amber: #e6c98f;
+  --shadow: rgba(0, 0, 0, 0.2);
 }
 
 * {
@@ -27,10 +27,7 @@ body {
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(76, 201, 240, 0.11), transparent 28%),
-    radial-gradient(circle at 82% 12%, rgba(128, 237, 153, 0.08), transparent 24%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -51,7 +48,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 306px minmax(0, 1fr);
+  grid-template-columns: 284px minmax(0, 1fr);
   height: 100vh;
   animation: appIn 520ms ease both;
 }
@@ -62,10 +59,13 @@ button {
   gap: 14px;
   min-height: 0;
   padding: 18px;
-  background: rgba(13, 17, 24, 0.94);
+  background: var(--sidebar);
   border-right: 1px solid var(--line);
-  box-shadow: 18px 0 60px var(--shadow);
-  backdrop-filter: blur(18px);
+  box-shadow: none;
+}
+
+.teamup-entry[hidden] {
+  display: none !important;
 }
 
 .brand,
@@ -94,11 +94,11 @@ button {
   width: 36px;
   height: 36px;
   place-items: center;
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--text), var(--blue));
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: var(--sidebar);
+  background: var(--text);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 12px 34px rgba(76, 201, 240, 0.25);
+  box-shadow: none;
 }
 
 .new-chat,
@@ -126,9 +126,10 @@ button {
   width: 100%;
   padding: 13px 14px;
   margin-top: 10px;
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--text), var(--blue));
-  box-shadow: 0 16px 34px rgba(76, 201, 240, 0.16);
+  color: var(--text);
+  background: #2a2a2a;
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 .computer-entry {
@@ -139,8 +140,8 @@ button {
   min-height: 64px;
   padding: 13px 14px;
   color: var(--text);
-  background: linear-gradient(135deg, rgba(76, 201, 240, 0.13), rgba(128, 237, 153, 0.08));
-  border-color: rgba(76, 201, 240, 0.26);
+  background: #202020;
+  border-color: var(--line);
   text-align: left;
 }
 
@@ -151,15 +152,15 @@ button {
 }
 
 .computer-entry.active {
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--blue), var(--green));
-  border-color: transparent;
-  box-shadow: 0 16px 36px rgba(76, 201, 240, 0.18);
+  color: var(--text);
+  background: #303030;
+  border-color: #666;
+  box-shadow: none;
 }
 
 .computer-entry.active small {
-  color: var(--bg);
-  opacity: 0.8;
+  color: var(--muted);
+  opacity: 1;
 }
 
 .teamup-entry {
@@ -170,16 +171,16 @@ button {
   width: 100%;
   min-height: 64px;
   padding: 13px 14px;
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--amber), var(--pink));
-  border: 1px solid transparent;
+  color: var(--text);
+  background: #34312a;
+  border: 1px solid #5c5140;
   border-radius: 10px;
   text-align: left;
   font-weight: 950;
 }
 
 .teamup-entry small {
-  color: rgba(6, 7, 11, 0.72);
+  color: var(--muted);
   font-size: 11px;
   font-weight: 900;
 }
@@ -226,9 +227,9 @@ button {
 .chat-row:hover,
 .chat-row.active {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.055);
+  background: #2a2a2a;
   border-color: var(--line);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+  box-shadow: none;
 }
 
 .chat-item {
@@ -272,9 +273,9 @@ button {
 }
 
 .delete-chat:hover {
-  color: var(--pink);
-  background: rgba(255, 107, 157, 0.08);
-  border-color: rgba(255, 107, 157, 0.22);
+  color: var(--text);
+  background: #383838;
+  border-color: #555;
 }
 
 .account-panel {
@@ -292,7 +293,7 @@ button {
   width: 100%;
   padding: 12px 14px;
   color: var(--text);
-  background: var(--panel);
+  background: #202020;
   border-color: var(--line);
 }
 
@@ -308,7 +309,7 @@ button {
   place-items: center;
   border-radius: 50%;
   background: var(--text);
-  color: var(--bg);
+  color: var(--sidebar);
   font-size: 13px;
   font-weight: 950;
 }
@@ -330,9 +331,9 @@ button {
 .plan-status {
   flex-shrink: 0;
   padding: 3px 6px;
-  color: var(--green) !important;
-  background: rgba(128, 237, 153, 0.08);
-  border: 1px solid rgba(128, 237, 153, 0.22);
+  color: var(--amber) !important;
+  background: rgba(230, 201, 143, 0.08);
+  border: 1px solid rgba(230, 201, 143, 0.2);
   border-radius: 999px;
   font-size: 10px;
   font-weight: 950;
@@ -349,13 +350,14 @@ button {
 .topbar {
   justify-content: space-between;
   gap: 20px;
-  padding: 24px clamp(18px, 4vw, 44px) 18px;
-  border-bottom: 1px solid rgba(44, 55, 72, 0.72);
+  padding: 18px clamp(18px, 4vw, 44px) 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
 }
 
 .eyebrow {
   margin: 0 0 8px;
-  color: var(--green);
+  color: var(--quiet);
   font-size: 12px;
   font-weight: 950;
   letter-spacing: 0.18em;
@@ -370,8 +372,8 @@ p {
 
 h1 {
   margin-bottom: 0;
-  font-size: clamp(32px, 5vw, 62px);
-  line-height: 0.94;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.05;
   letter-spacing: 0;
 }
 
@@ -385,9 +387,9 @@ h1 {
 .status-pill {
   gap: 8px;
   padding: 9px 12px;
-  color: var(--green);
-  background: rgba(128, 237, 153, 0.08);
-  border: 1px solid rgba(128, 237, 153, 0.24);
+  color: var(--muted);
+  background: #2b2b2b;
+  border: 1px solid var(--line);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 900;
@@ -402,9 +404,9 @@ h1 {
 .credit-pill {
   gap: 8px;
   padding: 9px 12px;
-  color: var(--amber);
-  background: rgba(255, 209, 102, 0.08);
-  border: 1px solid rgba(255, 209, 102, 0.24);
+  color: var(--muted);
+  background: #2b2b2b;
+  border: 1px solid var(--line);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 900;
@@ -416,13 +418,11 @@ h1 {
   gap: 14px;
   min-height: 0;
   overflow: auto;
-  padding: 26px clamp(18px, 4vw, 44px);
+  padding: 26px max(18px, calc((100% - 850px) / 2));
 }
 
 .computer-panel {
-  background:
-    linear-gradient(135deg, rgba(76, 201, 240, 0.08), transparent 36%),
-    linear-gradient(225deg, rgba(128, 237, 153, 0.08), transparent 32%);
+  background: #1f1f1f;
 }
 
 .computer-workspace {
@@ -457,9 +457,9 @@ h1 {
 
 .cw-new {
   padding: 3px 10px;
-  color: var(--blue);
-  background: rgba(76, 201, 240, 0.08);
-  border: 1px solid rgba(76, 201, 240, 0.28);
+  color: var(--text);
+  background: #2b2b2b;
+  border: 1px solid var(--line);
   border-radius: 7px;
   font-size: 12px;
   font-weight: 900;
@@ -467,7 +467,7 @@ h1 {
 }
 
 .cw-new:hover {
-  background: rgba(76, 201, 240, 0.18);
+  background: #383838;
 }
 
 .cw-list {
@@ -528,7 +528,7 @@ h1 {
   padding: 10px;
   color: var(--text);
   text-align: left;
-  background: rgba(19, 26, 36, 0.72);
+  background: #292929;
   border: 1px solid var(--line);
   border-radius: 8px;
   transition: border-color 160ms ease, background 160ms ease;
@@ -558,26 +558,26 @@ h1 {
 
 .connector-card[data-provider="google-drive"].active,
 .connector-card[data-provider="google-drive"]:hover {
-  border-color: rgba(66, 133, 244, 0.52);
-  background: rgba(66, 133, 244, 0.09);
+  border-color: #666;
+  background: #333;
 }
 
 .connector-card[data-provider="github"].active,
 .connector-card[data-provider="github"]:hover {
-  border-color: rgba(230, 237, 243, 0.32);
-  background: rgba(255, 255, 255, 0.07);
+  border-color: #666;
+  background: #333;
 }
 
 .connector-card[data-provider="pc"].active,
 .connector-card[data-provider="pc"]:hover {
-  border-color: rgba(76, 201, 240, 0.52);
-  background: rgba(76, 201, 240, 0.09);
+  border-color: #666;
+  background: #333;
 }
 
 .connector-card[data-connect="all"].active,
 .connector-card[data-connect="all"]:hover {
-  border-color: rgba(128, 237, 153, 0.52);
-  background: rgba(128, 237, 153, 0.09);
+  border-color: #666;
+  background: #333;
 }
 
 .empty-state {
@@ -600,30 +600,31 @@ h1 {
 }
 
 .message {
-  max-width: min(780px, 88%);
+  max-width: min(760px, 92%);
   padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  border: 1px solid transparent;
+  border-radius: 18px;
   line-height: 1.55;
   animation: messageIn 220ms ease both;
 }
 
 .message.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, rgba(76, 201, 240, 0.2), rgba(76, 201, 240, 0.07));
-  border-color: rgba(76, 201, 240, 0.45);
+  background: #303030;
+  border-color: #3a3a3a;
 }
 
 .message.assistant {
   align-self: flex-start;
-  background: rgba(19, 26, 36, 0.92);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .message-meta {
   display: block;
   margin-bottom: 6px;
-  color: var(--green);
+  color: var(--quiet);
   font-size: 11px;
   font-weight: 950;
   letter-spacing: 0.12em;
@@ -634,10 +635,10 @@ h1 {
   position: relative;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
-  padding: 14px clamp(18px, 4vw, 44px) 20px;
-  border-top: 1px solid rgba(44, 55, 72, 0.72);
-  background: rgba(6, 7, 11, 0.86);
-  backdrop-filter: blur(16px);
+  padding: 14px max(18px, calc((100% - 900px) / 2)) 20px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  backdrop-filter: none;
 }
 
 .model-option.disabled {
@@ -657,12 +658,12 @@ h1 {
   height: 100%;
   padding: 9px 12px;
   color: var(--text);
-  background: var(--panel);
+  background: #2b2b2b;
   border-color: var(--line);
 }
 
 .model-select small {
-  color: var(--blue);
+  color: var(--muted);
   font-size: 11px;
   font-weight: 850;
 }
@@ -676,7 +677,7 @@ h1 {
   gap: 8px;
   width: min(340px, calc(100vw - 36px));
   padding: 10px;
-  background: rgba(13, 17, 24, 0.98);
+  background: #2b2b2b;
   border: 1px solid var(--line);
   border-radius: 16px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
@@ -711,8 +712,8 @@ h1 {
 
 .model-option em {
   padding: 3px 7px;
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--green), var(--blue));
+  color: #171717;
+  background: var(--amber);
   border-radius: 999px;
   font-size: 10px;
   font-style: normal;
@@ -724,8 +725,8 @@ h1 {
 .model-option.active,
 .model-option:hover {
   color: var(--text);
-  background: rgba(76, 201, 240, 0.09);
-  border-color: rgba(76, 201, 240, 0.28);
+  background: #383838;
+  border-color: #555;
 }
 
 .model-option span {
@@ -741,7 +742,7 @@ h1 {
   resize: none;
   padding: 15px 15px;
   color: var(--text);
-  background: var(--panel);
+  background: #2f2f2f;
   border: 1px solid var(--line);
   border-radius: 14px;
   outline: none;
@@ -749,38 +750,39 @@ h1 {
 }
 
 .composer textarea:focus {
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.12);
+  border-color: #6b6b6b;
+  box-shadow: none;
 }
 
 .send-button {
   min-width: 92px;
   padding: 0 18px;
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--text), var(--green));
-  box-shadow: 0 14px 32px rgba(128, 237, 153, 0.13);
+  color: #171717;
+  background: var(--text);
+  box-shadow: none;
 }
 
 .upgrade-button {
   padding: 9px 16px;
-  color: #130e00;
-  background: linear-gradient(135deg, #ffd166 0%, #ffb700 100%);
-  border-color: transparent;
-  box-shadow: 0 8px 24px rgba(255, 209, 102, 0.28);
+  color: var(--text);
+  background: #2b2b2b;
+  border-color: var(--line);
+  box-shadow: none;
   font-size: 14px;
 }
 
 .upgrade-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 32px rgba(255, 209, 102, 0.4);
+  border-color: #666;
 }
 
 .message-action,
 .download-app-button {
   padding: 10px 13px;
-  color: var(--bg);
-  background: linear-gradient(135deg, var(--amber), var(--pink));
-  box-shadow: 0 14px 32px rgba(255, 107, 157, 0.14);
+  color: var(--text);
+  background: #2b2b2b;
+  border: 1px solid var(--line);
+  box-shadow: none;
 }
 
 .message-action {

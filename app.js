@@ -830,15 +830,20 @@ function firebaseAuthMessage(error, fallback) {
 }
 
 function activeChat() {
-  return state.chats.find((chat) => chat.id === state.activeChatId) || state.chats[0];
+  const visibleChats = hasProAccess() ? state.chats : state.chats.filter((chat) => !chat.teamup);
+  return visibleChats.find((chat) => chat.id === state.activeChatId) || visibleChats[0] || state.chats[0];
 }
 
 function activeModel() {
   return models.find((model) => model.id === state.activeModel) || models[0];
 }
 
+function hasProAccess() {
+  return Boolean(currentUser && state.pro);
+}
+
 function isModelLocked(model) {
-  return Boolean(model?.proOnly && !state.pro);
+  return Boolean(model?.proOnly && !hasProAccess());
 }
 
 function activeCost() {
@@ -899,7 +904,11 @@ function renderModelMenu() {
 
 function renderChats() {
   chatList.innerHTML = '';
-  state.chats.forEach((chat) => {
+  const visibleChats = hasProAccess() ? state.chats : state.chats.filter((chat) => !chat.teamup);
+  if (!hasProAccess() && activeChat()?.teamup && visibleChats[0]) {
+    state.activeChatId = visibleChats[0].id;
+  }
+  visibleChats.forEach((chat) => {
     const row = document.createElement('div');
     row.className = `chat-row${chat.id === state.activeChatId ? ' active' : ''}`;
     const button = document.createElement('button');
@@ -994,9 +1003,7 @@ function renderAccount() {
   }
 
   if (!accountPage) return;
-  if (teamupEntry) {
-    teamupEntry.hidden = !state.pro;
-  }
+  if (teamupEntry) teamupEntry.hidden = !hasProAccess();
   teamupCreditStatus.textContent = `${remainingTeamupTokens().toLocaleString()} weekly tokens`;
   const displayName = state.profile?.name || currentUser?.displayName || currentUser?.email || 'Not signed in';
   const nickname = state.profile?.nickname || displayName;
@@ -1119,7 +1126,7 @@ function createChat(personality = 'normal') {
 }
 
 function createTeamupRoom() {
-  if (!state.pro) {
+  if (!hasProAccess()) {
     startUpgrade();
     return;
   }
@@ -1293,7 +1300,7 @@ function localConnectionAnswer(text) {
 }
 
 async function sendTeamupMessage(chat, clean) {
-  if (!state.pro) {
+  if (!hasProAccess()) {
     chat.messages.push({ role: 'assistant', model: 'ROTEX Pro', text: 'Teamup rooms are Pro only. Upgrade?', action: 'upgrade' });
     persistState();
     render();
@@ -1676,7 +1683,7 @@ personalityOptions.forEach((button) => {
 });
 
 teamupEntry.addEventListener('click', () => {
-  if (!state.pro) {
+  if (!hasProAccess()) {
     startUpgrade();
     return;
   }
