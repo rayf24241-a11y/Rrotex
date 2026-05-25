@@ -137,6 +137,8 @@ const phoneCodeInput = document.querySelector('#phoneCodeInput');
 const sendPhoneCodeButton = document.querySelector('#sendPhoneCodeButton');
 const confirmPhoneCodeButton = document.querySelector('#confirmPhoneCodeButton');
 const skipPhoneButton = document.querySelector('#skipPhoneButton');
+const newComputerChatButton = document.querySelector('#newComputerChatButton');
+const computerChatList = document.querySelector('#computerChatList');
 
 const storageKey = 'rotex:web:v2';
 const pendingActivationKey = 'rotex:pending-activation';
@@ -871,6 +873,32 @@ function renderAccount() {
   }
 }
 
+function renderComputerChats() {
+  if (!computerChatList) return;
+  const computerChats = state.chats.filter((c) => c.computer);
+  computerChatList.innerHTML = '';
+  if (computerChats.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'cw-empty';
+    empty.textContent = 'No computer chats yet. Press + New to start one.';
+    computerChatList.appendChild(empty);
+    return;
+  }
+  computerChats.forEach((chat) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `cw-item${chat.id === state.activeChatId ? ' active' : ''}`;
+    btn.textContent = chat.title;
+    btn.title = chat.title;
+    btn.addEventListener('click', () => {
+      state.activeChatId = chat.id;
+      persistState();
+      render();
+    });
+    computerChatList.appendChild(btn);
+  });
+}
+
 function render() {
   applyCreditRefill();
   applyComputerUsageReset();
@@ -878,6 +906,7 @@ function render() {
   renderChats();
   renderMessages();
   renderAccount();
+  renderComputerChats();
 }
 
 function renderModeShell() {
@@ -1022,20 +1051,15 @@ function deleteChat(chatId) {
 }
 
 async function continueCheckout() {
-  if (!currentUser) {
-    openAuthPage('upgrade');
-    return;
-  }
-  if (needsProfile()) {
-    openAuthPage('upgrade', true);
-    return;
-  }
   try {
+    checkoutButton.disabled = true;
+    checkoutButton.textContent = 'Opening Stripe...';
+    const uid = currentUser?.uid || `guest_${crypto.randomUUID()}`;
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        uid: currentUser?.uid || '',
+        uid,
         email: currentUser?.email || '',
       }),
     });
@@ -1044,9 +1068,16 @@ async function continueCheckout() {
       window.location.href = data.url;
       return;
     }
-    alert(data.message || 'Stripe is not configured yet. Make a Stripe product/price and send me the Price ID.');
+    if (data.configured === false) {
+      alert('Stripe is not configured yet. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID in Vercel environment variables.');
+      return;
+    }
+    alert(data.message || 'Stripe checkout could not start.');
   } catch {
-    alert('Stripe checkout is not ready yet. Make the Stripe product and send me the Price ID.');
+    alert('Could not reach the checkout server. Check your connection and try again.');
+  } finally {
+    checkoutButton.disabled = false;
+    checkoutButton.textContent = 'Continue';
   }
 }
 
@@ -1295,17 +1326,8 @@ newChatButton.addEventListener('click', () => {
 });
 modelButton.addEventListener('click', toggleModelMenu);
 computerEntry.addEventListener('click', () => {
-  const turningOn = !state.computerMode;
-  state.computerMode = turningOn;
+  state.computerMode = !state.computerMode;
   ensureComputerModel();
-  if (turningOn) {
-    const id = crypto.randomUUID();
-    state.chats.unshift({ id, title: 'Computer mode', createdAt: Date.now(), messages: [] });
-    state.activeChatId = id;
-    if (state.computerConnections.length === 0) {
-      connectDialog.showModal();
-    }
-  }
   persistState();
   render();
 });
@@ -1445,12 +1467,13 @@ pcShareButton?.addEventListener('click', () => {
   openPcDialog();
 });
 
-connectDialog.addEventListener('close', () => {
-  if (state.computerMode && state.computerConnections.length === 0) {
-    state.computerMode = false;
-    persistState();
-    render();
-  }
+newComputerChatButton?.addEventListener('click', () => {
+  const id = crypto.randomUUID();
+  state.chats.unshift({ id, title: 'Computer chat', createdAt: Date.now(), messages: [], computer: true });
+  state.activeChatId = id;
+  persistState();
+  render();
+  messageInput?.focus();
 });
 
 async function startProviderConnect(provider) {
