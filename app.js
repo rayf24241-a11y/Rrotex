@@ -432,16 +432,9 @@ function showAuthStep(step) {
   }
   if (step === 'profile') {
     authTitle.textContent = 'Finish account';
-    authStatus.textContent = 'Pick a unique ROTEX name and nickname.';
+    authStatus.textContent = 'Pick a name and nickname for your ROTEX account.';
     profileNameInput.value = state.profile?.name || currentUser?.displayName || '';
     profileNicknameInput.value = state.profile?.nickname || '';
-    phoneStatus.textContent = state.phoneVerified
-      ? 'Phone verified. Normal free credits are active.'
-      : 'Add a phone number to keep normal free credits, or skip for lower free credits.';
-    phoneCodeWrap.hidden = true;
-    confirmPhoneCodeButton.hidden = true;
-    sendPhoneCodeButton.hidden = state.phoneVerified;
-    skipPhoneButton.hidden = state.phoneVerified || state.phoneSkipped;
     profileNameInput.focus();
   }
 }
@@ -541,41 +534,39 @@ async function continueEmailLogin() {
 }
 
 async function saveProfile() {
-  if (!currentUser || !db) {
+  if (!currentUser) {
     authStatus.textContent = 'Log in first.';
     return;
   }
   const name = profileNameInput.value.trim();
-  const nickname = profileNicknameInput.value.trim();
+  // Auto-fill nickname from first name if left blank
+  const nickname = profileNicknameInput.value.trim() || name.split(' ')[0];
   const usernameKey = normalizeUsername(name);
   if (!usernameKey || usernameKey.length < 3) {
-    authStatus.textContent = 'Pick a ROTEX name with at least 3 letters or numbers.';
-    return;
-  }
-  if (!nickname || nickname.length < 2) {
-    authStatus.textContent = 'Pick a nickname too.';
+    authStatus.textContent = 'Pick a name with at least 3 letters or numbers.';
     return;
   }
   try {
     saveProfileButton.disabled = true;
-    const usernameRef = doc(db, 'usernames', usernameKey);
-    const usernameSnap = await getDoc(usernameRef);
-    if (usernameSnap.exists() && usernameSnap.data()?.uid !== currentUser.uid) {
-      authStatus.textContent = 'Somebody already has that ROTEX name. Pick another.';
-      return;
-    }
-    if (!state.phoneVerified && !state.phoneSkipped) {
-      state.phoneSkipped = true;
-    }
-    await setDoc(usernameRef, {
-      uid: currentUser.uid,
-      name,
-      nickname,
-      updatedAt: serverTimestamp(),
-    });
     state.profile = { name, usernameKey, nickname };
+    state.phoneSkipped = true;
     await updateProfile(currentUser, { displayName: name });
     persistState();
+    // Save to Firestore if available (non-blocking — don't block login on failure)
+    if (db) {
+      try {
+        const usernameRef = doc(db, 'usernames', usernameKey);
+        const usernameSnap = await getDoc(usernameRef);
+        if (usernameSnap.exists() && usernameSnap.data()?.uid !== currentUser.uid) {
+          authStatus.textContent = 'That name is taken. Pick another.';
+          saveProfileButton.disabled = false;
+          return;
+        }
+        await setDoc(usernameRef, { uid: currentUser.uid, name, nickname, updatedAt: serverTimestamp() });
+      } catch (firestoreError) {
+        console.warn('Firestore save failed (continuing anyway):', firestoreError.message);
+      }
+    }
     authStatus.textContent = 'Account ready.';
     if (authReason === 'upgrade') {
       closeAuthPage();

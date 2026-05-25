@@ -144,17 +144,6 @@
         <div class="auth-step profile-fields" id="profileFields" hidden>
           <input class="auth-input" id="profileNameInput" maxlength="24" autocomplete="name" placeholder="Pick your ROTEX name" />
           <input class="auth-input" id="profileNicknameInput" maxlength="24" placeholder="Pick a nickname" />
-          <p class="upgrade-copy" id="phoneStatus">Add a phone number to keep normal free credits, or skip for lower free credits.</p>
-          <input class="auth-input" id="phoneInput" inputmode="tel" autocomplete="tel" placeholder="+1 555 555 5555" aria-label="Phone number" />
-          <div id="phoneCodeWrap" hidden>
-            <input class="auth-input" id="phoneCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Text code" aria-label="Phone verification code" />
-          </div>
-          <div id="phoneRecaptcha"></div>
-          <div class="dialog-actions">
-            <button id="sendPhoneCodeButton" type="button" class="secondary-action">Send phone code</button>
-            <button id="confirmPhoneCodeButton" type="button" class="secondary-action" hidden>Verify phone</button>
-            <button id="skipPhoneButton" type="button" class="secondary-action">Skip phone</button>
-          </div>
           <button class="checkout-action" id="saveProfileButton" type="button">Finish account</button>
         </div>
       </div>
@@ -197,6 +186,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="./app.js?v=20260525-8"></script>
+    <script type="module" src="./app.js?v=20260525-9"></script>
   </body>
 </html>
