@@ -144,6 +144,9 @@ async function initFirebase() {
       if (user) {
         await loadCloudState();
         await handleCheckoutReturn();
+      } else {
+        localStorage.removeItem(storageKey);
+        state = normalizeState({});
       }
       render();
     });
@@ -408,16 +411,19 @@ function renderAccount() {
   if (currentUser) {
     googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
     planStatus.textContent = state.pro ? 'Pro' : 'Normal';
+    planStatus.hidden = false;
     signOutButton.hidden = false;
     saveStatus.textContent = `Chats sync with Firebase for ${currentUser.email || 'this account'}.`;
   } else if (cloudReady) {
     googleButtonText.textContent = 'Log in or sign up';
     planStatus.textContent = 'Normal';
+    planStatus.hidden = true;
     signOutButton.hidden = true;
     saveStatus.textContent = 'Sign in with Google to save chats with Firebase.';
   } else {
     googleButtonText.textContent = 'Firebase not configured';
     planStatus.textContent = 'Normal';
+    planStatus.hidden = true;
     signOutButton.hidden = true;
     saveStatus.textContent = 'Add Firebase env vars in Vercel to enable Google login.';
   }
@@ -472,6 +478,14 @@ async function sendMessage(text) {
   const clean = text.trim();
   if (!clean || !chat) return;
 
+  if (!currentUser) {
+    alert('Log in with Google to use ROTEX credits and chat.');
+    if (auth) {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    }
+    return;
+  }
+
   applyCreditRefill();
   applyComputerUsageReset();
   ensureComputerModel();
@@ -516,10 +530,12 @@ async function sendMessage(text) {
   render();
 
   try {
+    const authToken = await currentUser.getIdToken();
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        authToken,
         model: model.id,
         computerMode: state.computerMode,
         computerConnections: state.computerConnections,

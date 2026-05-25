@@ -286,6 +286,13 @@ button {
   font-weight: 950;
 }
 
+.google-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .account-panel p {
   margin: 0;
   color: var(--quiet);
@@ -294,12 +301,13 @@ button {
 }
 
 .plan-status {
-  width: fit-content;
-  padding: 6px 9px;
+  flex-shrink: 0;
+  padding: 3px 6px;
   color: var(--green) !important;
   background: rgba(128, 237, 153, 0.08);
   border: 1px solid rgba(128, 237, 153, 0.22);
-  border-radius: 8px;
+  border-radius: 999px;
+  font-size: 10px;
   font-weight: 950;
   text-transform: uppercase;
 }

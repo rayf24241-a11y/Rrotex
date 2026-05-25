@@ -37,7 +37,16 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const { model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {} } = request.body || {};
+  const { authToken = '', model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {} } = request.body || {};
+  const authResult = await verifyFirebaseToken(authToken);
+  if (!authResult.ok) {
+    response.status(401).json({
+      error: 'login_required',
+      text: 'Log in with Google to use ROTEX credits and chat.',
+    });
+    return;
+  }
+
   const selected = MODELS[model] || MODELS['rod-1'];
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
@@ -90,6 +99,33 @@ module.exports = async function handler(request, response) {
     });
   }
 };
+
+async function verifyFirebaseToken(authToken) {
+  if (!authToken) {
+    return { ok: false };
+  }
+
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  if (!projectId) {
+    return { ok: false };
+  }
+
+  try {
+    const result = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(authToken)}`);
+    if (!result.ok) {
+      return { ok: false };
+    }
+
+    const token = await result.json();
+    return {
+      ok: token.aud === projectId && token.sub,
+      uid: token.sub || '',
+      email: token.email || '',
+    };
+  } catch {
+    return { ok: false };
+  }
+}
 
 async function callOpenAiCompatible({ apiKey, baseUrl, model, messages }) {
   if (!apiKey) {
