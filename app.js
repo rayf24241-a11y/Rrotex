@@ -85,8 +85,17 @@ const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
 const creditStatus = document.querySelector('#creditStatus');
 const upgradeButton = document.querySelector('#upgradeButton');
-const proPage = document.querySelector('#proPage');
-const closeProPageButton = document.querySelector('#closeProPageButton');
+const accountPage = document.querySelector('#accountPage');
+const closeAccountBtn = document.querySelector('#closeAccountBtn');
+const acctAvatar = document.querySelector('#acctAvatar');
+const acctName = document.querySelector('#acctName');
+const acctEmail = document.querySelector('#acctEmail');
+const acctPlanBadge = document.querySelector('#acctPlanBadge');
+const acctCreditDay = document.querySelector('#acctCreditDay');
+const acctCreditMonth = document.querySelector('#acctCreditMonth');
+const acctUpgradeBlock = document.querySelector('#acctUpgradeBlock');
+const acctProActive = document.querySelector('#acctProActive');
+const accountSignOutBtn = document.querySelector('#accountSignOutBtn');
 const authPage = document.querySelector('#authPage');
 const closeAuthPageButton = document.querySelector('#closeAuthPageButton');
 const authBackButton = document.querySelector('#authBackButton');
@@ -362,7 +371,7 @@ function openAuthPage(reason = 'account', forceProfile = false) {
   authReason = reason;
   localStorage.setItem(pendingAuthReasonKey, reason);
   appShell.hidden = true;
-  proPage.hidden = true;
+  accountPage.hidden = true;
   authPage.hidden = false;
   window.location.hash = 'authPage';
   if (currentUser && (forceProfile || needsProfile())) {
@@ -377,6 +386,33 @@ function closeAuthPage() {
   appShell.hidden = false;
   localStorage.removeItem(pendingAuthReasonKey);
   if (window.location.hash === '#authPage') {
+    history.pushState('', document.title, window.location.pathname + window.location.search);
+  }
+}
+
+function openAccountPage(focusUpgrade = false) {
+  if (!currentUser) {
+    openAuthPage(focusUpgrade ? 'upgrade' : 'account');
+    return;
+  }
+  if (needsProfile()) {
+    openAuthPage(focusUpgrade ? 'upgrade' : 'account', true);
+    return;
+  }
+  authPage.hidden = true;
+  appShell.hidden = true;
+  accountPage.hidden = false;
+  window.location.hash = 'account';
+  renderAccount();
+  if (focusUpgrade) {
+    acctUpgradeBlock?.scrollIntoView({ block: 'center' });
+  }
+}
+
+function closeAccountPage() {
+  accountPage.hidden = true;
+  appShell.hidden = false;
+  if (window.location.hash === '#account' || window.location.hash === '#pro') {
     history.pushState('', document.title, window.location.pathname + window.location.search);
   }
 }
@@ -871,6 +907,20 @@ function renderAccount() {
     signOutButton.hidden = true;
     saveStatus.textContent = 'Add Firebase env vars in Vercel to enable Google login.';
   }
+
+  if (!accountPage) return;
+  const displayName = state.profile?.name || currentUser?.displayName || currentUser?.email || 'Not signed in';
+  const nickname = state.profile?.nickname || displayName;
+  acctAvatar.textContent = currentUser ? nickname.trim().charAt(0).toUpperCase() || 'R' : '?';
+  acctName.textContent = currentUser ? displayName : 'Not signed in';
+  acctEmail.textContent = currentUser?.email || 'Log in to save chats, credits, and Pro.';
+  acctPlanBadge.textContent = state.pro ? 'Pro' : 'Normal';
+  acctPlanBadge.classList.toggle('pro', state.pro);
+  acctCreditDay.textContent = formatMoney(remainingDailyCredits());
+  acctCreditMonth.textContent = formatMoney(remainingMonthlyCredits());
+  acctUpgradeBlock.hidden = Boolean(state.pro);
+  acctProActive.hidden = !state.pro;
+  accountSignOutBtn.hidden = !currentUser;
 }
 
 function renderComputerChats() {
@@ -1022,18 +1072,11 @@ async function sendMessage(text) {
 }
 
 async function startUpgrade() {
-  appShell.hidden = true;
-  authPage.hidden = true;
-  proPage.hidden = false;
-  window.location.hash = 'pro';
-}
-
-function closeProPage() {
-  proPage.hidden = true;
-  appShell.hidden = false;
-  if (window.location.hash === '#pro') {
-    history.pushState('', document.title, window.location.pathname + window.location.search);
+  if (!currentUser) {
+    openAuthPage('upgrade');
+    return;
   }
+  openAccountPage(true);
 }
 
 function deleteChat(chatId) {
@@ -1051,16 +1094,24 @@ function deleteChat(chatId) {
 }
 
 async function continueCheckout() {
+  if (!currentUser) {
+    openAuthPage('upgrade');
+    return;
+  }
+  if (needsProfile()) {
+    openAuthPage('upgrade', true);
+    return;
+  }
+  const originalText = checkoutButton.textContent;
   try {
     checkoutButton.disabled = true;
     checkoutButton.textContent = 'Opening Stripe...';
-    const uid = currentUser?.uid || `guest_${crypto.randomUUID()}`;
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        uid,
-        email: currentUser?.email || '',
+        uid: currentUser.uid,
+        email: currentUser.email || '',
       }),
     });
     const data = await response.json();
@@ -1069,7 +1120,7 @@ async function continueCheckout() {
       return;
     }
     if (data.configured === false) {
-      alert('Stripe is not configured yet. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID in Vercel environment variables.');
+      alert(data.message || 'Stripe is not configured yet. Add the Stripe env vars in Vercel.');
       return;
     }
     alert(data.message || 'Stripe checkout could not start.');
@@ -1077,7 +1128,7 @@ async function continueCheckout() {
     alert('Could not reach the checkout server. Check your connection and try again.');
   } finally {
     checkoutButton.disabled = false;
-    checkoutButton.textContent = 'Continue';
+    checkoutButton.textContent = originalText;
   }
 }
 
@@ -1105,7 +1156,7 @@ async function handleCheckoutReturn() {
     persistState();
     setCloudStatus('Pro active');
     history.replaceState('', document.title, window.location.pathname);
-    closeProPage();
+    closeAccountPage();
     render();
   } catch (error) {
     alert('ROTEX could not verify Stripe yet. Try refreshing after Stripe redirects back.');
@@ -1520,6 +1571,10 @@ messageInput.addEventListener('keydown', (event) => {
 
 googleButton.addEventListener('click', async (event) => {
   event.preventDefault();
+  if (currentUser && !needsProfile()) {
+    openAccountPage();
+    return;
+  }
   openAuthPage('account', Boolean(currentUser && needsProfile()));
 });
 
@@ -1527,7 +1582,13 @@ signOutButton.addEventListener('click', async () => {
   if (auth) await signOut(auth);
 });
 
+accountSignOutBtn?.addEventListener('click', async () => {
+  closeAccountPage();
+  if (auth) await signOut(auth);
+});
+
 closeAuthPageButton?.addEventListener('click', closeAuthPage);
+closeAccountBtn?.addEventListener('click', closeAccountPage);
 authGoogleButton.addEventListener('click', signInWithGoogleFromAuth);
 chooseEmailButton.addEventListener('click', () => showAuthStep('email'));
 sendEmailCodeButton.addEventListener('click', sendEmailCodeNotice);
@@ -1538,14 +1599,13 @@ sendPhoneCodeButton?.addEventListener('click', sendPhoneCode);
 confirmPhoneCodeButton?.addEventListener('click', confirmPhoneCode);
 skipPhoneButton?.addEventListener('click', skipPhoneVerification);
 upgradeButton.addEventListener('click', startUpgrade);
-closeProPageButton.addEventListener('click', closeProPage);
 checkoutButton.addEventListener('click', continueCheckout);
 
 if (window.location.hash === '#authPage' || window.location.hash === '#login') {
   openAuthPage('account');
 }
 
-if (window.location.hash === '#pro') {
+if (window.location.hash === '#pro' || window.location.hash === '#account') {
   startUpgrade();
 }
 

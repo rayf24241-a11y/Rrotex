@@ -9,9 +9,12 @@ module.exports = async function handler(request, response) {
   const priceId   = testMode ? process.env.STRIPE_TEST_PRICE_ID   : process.env.STRIPE_PRICE_ID;
 
   if (!secretKey || !priceId) {
+    const missingNames = testMode
+      ? 'STRIPE_TEST_SECRET_KEY and STRIPE_TEST_PRICE_ID'
+      : 'STRIPE_SECRET_KEY and STRIPE_PRICE_ID';
     response.status(200).json({
       configured: false,
-      message: 'Stripe is not configured. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID in Vercel.',
+      message: `Stripe is not configured. Add ${missingNames} in Vercel.`,
     });
     return;
   }

@@ -103,21 +103,51 @@
       </section>
     </main>
 
-    <section class="pro-page" id="proPage" hidden>
-      <div class="pro-shell">
-        <button class="dialog-x" id="closeProPageButton" type="button" aria-label="Close">X</button>
-        <p class="eyebrow">ROTEX Pro</p>
-        <h2>Pro plan</h2>
-        <div class="upgrade-price">$15 <span>/ monthly</span></div>
-        <ul class="upgrade-list">
-          <li>More models</li>
-          <li>More computer mode</li>
-          <li>More access</li>
-          <li>More merges</li>
-        </ul>
-        <div class="dialog-actions">
-          <a class="secondary-action download-app-link" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
-          <button id="checkoutButton" type="button" class="checkout-action">Continue</button>
+    <section class="account-page" id="accountPage" hidden>
+      <div class="account-shell">
+        <button class="acct-close" id="closeAccountBtn" type="button" aria-label="Close">✕</button>
+
+        <div class="acct-profile">
+          <div class="acct-avatar" id="acctAvatar">?</div>
+          <div class="acct-info">
+            <p class="eyebrow">Account & settings</p>
+            <h2 class="acct-name" id="acctName">Not signed in</h2>
+            <p class="acct-email" id="acctEmail"></p>
+          </div>
+          <span class="acct-plan-badge" id="acctPlanBadge">Normal</span>
+        </div>
+
+        <div class="acct-stats">
+          <div class="acct-stat">
+            <span>Today left</span>
+            <strong id="acctCreditDay">—</strong>
+          </div>
+          <div class="acct-stat">
+            <span>Month left</span>
+            <strong id="acctCreditMonth">—</strong>
+          </div>
+        </div>
+
+        <div class="acct-upgrade-block" id="acctUpgradeBlock">
+          <p class="eyebrow">ROTEX Pro</p>
+          <div class="upgrade-price">$15 <span>/ monthly</span></div>
+          <ul class="upgrade-list">
+            <li>All 5 models — Rod thinking, Tex 0, Tex 1.5, and more</li>
+            <li>$2.50 daily · $5 monthly credit limit (5× more)</li>
+            <li>More computer mode messages every day</li>
+            <li>Priority access and early features</li>
+          </ul>
+          <button id="checkoutButton" type="button" class="acct-buy-btn">Buy Pro — $15 / month →</button>
+        </div>
+
+        <div class="acct-pro-active" id="acctProActive" hidden>
+          <p class="eyebrow" style="color:var(--green)">Pro is active</p>
+          <p>All models and higher credit limits are unlocked on your account.</p>
+        </div>
+
+        <div class="acct-footer">
+          <a class="secondary-action" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
+          <button class="acct-signout" id="accountSignOutBtn" type="button">Sign out</button>
         </div>
       </div>
     </section>
@@ -196,6 +226,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="./app.js?v=20260525-13"></script>
+  <script type="module" src="./app.js?v=20260525-14"></script>
   </body>
 </html>
