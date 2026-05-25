@@ -249,9 +249,6 @@ function renderModelMenu() {
   const model = activeModel();
   selectedModelName.textContent = model.name;
   selectedModelShort.textContent = state.computerMode ? 'Computer mode' : model.short;
-  if (state.computerMode && !state.pro) {
-    selectedModelShort.textContent = `${computerMessagesLeft()} free today`;
-  }
   modelMenu.innerHTML = '';
 
   models.forEach((item) => {
@@ -360,11 +357,9 @@ function renderModeShell() {
   modeEyebrow.textContent = state.computerMode ? 'ROTEX computer' : 'ROTEX web';
   modeTitle.textContent = state.computerMode ? 'Computer mode' : 'Chat with ROTEX';
   modeSubtitle.textContent = state.computerMode
-    ? 'A separate workspace for app connections, approvals, and heavier computer work.'
+    ? 'Workspace connections and approvals live here.'
     : 'Fast chat, code, and research with ROTEX.';
-  computerEntrySub.textContent = state.computerMode
-    ? `${computerMessagesLeft()} free today`
-    : 'Connect apps';
+  computerEntrySub.textContent = state.computerMode ? 'Open workspace' : 'Connect apps';
   connectorCards.forEach((card) => {
     const value = card.dataset.connect;
     const active = value === 'all'

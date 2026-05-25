@@ -341,15 +341,12 @@ h1 {
     linear-gradient(225deg, rgba(128, 237, 153, 0.08), transparent 32%);
 }
 
-.computer-panel .messages {
-  padding-top: 18px;
-}
-
 .computer-workspace {
   display: none;
-  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
-  gap: 12px;
-  padding: 0 clamp(18px, 4vw, 44px) 18px;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px clamp(18px, 4vw, 44px);
+  border-bottom: 1px solid rgba(44, 55, 72, 0.55);
 }
 
 .computer-workspace.active {
@@ -359,24 +356,25 @@ h1 {
 .computer-hero,
 .connector-card {
   border: 1px solid rgba(76, 201, 240, 0.24);
-  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
 }
 
 .computer-hero {
-  padding: 22px;
+  padding: 10px;
   background:
     linear-gradient(135deg, rgba(76, 201, 240, 0.2), rgba(128, 237, 153, 0.06)),
     rgba(19, 26, 36, 0.84);
-  border-radius: 22px;
+  border-radius: 8px;
 }
 
 .computer-hero h2 {
-  margin: 0 0 12px;
-  font-size: clamp(30px, 4vw, 52px);
-  line-height: 0.96;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.15;
 }
 
 .computer-hero p:last-child {
+  display: none;
   margin-bottom: 0;
   color: var(--muted);
   line-height: 1.5;
@@ -384,27 +382,28 @@ h1 {
 
 .computer-connectors {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .connector-card {
   display: grid;
   align-content: space-between;
-  min-height: 132px;
-  padding: 16px;
+  min-height: 58px;
+  padding: 10px;
   color: var(--text);
   text-align: left;
   background: rgba(19, 26, 36, 0.72);
-  border-radius: 20px;
+  border-radius: 8px;
 }
 
 .connector-card strong {
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .connector-card span {
   color: var(--muted);
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -422,8 +421,8 @@ h1 {
 }
 
 .connector-card.all {
-  grid-column: span 2;
-  min-height: 92px;
+  grid-column: auto;
+  min-height: 58px;
 }
 
 .empty-state {
