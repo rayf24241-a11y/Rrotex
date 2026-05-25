@@ -605,6 +605,22 @@ h1 {
   margin-top: 12px;
 }
 
+.download-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.download-file {
+  display: inline-flex;
+  width: fit-content;
+  padding: 10px 12px;
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--blue), var(--green));
+  border-radius: 8px;
+  font-weight: 900;
+}
+
 .upgrade-dialog {
   width: min(460px, calc(100vw - 28px));
   padding: 0;
@@ -627,6 +643,7 @@ h1 {
 }
 
 .connect-card {
+  position: relative;
   display: grid;
   gap: 14px;
   padding: 24px;
@@ -635,6 +652,26 @@ h1 {
   border-radius: 20px;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
   animation: floatIn 180ms ease both;
+}
+
+.dialog-x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 950;
+}
+
+.dialog-x:hover {
+  color: var(--text);
+  border-color: rgba(76, 201, 240, 0.42);
 }
 
 .connect-card h2 {

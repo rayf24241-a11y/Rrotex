@@ -99,6 +99,7 @@ const pairPcButton = document.querySelector('#pairPcButton');
 const disconnectPcButton = document.querySelector('#disconnectPcButton');
 
 const storageKey = 'rotex:web:v2';
+const pendingActivationKey = 'rotex:pending-activation';
 const freeCreditAmount = 0.3;
 const refillEveryMs = 3 * 24 * 60 * 60 * 1000;
 const freeComputerMessagesPerDay = 3;
@@ -111,6 +112,7 @@ let cloudReady = false;
 let saveTimer = null;
 
 initFirebase();
+applyPendingActivation();
 render();
 
 async function initFirebase() {
@@ -325,7 +327,9 @@ function renderMessages() {
   chat.messages.forEach((message) => {
     const item = document.createElement('div');
     item.className = `message ${message.role}`;
-    item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : escapeHtml(message.model)}</span>${escapeHtml(message.text)}`;
+    const downloads = message.role === 'assistant' ? extractDownloadFiles(message.text) : [];
+    const visibleText = downloads.length ? stripDownloadBlocks(message.text) : message.text;
+    item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : escapeHtml(message.model)}</span>${escapeHtml(visibleText)}`;
     if (message.action === 'upgrade') {
       const button = document.createElement('button');
       button.type = 'button';
@@ -333,6 +337,9 @@ function renderMessages() {
       button.textContent = 'Upgrade';
       button.addEventListener('click', startUpgrade);
       item.appendChild(button);
+    }
+    if (downloads.length) {
+      item.appendChild(renderDownloadList(downloads));
     }
     messagesEl.appendChild(item);
   });
@@ -530,6 +537,67 @@ function renderPcBridge() {
   disconnectPcButton.disabled = !state.pcBridge.connected && !state.pcBridge.code;
 }
 
+function announceActivation(service) {
+  const chat = activeChat();
+  if (!chat) return;
+  chat.messages.push({
+    role: 'assistant',
+    model: 'ROTEX computer',
+    text: `you activated ${service}`,
+  });
+}
+
+function activateService(service, announce = true) {
+  setConnection(service, true);
+  if (announce) {
+    announceActivation(service);
+  }
+}
+
+function applyPendingActivation() {
+  const service = localStorage.getItem(pendingActivationKey);
+  if (!service || !connectableServices.includes(service)) return;
+  localStorage.removeItem(pendingActivationKey);
+  activateService(service);
+  persistState();
+}
+
+function extractDownloadFiles(text) {
+  const files = [];
+  const pattern = /```file:([^\n\r]+)\r?\n([\s\S]*?)```/g;
+  let match = pattern.exec(text);
+  while (match) {
+    const name = safeFileName(match[1]);
+    if (name) {
+      files.push({ name, content: match[2].replace(/\s+$/, '') });
+    }
+    match = pattern.exec(text);
+  }
+  return files;
+}
+
+function stripDownloadBlocks(text) {
+  return text.replace(/```file:([^\n\r]+)\r?\n([\s\S]*?)```/g, '').trim();
+}
+
+function safeFileName(value) {
+  return String(value).trim().replace(/[<>:"/\\|?*]/g, '-').slice(0, 80);
+}
+
+function renderDownloadList(files) {
+  const list = document.createElement('div');
+  list.className = 'download-list';
+  files.forEach((file) => {
+    const link = document.createElement('a');
+    link.className = 'download-file';
+    link.download = file.name;
+    link.href = URL.createObjectURL(new Blob([file.content], { type: 'text/plain' }));
+    link.textContent = `Download ${file.name}`;
+    list.appendChild(link);
+  });
+  return list;
+}
+
 function openPcDialog() {
   renderPcBridge();
   if (!pcDialog.open) {
@@ -600,13 +668,14 @@ connectOptions.forEach((button) => {
     const value = button.dataset.connect;
     if (value === 'all') {
       state.computerConnections = [...connectableServices];
+      announceActivation('Google Drive, GitHub, and PC');
     } else if (value === 'PC') {
-      setConnection('PC', true);
+      activateService('PC');
       openPcDialog();
     } else if (state.computerConnections.includes(value)) {
       setConnection(value, false);
     } else {
-      setConnection(value, true);
+      activateService(value);
     }
     persistState();
     render();
@@ -619,8 +688,9 @@ connectorCards.forEach((button) => {
     const provider = button.dataset.provider;
     if (value === 'all') {
       state.computerConnections = [...connectableServices];
+      announceActivation('Google Drive, GitHub, and PC');
     } else if (value === 'PC') {
-      setConnection('PC', true);
+      activateService('PC');
       persistState();
       render();
       openPcDialog();
@@ -644,7 +714,7 @@ makePcCodeButton.addEventListener('click', () => {
     connected: false,
     createdAt: Date.now(),
   };
-  setConnection('PC', true);
+  activateService('PC', false);
   persistState();
   render();
   openPcDialog();
@@ -657,7 +727,8 @@ pairPcButton.addEventListener('click', () => {
     return;
   }
   state.pcBridge.connected = true;
-  setConnection('PC', true);
+  activateService('PC', false);
+  announceActivation('PC');
   persistState();
   render();
   openPcDialog();
@@ -670,6 +741,14 @@ disconnectPcButton.addEventListener('click', () => {
   persistState();
   render();
   openPcDialog();
+});
+
+connectDialog.addEventListener('close', () => {
+  if (state.computerMode && state.computerConnections.length === 0) {
+    state.computerMode = false;
+    persistState();
+    render();
+  }
 });
 
 async function startProviderConnect(provider) {

@@ -1,4 +1,14 @@
 module.exports = function handler(request, response) {
   response.setHeader('Content-Type', 'text/html');
-  response.status(200).send('<h1>GitHub returned to ROTEX</h1><p>OAuth callback received. Token exchange/storage is the next step.</p>');
+  response.status(200).send(`<!doctype html>
+<html>
+  <head><title>GitHub connected</title></head>
+  <body>
+    <script>
+      localStorage.setItem('rotex:pending-activation', 'GitHub');
+      window.location.href = '/';
+    </script>
+    <p>GitHub connected. Returning to ROTEX...</p>
+  </body>
+</html>`);
 };
