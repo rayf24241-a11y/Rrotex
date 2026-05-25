@@ -4,9 +4,11 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const hasTestKey = Boolean(process.env.STRIPE_TEST_SECRET_KEY);
+  const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
+  const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
+  const hasTestKey = Boolean(testSecretKey);
   const testMode  = process.env.STRIPE_MODE === 'test' || (process.env.STRIPE_MODE !== 'live' && hasTestKey);
-  const secretKey = testMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
+  const secretKey = testMode ? testSecretKey : liveSecretKey;
 
   if (!secretKey) {
     response.status(200).json({ verified: false, message: 'Stripe is not configured.' });
@@ -43,3 +45,7 @@ module.exports = async function handler(request, response) {
     subscriptionId: session.subscription || '',
   });
 };
+
+function cleanEnv(value) {
+  return String(value || '').trim().replace(/^['"]|['"]$/g, '').replace(/[^\x20-\x7E]/g, '');
+}

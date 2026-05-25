@@ -4,10 +4,14 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const hasTestKeys = Boolean(process.env.STRIPE_TEST_SECRET_KEY && process.env.STRIPE_TEST_PRICE_ID);
+  const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
+  const livePriceId = cleanEnv(process.env.STRIPE_PRICE_ID);
+  const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
+  const testPriceId = cleanEnv(process.env.STRIPE_TEST_PRICE_ID);
+  const hasTestKeys = Boolean(testSecretKey && testPriceId);
   const testMode = process.env.STRIPE_MODE === 'test' || (process.env.STRIPE_MODE !== 'live' && hasTestKeys);
-  const secretKey = testMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
-  const priceId   = testMode ? process.env.STRIPE_TEST_PRICE_ID   : process.env.STRIPE_PRICE_ID;
+  const secretKey = testMode ? testSecretKey : liveSecretKey;
+  const priceId = testMode ? testPriceId : livePriceId;
 
   if (!secretKey || !priceId) {
     const missingNames = testMode
@@ -56,3 +60,7 @@ module.exports = async function handler(request, response) {
 
   response.status(200).json({ configured: true, mode: testMode ? 'test' : 'live', url: data.url });
 };
+
+function cleanEnv(value) {
+  return String(value || '').trim().replace(/^['"]|['"]$/g, '').replace(/[^\x20-\x7E]/g, '');
+}
