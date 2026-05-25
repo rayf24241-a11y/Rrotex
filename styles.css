@@ -785,6 +785,15 @@ h1 {
   text-align: center;
 }
 
+.phone-input {
+  letter-spacing: 0;
+  text-align: left;
+}
+
+#phoneRecaptcha {
+  min-height: 1px;
+}
+
 .pc-folder {
   padding: 12px;
   color: var(--muted);

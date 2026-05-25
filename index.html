@@ -25,6 +25,7 @@
 
         <div class="account-panel">
           <button class="signout-button" id="pcShareButton" type="button">Settings / Share</button>
+          <button class="signout-button" id="phoneVerifyButton" type="button" hidden>Verify phone</button>
           <button class="google-button" id="googleButton" type="button">
             <span class="google-mark">G</span>
             <span class="google-copy">
@@ -146,6 +147,25 @@
           <button id="choosePcFolderButton" type="button" class="secondary-action">Choose folder</button>
           <button id="disconnectPcButton" type="button" class="secondary-action">Disable</button>
           <button value="cancel" type="submit" class="secondary-action">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="connect-dialog" id="phoneDialog">
+      <form method="dialog" class="connect-card">
+        <button class="dialog-x" type="submit" value="cancel" aria-label="Close">X</button>
+        <p class="eyebrow">Phone check</p>
+        <h2>Verify phone</h2>
+        <p class="upgrade-copy" id="phoneStatus">Verify once to keep normal free credits. You can skip, but free credits drop to $0.100 daily.</p>
+        <input class="pc-input phone-input" id="phoneInput" inputmode="tel" autocomplete="tel" placeholder="+1 555 555 5555" aria-label="Phone number" />
+        <div id="phoneCodeWrap" hidden>
+          <input class="pc-input" id="phoneCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" aria-label="Phone verification code" />
+        </div>
+        <div id="phoneRecaptcha"></div>
+        <div class="dialog-actions">
+          <button id="sendPhoneCodeButton" type="button" class="checkout-action">Send code</button>
+          <button id="confirmPhoneCodeButton" type="button" class="checkout-action" hidden>Verify</button>
+          <button id="skipPhoneButton" type="button" class="secondary-action">Skip</button>
         </div>
       </form>
     </dialog>

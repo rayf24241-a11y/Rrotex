@@ -2,7 +2,10 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/fireba
 import {
   getAuth,
   GoogleAuthProvider,
+  linkWithCredential,
   onAuthStateChanged,
+  PhoneAuthProvider,
+  RecaptchaVerifier,
   signInWithPopup,
   signOut,
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
@@ -71,6 +74,7 @@ const newChatButton = document.querySelector('#newChatButton');
 const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
 const signOutButton = document.querySelector('#signOutButton');
+const phoneVerifyButton = document.querySelector('#phoneVerifyButton');
 const pcShareButton = document.querySelector('#pcShareButton');
 const planStatus = document.querySelector('#planStatus');
 const saveStatus = document.querySelector('#saveStatus');
@@ -103,11 +107,20 @@ const makePcCodeButton = document.querySelector('#makePcCodeButton');
 const pairPcButton = document.querySelector('#pairPcButton');
 const choosePcFolderButton = document.querySelector('#choosePcFolderButton');
 const disconnectPcButton = document.querySelector('#disconnectPcButton');
+const phoneDialog = document.querySelector('#phoneDialog');
+const phoneStatus = document.querySelector('#phoneStatus');
+const phoneInput = document.querySelector('#phoneInput');
+const phoneCodeWrap = document.querySelector('#phoneCodeWrap');
+const phoneCodeInput = document.querySelector('#phoneCodeInput');
+const sendPhoneCodeButton = document.querySelector('#sendPhoneCodeButton');
+const confirmPhoneCodeButton = document.querySelector('#confirmPhoneCodeButton');
+const skipPhoneButton = document.querySelector('#skipPhoneButton');
 
 const storageKey = 'rotex:web:v2';
 const pendingActivationKey = 'rotex:pending-activation';
 const creditPlans = {
   normal: { daily: 0.3, weekly: 0.9, monthly: 1.5 },
+  limited: { daily: 0.1, weekly: 0.3, monthly: 0.5 },
   pro: { daily: 2.5, weekly: 5, monthly: 5 },
 };
 const freeComputerMessagesPerDay = 3;
@@ -119,6 +132,8 @@ let db = null;
 let currentUser = null;
 let cloudReady = false;
 let saveTimer = null;
+let phoneVerifier = null;
+let phoneConfirmation = null;
 
 initFirebase();
 applyPendingActivation();
@@ -149,6 +164,9 @@ async function initFirebase() {
         state = normalizeState({});
       }
       render();
+      if (shouldAskPhone()) {
+        window.setTimeout(openPhoneDialog, 350);
+      }
     });
   } catch (error) {
     console.warn('Firebase unavailable:', error);
@@ -172,12 +190,16 @@ function normalizeState(value) {
     ? value.chats
     : [{ id: firstChatId, title: 'New ROTEX chat', createdAt: Date.now(), messages: [] }];
   const pro = Boolean(value.pro);
-  const creditUsage = normalizeCreditUsage(value.creditUsage, pro, value.credits);
+  const phoneVerified = Boolean(value.phoneVerified);
+  const phoneSkipped = Boolean(value.phoneSkipped);
+  const creditUsage = normalizeCreditUsage(value.creditUsage, pro, value.credits, { phoneVerified, phoneSkipped });
 
   return {
     activeModel: value.activeModel || 'rod-1',
     computerMode: Boolean(value.computerMode),
     pro,
+    phoneVerified,
+    phoneSkipped,
     creditUsage,
     computerUsage: normalizeComputerUsage(value.computerUsage),
     computerConnections: Array.isArray(value.computerConnections)
@@ -190,8 +212,8 @@ function normalizeState(value) {
   };
 }
 
-function normalizeCreditUsage(value, pro, oldCredits) {
-  const plan = pro ? creditPlans.pro : creditPlans.normal;
+function normalizeCreditUsage(value, pro, oldCredits, accountState = state) {
+  const plan = pro ? creditPlans.pro : activeFreePlan(accountState);
   const today = dayKey();
   const week = weekKey();
   const month = monthKey();
@@ -237,7 +259,7 @@ function normalizeComputerUsage(value) {
 }
 
 function applyCreditRefill() {
-  state.creditUsage = normalizeCreditUsage(state.creditUsage, state.pro, state.credits);
+  state.creditUsage = normalizeCreditUsage(state.creditUsage, state.pro, state.credits, state);
   state.credits = remainingMonthlyCredits(state.pro, state.creditUsage);
 }
 
@@ -280,6 +302,134 @@ async function loadCloudState() {
     });
   }
   setCloudStatus('Synced');
+}
+
+function shouldAskPhone() {
+  return currentUser && !state.pro && !state.phoneVerified && !state.phoneSkipped;
+}
+
+function openPhoneDialog() {
+  if (!currentUser) return;
+  phoneStatus.textContent = 'Verify once to keep normal free credits. You can skip, but free credits drop to $0.100 daily.';
+  phoneCodeWrap.hidden = true;
+  confirmPhoneCodeButton.hidden = true;
+  sendPhoneCodeButton.hidden = false;
+  if (!phoneDialog.open) {
+    phoneDialog.showModal();
+  }
+}
+
+function ensurePhoneVerifier() {
+  if (phoneVerifier) return phoneVerifier;
+  phoneVerifier = new RecaptchaVerifier(auth, 'phoneRecaptcha', {
+    size: 'invisible',
+    callback: () => {},
+  });
+  return phoneVerifier;
+}
+
+async function sendPhoneCode() {
+  if (!auth || !currentUser) {
+    phoneStatus.textContent = 'Log in with Google first.';
+    return;
+  }
+  const phoneNumber = phoneInput.value.trim();
+  if (!phoneNumber.startsWith('+') || phoneNumber.length < 8) {
+    phoneStatus.textContent = 'Use full format, like +15555555555.';
+    return;
+  }
+  try {
+    sendPhoneCodeButton.disabled = true;
+    phoneStatus.textContent = 'Sending code...';
+    const provider = new PhoneAuthProvider(auth);
+    phoneConfirmation = await provider.verifyPhoneNumber(phoneNumber, ensurePhoneVerifier());
+    phoneStatus.textContent = 'Code sent. Type the 6 digits from your text.';
+    phoneCodeWrap.hidden = false;
+    confirmPhoneCodeButton.hidden = false;
+    sendPhoneCodeButton.hidden = true;
+    phoneCodeInput.focus();
+  } catch (error) {
+    phoneStatus.textContent = firebaseAuthMessage(error, 'Phone verification could not start. Make sure Phone is enabled in Firebase Authentication.');
+    resetPhoneVerifier();
+  } finally {
+    sendPhoneCodeButton.disabled = false;
+  }
+}
+
+async function confirmPhoneCode() {
+  if (!phoneConfirmation || !currentUser) {
+    phoneStatus.textContent = 'Send a code first.';
+    return;
+  }
+  const code = phoneCodeInput.value.trim();
+  if (code.length < 6) {
+    phoneStatus.textContent = 'Type the 6 digit code.';
+    return;
+  }
+  try {
+    confirmPhoneCodeButton.disabled = true;
+    phoneStatus.textContent = 'Verifying...';
+    const credential = PhoneAuthProvider.credential(phoneConfirmation, code);
+    await linkWithCredential(currentUser, credential);
+    state.phoneVerified = true;
+    state.phoneSkipped = false;
+    state.creditUsage = normalizeCreditUsage(state.creditUsage, state.pro, state.credits, state);
+    persistState();
+    render();
+    phoneStatus.textContent = 'Phone verified. Normal free credits are active.';
+    phoneDialog.close();
+  } catch (error) {
+    if (error?.code === 'auth/provider-already-linked' || error?.code === 'auth/credential-already-in-use') {
+      state.phoneVerified = true;
+      state.phoneSkipped = false;
+      persistState();
+      render();
+      phoneDialog.close();
+      return;
+    }
+    phoneStatus.textContent = firebaseAuthMessage(error, 'That code did not work. Try again.');
+  } finally {
+    confirmPhoneCodeButton.disabled = false;
+  }
+}
+
+function skipPhoneVerification() {
+  state.phoneVerified = false;
+  state.phoneSkipped = true;
+  state.creditUsage = normalizeCreditUsage(state.creditUsage, state.pro, state.credits, state);
+  persistState();
+  render();
+  phoneDialog.close();
+}
+
+function resetPhoneVerifier() {
+  try {
+    phoneVerifier?.clear();
+  } catch {}
+  phoneVerifier = null;
+}
+
+function firebaseAuthMessage(error, fallback) {
+  const code = error?.code || '';
+  if (code === 'auth/operation-not-allowed') {
+    return 'Enable this sign-in method in Firebase Authentication first.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'Add this website domain to Firebase Authentication authorized domains.';
+  }
+  if (code === 'auth/invalid-phone-number') {
+    return 'That phone number needs country code format, like +15555555555.';
+  }
+  if (code === 'auth/too-many-requests') {
+    return 'Too many tries right now. Wait a little and try again.';
+  }
+  if (code === 'auth/popup-closed-by-user') {
+    return 'Login was closed before it finished.';
+  }
+  if (code === 'auth/invalid-action-code') {
+    return 'Firebase said the requested action is invalid. Refresh, use the live domain, and check authorized domains.';
+  }
+  return error?.message || fallback;
 }
 
 function activeChat() {
@@ -374,7 +524,7 @@ function renderMessages() {
         <p class="eyebrow">Ready</p>
         <h2>${model.name}</h2>
         <p>${model.description}</p>
-        <p>${model.api}. Costs ${formatMoney(activeCost())} per message${state.computerMode ? ' in computer mode' : ''}. Normal limits are ${formatMoney(creditPlans.normal.daily)} daily, ${formatMoney(creditPlans.normal.weekly)} weekly, and ${formatMoney(creditPlans.normal.monthly)} monthly.</p>
+        <p>${model.api}. Costs ${formatMoney(activeCost())} per message${state.computerMode ? ' in computer mode' : ''}. Free limits are ${formatMoney(activeFreePlan().daily)} daily, ${formatMoney(activeFreePlan().weekly)} weekly, and ${formatMoney(activeFreePlan().monthly)} monthly.</p>
       </div>
     `;
     return;
@@ -412,18 +562,24 @@ function renderAccount() {
     googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
     planStatus.textContent = state.pro ? 'Pro' : 'Normal';
     planStatus.hidden = false;
+    phoneVerifyButton.hidden = state.pro || state.phoneVerified;
+    phoneVerifyButton.textContent = state.phoneSkipped ? 'Verify phone for more credits' : 'Verify phone';
     signOutButton.hidden = false;
-    saveStatus.textContent = `Chats sync with Firebase for ${currentUser.email || 'this account'}.`;
+    saveStatus.textContent = state.phoneVerified
+      ? `Phone verified. Chats sync with Firebase for ${currentUser.email || 'this account'}.`
+      : `Phone not verified. Free credits are ${formatMoney(activeFreePlan().daily)} daily.`;
   } else if (cloudReady) {
     googleButtonText.textContent = 'Log in or sign up';
     planStatus.textContent = 'Normal';
     planStatus.hidden = true;
+    phoneVerifyButton.hidden = true;
     signOutButton.hidden = true;
     saveStatus.textContent = 'Sign in with Google to save chats with Firebase.';
   } else {
     googleButtonText.textContent = 'Firebase not configured';
     planStatus.textContent = 'Normal';
     planStatus.hidden = true;
+    phoneVerifyButton.hidden = true;
     signOutButton.hidden = true;
     saveStatus.textContent = 'Add Firebase env vars in Vercel to enable Google login.';
   }
@@ -481,8 +637,17 @@ async function sendMessage(text) {
   if (!currentUser) {
     alert('Log in with Google to use ROTEX credits and chat.');
     if (auth) {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      try {
+        await signInWithPopup(auth, new GoogleAuthProvider());
+      } catch (error) {
+        alert(firebaseAuthMessage(error, 'Google login could not start.'));
+      }
     }
+    return;
+  }
+
+  if (shouldAskPhone()) {
+    openPhoneDialog();
     return;
   }
 
@@ -642,7 +807,11 @@ function formatMoney(value) {
 }
 
 function activeCreditPlan(pro = state.pro) {
-  return pro ? creditPlans.pro : creditPlans.normal;
+  return pro ? creditPlans.pro : activeFreePlan();
+}
+
+function activeFreePlan(value = state) {
+  return value?.phoneVerified ? creditPlans.normal : creditPlans.limited;
 }
 
 function remainingDailyCredits(pro = state.pro, usage = state.creditUsage) {
@@ -1037,13 +1206,21 @@ googleButton.addEventListener('click', async () => {
     alert('Firebase is not configured yet. Add the Firebase env vars in Vercel first.');
     return;
   }
-  await signInWithPopup(auth, new GoogleAuthProvider());
+  try {
+    await signInWithPopup(auth, new GoogleAuthProvider());
+  } catch (error) {
+    alert(firebaseAuthMessage(error, 'Google login could not start.'));
+  }
 });
 
 signOutButton.addEventListener('click', async () => {
   if (auth) await signOut(auth);
 });
 
+phoneVerifyButton.addEventListener('click', openPhoneDialog);
+sendPhoneCodeButton.addEventListener('click', sendPhoneCode);
+confirmPhoneCodeButton.addEventListener('click', confirmPhoneCode);
+skipPhoneButton.addEventListener('click', skipPhoneVerification);
 upgradeButton.addEventListener('click', startUpgrade);
 closeProPageButton.addEventListener('click', closeProPage);
 checkoutButton.addEventListener('click', continueCheckout);
