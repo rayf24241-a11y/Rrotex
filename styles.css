@@ -631,6 +631,10 @@ h1 {
   text-transform: uppercase;
 }
 
+.message-text {
+  display: block;
+}
+
 .composer {
   position: relative;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -786,7 +790,8 @@ h1 {
 }
 
 .message-action {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   margin-top: 12px;
 }
 

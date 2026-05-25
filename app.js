@@ -957,7 +957,7 @@ function renderMessages() {
     item.className = `message ${message.role}`;
     const downloads = message.role === 'assistant' ? extractDownloadFiles(message.text) : [];
     const visibleText = downloads.length ? stripDownloadBlocks(message.text) : message.text;
-    item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : escapeHtml(message.model)}</span>${escapeHtml(visibleText)}`;
+    item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : escapeHtml(message.model)}</span><span class="message-text">${escapeHtml(visibleText)}</span>`;
     if (message.action === 'upgrade') {
       const button = document.createElement('button');
       button.type = 'button';
