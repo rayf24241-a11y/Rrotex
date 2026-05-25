@@ -106,6 +106,7 @@ button {
 .send-button,
 .upgrade-button,
 .message-action,
+.computer-toggle,
 .model-select,
 .model-option {
   border: 1px solid transparent;
@@ -346,12 +347,31 @@ h1 {
 
 .composer {
   position: relative;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 10px;
   padding: 14px clamp(18px, 4vw, 44px) 20px;
   border-top: 1px solid rgba(44, 55, 72, 0.72);
   background: rgba(6, 7, 11, 0.86);
   backdrop-filter: blur(16px);
+}
+
+.computer-toggle {
+  min-width: 106px;
+  padding: 0 13px;
+  color: var(--muted);
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+.computer-toggle.active {
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--blue), var(--green));
+  border-color: transparent;
+  box-shadow: 0 14px 32px rgba(76, 201, 240, 0.16);
+}
+
+.model-option.disabled {
+  opacity: 0.46;
 }
 
 .model-select-wrap {

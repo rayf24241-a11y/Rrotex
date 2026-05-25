@@ -22,6 +22,16 @@ Model costs:
 | Tex 1.5 | DeepSeek `deepseek-chat` | `$0.015/message` |
 | Treesearch _ q | Groq `llama-3.3-70b-versatile` | `$0.002/message` |
 
+Computer mode is available to everyone, but it has separate pricing:
+
+| Computer mode model | Cost |
+| --- | ---: |
+| Rod thinking (ICM) | `$0.010/message` |
+| Tex 0 (ICM) | `$0.040/message` |
+| Tex 1.5 (ICM) | `$0.070/message` |
+
+Computer mode can ask the user to connect Google Drive, GitHub, OneDrive, and other plugins/services. Direct file editing is disabled in the website chat.
+
 When a user is out of credits, the app shows `your out of credits, upgrade?` with an Upgrade button.
 
 Upgrade benefits:

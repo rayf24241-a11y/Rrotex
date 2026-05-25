@@ -21,6 +21,7 @@ const models = [
     short: 'Everyday',
     api: 'Groq llama-3.1-8b-instant',
     cost: 0.001,
+    computerCost: null,
     description: 'Everyday tasks, quick answers, normal chat, and simple work.',
   },
   {
@@ -29,6 +30,7 @@ const models = [
     short: 'Hard tasks',
     api: 'Groq llama-3.3-70b-versatile',
     cost: 0.004,
+    computerCost: 0.01,
     description: 'Harder tasks that need more reasoning, planning, and careful answers.',
   },
   {
@@ -37,6 +39,7 @@ const models = [
     short: 'Code',
     api: 'DeepSeek chat',
     cost: 0.007,
+    computerCost: 0.04,
     description: 'Code help, debugging, implementation, and file-aware project work.',
   },
   {
@@ -45,6 +48,7 @@ const models = [
     short: 'Complex code',
     api: 'DeepSeek chat/reasoner',
     cost: 0.015,
+    computerCost: 0.07,
     description: 'Complex code, larger builds, deeper architecture, and tougher fixes.',
   },
   {
@@ -53,6 +57,7 @@ const models = [
     short: 'Research',
     api: 'Groq llama-3.3-70b-versatile',
     cost: 0.002,
+    computerCost: null,
     description: 'Research mode for searching, comparing, and explaining. It cannot create files.',
   },
 ];
@@ -73,6 +78,7 @@ const modelButton = document.querySelector('#modelButton');
 const modelMenu = document.querySelector('#modelMenu');
 const selectedModelName = document.querySelector('#selectedModelName');
 const selectedModelShort = document.querySelector('#selectedModelShort');
+const computerToggle = document.querySelector('#computerToggle');
 
 const storageKey = 'rotex:web:v2';
 const freeCreditAmount = 0.3;
@@ -133,6 +139,7 @@ function normalizeState(value) {
 
   return {
     activeModel: value.activeModel || 'rod-1',
+    computerMode: Boolean(value.computerMode),
     activeChatId: value.activeChatId || chats[0].id,
     credits: typeof value.credits === 'number' ? Math.max(value.credits, value.credits <= 0.003 ? freeCreditAmount : value.credits) : freeCreditAmount,
     nextRefillAt: typeof value.nextRefillAt === 'number' ? value.nextRefillAt : Date.now() + refillEveryMs,
@@ -190,22 +197,36 @@ function activeModel() {
   return models.find((model) => model.id === state.activeModel) || models[0];
 }
 
+function activeCost() {
+  const model = activeModel();
+  return state.computerMode ? (model.computerCost ?? model.cost) : model.cost;
+}
+
+function ensureComputerModel() {
+  if (!state.computerMode || activeModel().computerCost !== null) return;
+  state.activeModel = 'rod-thinking';
+}
+
 function setCloudStatus(text) {
   syncStatus.textContent = text;
 }
 
 function renderModelMenu() {
+  ensureComputerModel();
   const model = activeModel();
   selectedModelName.textContent = model.name;
-  selectedModelShort.textContent = model.short;
+  selectedModelShort.textContent = state.computerMode ? 'Computer mode' : model.short;
   modelMenu.innerHTML = '';
 
   models.forEach((item) => {
+    const disabled = state.computerMode && item.computerCost === null;
+    const price = state.computerMode ? item.computerCost : item.cost;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = `model-option${item.id === state.activeModel ? ' active' : ''}`;
-    button.innerHTML = `<strong>${item.name}</strong><span>${item.description}</span><span>${formatMoney(item.cost)} per message</span>`;
+    button.className = `model-option${item.id === state.activeModel ? ' active' : ''}${disabled ? ' disabled' : ''}`;
+    button.innerHTML = `<strong>${item.name}</strong><span>${item.description}</span><span>${disabled ? 'Not in computer mode' : `${formatMoney(price)} per message${state.computerMode ? ' ICM' : ''}`}</span>`;
     button.addEventListener('click', () => {
+      if (disabled) return;
       state.activeModel = item.id;
       closeModelMenu();
       persistState();
@@ -242,7 +263,7 @@ function renderMessages() {
         <p class="eyebrow">Ready</p>
         <h2>${model.name}</h2>
         <p>${model.description}</p>
-        <p>${model.api}. Costs ${formatMoney(model.cost)} per message. Normal users refill to ${formatMoney(freeCreditAmount)} every 3 days.</p>
+        <p>${model.api}. Costs ${formatMoney(activeCost())} per message${state.computerMode ? ' in computer mode' : ''}. Normal users refill to ${formatMoney(freeCreditAmount)} every 3 days.</p>
       </div>
     `;
     return;
@@ -268,6 +289,8 @@ function renderMessages() {
 function renderAccount() {
   applyCreditRefill();
   creditStatus.textContent = `${formatMoney(state.credits)} credits`;
+  computerToggle.classList.toggle('active', state.computerMode);
+  computerToggle.setAttribute('aria-pressed', String(state.computerMode));
   if (currentUser) {
     googleButtonText.textContent = currentUser.displayName || currentUser.email || 'Google account';
     signOutButton.hidden = false;
@@ -307,12 +330,14 @@ function createChat() {
 
 async function sendMessage(text) {
   const chat = activeChat();
-  const model = activeModel();
   const clean = text.trim();
   if (!clean || !chat) return;
 
   applyCreditRefill();
-  if (state.credits + 0.0000001 < model.cost) {
+  ensureComputerModel();
+  const model = activeModel();
+  const cost = activeCost();
+  if (state.credits + 0.0000001 < cost) {
     chat.messages.push({
       role: 'assistant',
       model: 'ROTEX credits',
@@ -324,7 +349,7 @@ async function sendMessage(text) {
     return;
   }
 
-  state.credits = Math.max(0, state.credits - model.cost);
+  state.credits = Math.max(0, state.credits - cost);
   chat.messages.push({ role: 'user', text: clean, model: 'You' });
   if (chat.title === 'New ROTEX chat') {
     chat.title = clean.length > 32 ? `${clean.slice(0, 32)}...` : clean;
@@ -342,6 +367,7 @@ async function sendMessage(text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: model.id,
+        computerMode: state.computerMode,
         messages: chat.messages.filter((message) => message.text !== 'Thinking...'),
       }),
     });
@@ -404,6 +430,12 @@ function closeModelMenu() {
 
 newChatButton.addEventListener('click', createChat);
 modelButton.addEventListener('click', toggleModelMenu);
+computerToggle.addEventListener('click', () => {
+  state.computerMode = !state.computerMode;
+  ensureComputerModel();
+  persistState();
+  render();
+});
 
 document.addEventListener('click', (event) => {
   if (!modelMenu.contains(event.target) && !modelButton.contains(event.target)) {
