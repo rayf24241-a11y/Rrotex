@@ -1295,10 +1295,16 @@ newChatButton.addEventListener('click', () => {
 });
 modelButton.addEventListener('click', toggleModelMenu);
 computerEntry.addEventListener('click', () => {
-  state.computerMode = !state.computerMode;
+  const turningOn = !state.computerMode;
+  state.computerMode = turningOn;
   ensureComputerModel();
-  if (state.computerMode && state.computerConnections.length === 0) {
-    connectDialog.showModal();
+  if (turningOn) {
+    const id = crypto.randomUUID();
+    state.chats.unshift({ id, title: 'Computer mode', createdAt: Date.now(), messages: [] });
+    state.activeChatId = id;
+    if (state.computerConnections.length === 0) {
+      connectDialog.showModal();
+    }
   }
   persistState();
   render();
@@ -1435,7 +1441,7 @@ disconnectPcButton.addEventListener('click', () => {
   openPcDialog();
 });
 
-pcShareButton.addEventListener('click', () => {
+pcShareButton?.addEventListener('click', () => {
   openPcDialog();
 });
 
