@@ -25,8 +25,8 @@ module.exports = async function handler(request, response) {
     cancel_url: origin,
     client_reference_id: uid,
     'metadata[uid]': uid,
-    'metadata[credits]': '3',
-    'metadata[benefits]': '$3 credits, better models coming soon, computer mode coming soon, more plugins, Tex 2.5 coming soon',
+    'metadata[credits]': '5',
+    'metadata[benefits]': '$5 credits, better models, computer mode, more plugins',
   });
 
   if (email) {

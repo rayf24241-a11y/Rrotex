@@ -38,11 +38,10 @@ When a user is out of credits, the app shows `your out of credits, upgrade?` wit
 
 Upgrade benefits:
 
-- `$3` in credits
-- Better models (coming soon)
-- Computer mode (coming soon)
+- `$5` in credits
+- Better models
+- Computer mode
 - More plugins
-- Tex 2.5 (coming soon)
 
 ## Firebase Auth
 
@@ -94,7 +93,7 @@ STRIPE_SECRET_KEY
 STRIPE_PRICE_ID
 ```
 
-The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id, `$3` credits, and the coming-soon benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
+The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id, `$5` credits, and the Pro benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
 
 ## Local preview
 
@@ -114,7 +113,7 @@ Do not put Stripe secret keys in this website. The website should call a backend
 POST /api/create-checkout-session
 ```
 
-That backend uses the Stripe test secret key to create a Checkout Session for the $15 monthly Pro plan, then returns the checkout URL to the website.
+That backend uses the Stripe secret key to create a Checkout Session for the $15 monthly Pro plan, then returns the checkout URL to the website.
 
 ## ROTEX backend plan
 
