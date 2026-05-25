@@ -4,30 +4,40 @@ const MODELS = {
     provider: 'groq',
     providerModel: 'llama-3.1-8b-instant',
     purpose: 'everyday tasks',
+    temperature: 0.65,
+    maxTokens: 700,
   },
   'rod-thinking': {
     name: 'Rod thinking',
     provider: 'groq',
     providerModel: 'llama-3.3-70b-versatile',
     purpose: 'harder tasks',
+    temperature: 0.55,
+    maxTokens: 1100,
   },
   'tex-0': {
     name: 'Tex 0',
     provider: 'deepseek',
     providerModel: 'deepseek-chat',
     purpose: 'code',
+    temperature: 0.35,
+    maxTokens: 1200,
   },
   'tex-1-5': {
     name: 'Tex 1.5',
     provider: 'deepseek',
-    providerModel: 'deepseek-chat',
+    providerModel: 'deepseek-reasoner',
     purpose: 'complex code',
+    temperature: 0.25,
+    maxTokens: 1600,
   },
   'treesearch-q': {
     name: 'Treesearch _ q',
     provider: 'groq',
     providerModel: 'llama-3.3-70b-versatile',
     purpose: 'research only',
+    temperature: 0.4,
+    maxTokens: 1200,
   },
 };
 
@@ -76,12 +86,16 @@ module.exports = async function handler(request, response) {
         baseUrl: 'https://api.deepseek.com/chat/completions',
         model: selected.providerModel,
         messages: cleanMessages,
+        temperature: selected.temperature,
+        maxTokens: selected.maxTokens,
       })
       : await callOpenAiCompatible({
         apiKey: process.env.GROQ_API_KEY,
         baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
         model: selected.providerModel,
         messages: cleanMessages,
+        temperature: selected.temperature,
+        maxTokens: selected.maxTokens,
       });
 
     response.status(200).json({ model: selected.name, text });
@@ -120,7 +134,7 @@ async function verifyFirebaseToken(authToken) {
   }
 }
 
-async function callOpenAiCompatible({ apiKey, baseUrl, model, messages }) {
+async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperature = 0.7, maxTokens = 900 }) {
   if (!apiKey) {
     throw new Error('Missing provider key');
   }
@@ -134,8 +148,8 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages }) {
     body: JSON.stringify({
       model,
       messages,
-      temperature: 0.7,
-      max_tokens: 900,
+      temperature,
+      max_tokens: maxTokens,
     }),
   });
 
