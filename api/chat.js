@@ -1,3 +1,5 @@
+const AdmZip = require('adm-zip');
+
 const MODELS = {
   'rod-1': {
     name: 'Rod _ 1',
@@ -95,6 +97,8 @@ module.exports = async function handler(request, response) {
       hasImages && selected.provider !== 'anthropic' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
       'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
       'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
+      'You can create multiple downloadable files and folders. For a folder, use file blocks with paths like ```file:project/src/app.js. For binary/image files, use ```file:name.ext;base64 and put only base64 content inside. If the user asks for a zip, create multiple file blocks and the app can zip them together.',
+      'The conversation may include a compact summary of older messages. Treat it as memory and continue from the recent messages.',
       personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
       connectionStatus,
       'If the user asks whether GitHub, Google Drive, PC, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
@@ -171,24 +175,60 @@ function supportedVisionModel() {
 
 function normalizeAttachments(value) {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, 5).map((item) => ({
-    name: String(item?.name || 'attachment').slice(0, 100),
-    type: String(item?.type || 'application/octet-stream').slice(0, 80),
-    kind: item?.kind === 'image' ? 'image' : 'file',
-    size: Number(item?.size) || 0,
-    content: String(item?.content || '').slice(0, item?.kind === 'image' ? 2500000 : 12000),
-  })).filter((item) => item.content);
+  return value.slice(0, 30).map((item) => {
+    const kind = item?.kind === 'image' ? 'image' : item?.kind === 'zip' ? 'zip' : 'file';
+    const content = String(item?.content || '').slice(0, kind === 'image' || kind === 'zip' ? 4000000 : 12000);
+    return {
+      name: String(item?.name || 'attachment').slice(0, 100),
+      path: String(item?.path || item?.name || 'attachment').slice(0, 180),
+      type: String(item?.type || 'application/octet-stream').slice(0, 80),
+      kind,
+      size: Number(item?.size) || 0,
+      content,
+      zipText: kind === 'zip' ? readZipText(content) : '',
+    };
+  }).filter((item) => item.content);
 }
 
 function attachmentPrompt(attachments, canReadImages) {
   const lines = attachments.map((item, index) => {
-    const base = `${index + 1}. ${item.name} (${item.type || item.kind}, ${item.size || 0} bytes)`;
+    const base = `${index + 1}. ${item.path || item.name} (${item.type || item.kind}, ${item.size || 0} bytes)`;
     if (item.kind === 'image') {
       return `${base}: ${canReadImages ? 'image attached for visual reading.' : 'image attached, but this selected model can only see the file name/type.'}`;
+    }
+    if (item.kind === 'zip') {
+      return `${base}: zip archive contents:\n${item.zipText || 'No readable text files found in this zip.'}`;
+    }
+    if (item.content.startsWith('data:')) {
+      return `${base}: binary file attached. The model can see the name, path, type, and size.`;
     }
     return `${base}:\n${item.content.slice(0, 4000)}`;
   });
   return `User attached files:\n${lines.join('\n\n')}`;
+}
+
+function readZipText(dataUrl) {
+  try {
+    const base64 = String(dataUrl || '').split(',', 2)[1] || '';
+    if (!base64) return '';
+    const zip = new AdmZip(Buffer.from(base64, 'base64'));
+    return zip.getEntries()
+      .filter((entry) => !entry.isDirectory)
+      .slice(0, 20)
+      .map((entry) => {
+        const name = entry.entryName;
+        if (!isReadablePath(name)) return `${name}: binary or unsupported file`;
+        return `${name}:\n${entry.getData().toString('utf8').slice(0, 3000)}`;
+      })
+      .join('\n\n')
+      .slice(0, 12000);
+  } catch (error) {
+    return `Could not read zip: ${error?.message || 'unknown error'}`;
+  }
+}
+
+function isReadablePath(name) {
+  return /\.(txt|md|json|js|ts|tsx|jsx|html|css|py|csv|xml|yml|yaml|bat|ps1|java|c|cpp|cs|go|rs|php|rb|sql|env|gitignore)$/i.test(name);
 }
 
 function summarizeConnections(computerConnections, pcBridge) {

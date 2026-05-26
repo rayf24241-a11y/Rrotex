@@ -96,7 +96,9 @@ const composer = document.querySelector('#composer');
 const messageInput = document.querySelector('#messageInput');
 const attachmentTray = document.querySelector('#attachmentTray');
 const attachmentInput = document.querySelector('#attachmentInput');
+const folderInput = document.querySelector('#folderInput');
 const attachButton = document.querySelector('#attachButton');
+const folderButton = document.querySelector('#folderButton');
 const newChatButton = document.querySelector('#newChatButton');
 const teamupEntry = document.querySelector('#teamupEntry');
 const teamupCreditStatus = document.querySelector('#teamupCreditStatus');
@@ -216,6 +218,8 @@ let pendingAttachments = [];
 let suppressProfileClick = false;
 let suppressAccountMenuClick = false;
 const plusOverrideEmails = new Set(['rayf24241@gmail.com']);
+const maxAttachments = 30;
+const readableExtensions = new Set(['txt', 'md', 'json', 'js', 'ts', 'tsx', 'jsx', 'html', 'css', 'py', 'csv', 'xml', 'yml', 'yaml', 'bat', 'ps1', 'java', 'c', 'cpp', 'cs', 'go', 'rs', 'php', 'rb', 'sql', 'env', 'gitignore']);
 
 initFirebase();
 applyPendingActivation();
@@ -1354,7 +1358,7 @@ async function sendMessage(text) {
         pcBridge: state.pcBridge,
         personality: personalities[chat.personality || 'normal'],
         attachments,
-        messages: chat.messages.filter((message) => message.text !== 'Thinking...'),
+        messages: buildApiMessages(chat),
       }),
     });
     const data = await response.json();
@@ -1393,6 +1397,35 @@ function localConnectionAnswer(text) {
   return connected
     ? `${service} is connected successfully.`
     : `${service} is not connected yet.`;
+}
+
+function buildApiMessages(chat) {
+  const cleanMessages = (chat?.messages || [])
+    .filter((message) => message.text !== 'Thinking...' && !/^Teamup is thinking|is combining the teamup answer/.test(message.text))
+    .map((message) => ({
+      role: message.role,
+      text: message.text,
+      model: message.model,
+    }));
+  if (cleanMessages.length <= 18) return cleanMessages;
+  const older = cleanMessages.slice(0, -14);
+  const recent = cleanMessages.slice(-14);
+  return [
+    {
+      role: 'system',
+      text: `Compact conversation summary: ${compactConversation(older)}`,
+      model: 'ROTEX memory',
+    },
+    ...recent,
+  ];
+}
+
+function compactConversation(messages) {
+  return messages
+    .slice(-24)
+    .map((message) => `${message.role === 'user' ? 'User' : message.model || 'ROTEX'}: ${String(message.text || '').replace(/\s+/g, ' ').slice(0, 240)}`)
+    .join(' | ')
+    .slice(0, 4000);
 }
 
 async function sendTeamupMessage(chat, clean) {
@@ -1463,9 +1496,7 @@ async function getTeamupReply(chat, selfModel, partnerModel, clean, instruction)
         authToken,
         model: selfModel.id,
         personality: `Teamup mini room. You are ${selfModel.name}. Work with ${partnerModel.name}. ${instruction} Be useful, concise, and do not introduce yourself unless asked. User request: ${clean}`,
-        messages: chat.messages
-          .filter((message) => message.text !== 'Thinking...' && !/^Teamup is thinking|is combining the teamup answer/.test(message.text))
-          .slice(-10),
+        messages: buildApiMessages(chat).slice(-12),
       }),
     });
     const data = await response.json();
@@ -1707,12 +1738,13 @@ function applyPendingActivation() {
 
 function extractDownloadFiles(text) {
   const files = [];
-  const pattern = /```file:([^\n\r]+)\r?\n([\s\S]*?)```/g;
+  const pattern = /```(?:file|folder):([^\n\r]+)\r?\n([\s\S]*?)```/g;
   let match = pattern.exec(text);
   while (match) {
-    const name = safeFileName(match[1]);
+    const parsed = parseDownloadHeader(match[1]);
+    const name = safeDownloadPath(parsed.name);
     if (name) {
-      files.push({ name, content: match[2].replace(/\s+$/, '') });
+      files.push({ name, content: match[2].replace(/\s+$/, ''), base64: parsed.base64 });
     }
     match = pattern.exec(text);
   }
@@ -1720,11 +1752,27 @@ function extractDownloadFiles(text) {
 }
 
 function stripDownloadBlocks(text) {
-  return text.replace(/```file:([^\n\r]+)\r?\n([\s\S]*?)```/g, '').trim();
+  return text.replace(/```(?:file|folder):([^\n\r]+)\r?\n([\s\S]*?)```/g, '').trim();
 }
 
 function safeFileName(value) {
   return String(value).trim().replace(/[<>:"/\\|?*]/g, '-').slice(0, 80);
+}
+
+function safeDownloadPath(value) {
+  return String(value)
+    .trim()
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((part) => safeFileName(part))
+    .filter(Boolean)
+    .join('/')
+    .slice(0, 180);
+}
+
+function parseDownloadHeader(value) {
+  const parts = String(value || '').split(';').map((part) => part.trim()).filter(Boolean);
+  return { name: parts[0] || 'download.txt', base64: parts.includes('base64') };
 }
 
 function renderDownloadList(files) {
@@ -1733,12 +1781,54 @@ function renderDownloadList(files) {
   files.forEach((file) => {
     const link = document.createElement('a');
     link.className = 'download-file';
-    link.download = file.name;
-    link.href = URL.createObjectURL(new Blob([file.content], { type: 'text/plain' }));
+    link.download = file.name.split('/').pop() || file.name;
+    link.href = URL.createObjectURL(downloadBlob(file));
     link.textContent = `Download ${file.name}`;
     list.appendChild(link);
   });
+  if (files.length > 1 || files.some((file) => file.name.includes('/'))) {
+    const zipButton = document.createElement('button');
+    zipButton.type = 'button';
+    zipButton.className = 'download-file';
+    zipButton.textContent = 'Download all as zip';
+    zipButton.addEventListener('click', () => downloadFilesAsZip(files));
+    list.appendChild(zipButton);
+  }
   return list;
+}
+
+function downloadBlob(file) {
+  if (file.base64) {
+    return new Blob([base64ToBytes(file.content.replace(/\s+/g, ''))], { type: inferMime(file.name) });
+  }
+  return new Blob([file.content], { type: inferMime(file.name) });
+}
+
+async function downloadFilesAsZip(files) {
+  if (!window.JSZip) return;
+  const zip = new window.JSZip();
+  files.forEach((file) => {
+    zip.file(file.name, file.base64 ? base64ToBytes(file.content.replace(/\s+/g, '')) : file.content, { binary: file.base64 });
+  });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const link = document.createElement('a');
+  link.download = 'rotex-files.zip';
+  link.href = URL.createObjectURL(blob);
+  link.click();
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function inferMime(name) {
+  if (/\.(png)$/i.test(name)) return 'image/png';
+  if (/\.(jpe?g)$/i.test(name)) return 'image/jpeg';
+  if (/\.(gif)$/i.test(name)) return 'image/gif';
+  if (/\.(svg)$/i.test(name)) return 'image/svg+xml';
+  if (/\.(zip)$/i.test(name)) return 'application/zip';
+  return 'text/plain';
 }
 
 function renderAttachmentList(files) {
@@ -1756,6 +1846,7 @@ function renderAttachmentList(files) {
 function publicAttachment(file) {
   return {
     name: file.name,
+    path: file.path,
     type: file.type,
     size: file.size,
     kind: file.kind,
@@ -1763,10 +1854,10 @@ function publicAttachment(file) {
 }
 
 async function handleAttachmentSelection(files) {
-  const selected = Array.from(files || []).slice(0, 5 - pendingAttachments.length);
+  const selected = Array.from(files || []).slice(0, maxAttachments - pendingAttachments.length);
   if (!selected.length) return;
   const loaded = await Promise.all(selected.map(readAttachment));
-  pendingAttachments = [...pendingAttachments, ...loaded.filter(Boolean)].slice(0, 5);
+  pendingAttachments = [...pendingAttachments, ...loaded.filter(Boolean)].slice(0, maxAttachments);
   renderAttachments();
 }
 
@@ -1778,7 +1869,7 @@ function renderAttachments() {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'attachment-pill';
-    chip.textContent = `${file.kind === 'image' ? 'Image' : 'File'} ${file.name} x`;
+    chip.textContent = `${attachmentLabel(file)} ${file.path || file.name} x`;
     chip.addEventListener('click', () => {
       pendingAttachments.splice(index, 1);
       renderAttachments();
@@ -1790,24 +1881,35 @@ function renderAttachments() {
 function readAttachment(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
-    const kind = file.type.startsWith('image/') ? 'image' : 'file';
+    const path = safeDownloadPath(file.webkitRelativePath || file.name) || safeFileName(file.name) || 'attachment';
+    const ext = path.split('.').pop()?.toLowerCase() || '';
+    const kind = file.type.startsWith('image/') ? 'image' : ext === 'zip' || file.type === 'application/zip' ? 'zip' : 'file';
+    const readable = kind === 'file' && (file.type.startsWith('text/') || readableExtensions.has(ext));
     reader.onerror = () => resolve(null);
     reader.onload = () => {
       const raw = String(reader.result || '');
       resolve({
         name: safeFileName(file.name) || 'attachment',
+        path,
         type: file.type || 'application/octet-stream',
         size: file.size,
         kind,
-        content: kind === 'image' ? raw : raw.slice(0, 12000),
+        content: kind === 'image' || kind === 'zip' || !readable ? raw : raw.slice(0, 12000),
       });
     };
-    if (kind === 'image') {
+    if (kind === 'image' || kind === 'zip' || !readable) {
       reader.readAsDataURL(file);
     } else {
       reader.readAsText(file);
     }
   });
+}
+
+function attachmentLabel(file) {
+  if (file.kind === 'image') return 'Image';
+  if (file.kind === 'zip') return 'Zip';
+  if (file.path && file.path.includes('/')) return 'Folder file';
+  return 'File';
 }
 
 function normalizeAssistantText(text, modelName = 'ROTEX') {
@@ -2221,9 +2323,14 @@ composer.addEventListener('submit', (event) => {
 });
 
 attachButton?.addEventListener('click', () => attachmentInput?.click());
+folderButton?.addEventListener('click', () => folderInput?.click());
 attachmentInput?.addEventListener('change', async () => {
   await handleAttachmentSelection(attachmentInput.files);
   attachmentInput.value = '';
+});
+folderInput?.addEventListener('change', async () => {
+  await handleAttachmentSelection(folderInput.files);
+  folderInput.value = '';
 });
 
 messageInput.addEventListener('keydown', (event) => {
