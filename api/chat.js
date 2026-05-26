@@ -18,7 +18,7 @@ const MODELS = {
   'rod-brain': {
     name: 'Rod brain',
     provider: 'anthropic',
-    providerModel: process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
+    providerModel: process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-haiku-4-5-20251001',
     purpose: 'smart everyday help',
     temperature: 0.45,
     maxTokens: 1100,
@@ -42,7 +42,7 @@ const MODELS = {
   'tex-2-5': {
     name: 'Tex 2.5',
     provider: 'anthropic',
-    providerModel: process.env.CLAUDE_OPUS_MODEL || process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-1-20250805',
+    providerModel: process.env.CLAUDE_OPUS_MODEL || process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-7',
     purpose: 'pro complex code',
     temperature: 0.25,
     maxTokens: 1800,
