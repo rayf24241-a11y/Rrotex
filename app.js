@@ -871,7 +871,20 @@ function renderModelMenu() {
   selectedModelShort.textContent = state.computerMode ? 'Computer mode' : model.short;
   modelMenu.innerHTML = '';
 
-  models.forEach((item) => {
+  const basicModels = models.filter((item) => !item.proOnly);
+  const plusModels = models.filter((item) => item.proOnly);
+
+  renderModelGroup('Basic', basicModels);
+  renderModelGroup('Plus', plusModels);
+}
+
+function renderModelGroup(label, groupModels) {
+  if (!groupModels.length) return;
+  const group = document.createElement('div');
+  group.className = 'model-group';
+  group.innerHTML = `<div class="model-group-label">${label}</div>`;
+
+  groupModels.forEach((item) => {
     const proLocked = isModelLocked(item);
     const disabled = proLocked || (state.computerMode && item.computerCost === null);
     const price = state.computerMode ? item.computerCost : item.cost;
@@ -892,8 +905,10 @@ function renderModelMenu() {
       persistState();
       render();
     });
-    modelMenu.appendChild(button);
+    group.appendChild(button);
   });
+
+  modelMenu.appendChild(group);
 }
 
 function renderChats() {
