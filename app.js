@@ -99,7 +99,9 @@ const teamupEntry = document.querySelector('#teamupEntry');
 const teamupCreditStatus = document.querySelector('#teamupCreditStatus');
 const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
-const signOutButton = document.querySelector('#signOutButton');
+const accountMenu = document.querySelector('#accountMenu');
+const accountMenuAccount = document.querySelector('#accountMenuAccount');
+const accountMenuUpgrade = document.querySelector('#accountMenuUpgrade');
 const pcShareButton = document.querySelector('#pcShareButton');
 const planStatus = document.querySelector('#planStatus');
 const saveStatus = document.querySelector('#saveStatus');
@@ -114,6 +116,7 @@ const acctName = document.querySelector('#acctName');
 const acctEmail = document.querySelector('#acctEmail');
 const acctPlanBadge = document.querySelector('#acctPlanBadge');
 const acctUpgradeBlock = document.querySelector('#acctUpgradeBlock');
+const acctAccountBlock = document.querySelector('#acctAccountBlock');
 const acctProActive = document.querySelector('#acctProActive');
 const accountSignOutBtn = document.querySelector('#accountSignOutBtn');
 const authPage = document.querySelector('#authPage');
@@ -166,6 +169,7 @@ const phoneCodeInput = document.querySelector('#phoneCodeInput');
 const sendPhoneCodeButton = document.querySelector('#sendPhoneCodeButton');
 const confirmPhoneCodeButton = document.querySelector('#confirmPhoneCodeButton');
 const skipPhoneButton = document.querySelector('#skipPhoneButton');
+const phoneVerifyBadge = document.querySelector('#phoneVerifyBadge');
 const newComputerChatButton = document.querySelector('#newComputerChatButton');
 const computerChatList = document.querySelector('#computerChatList');
 const personalityDialog = document.querySelector('#personalityDialog');
@@ -204,6 +208,7 @@ let phoneVerifier = null;
 let phoneConfirmation = null;
 let authReason = localStorage.getItem(pendingAuthReasonKey) || 'account';
 let emailCodeToken = '';
+let accountView = 'account';
 const plusOverrideEmails = new Set(['rayf24241@gmail.com']);
 
 initFirebase();
@@ -462,10 +467,12 @@ function closeAuthPage() {
 }
 
 function openAccountPage(focusUpgrade = false) {
+  accountView = focusUpgrade ? 'upgrade' : 'account';
+  closeAccountMenu();
   authPage.hidden = true;
   appShell.hidden = true;
   accountPage.hidden = false;
-  window.location.hash = 'account';
+  window.location.hash = focusUpgrade ? 'pro' : 'account';
   renderAccount();
   if (focusUpgrade) {
     acctUpgradeBlock?.scrollIntoView({ block: 'center' });
@@ -478,6 +485,15 @@ function closeAccountPage() {
   if (window.location.hash === '#account' || window.location.hash === '#pro') {
     history.pushState('', document.title, window.location.pathname + window.location.search);
   }
+}
+
+function toggleAccountMenu() {
+  if (!accountMenu) return;
+  accountMenu.hidden = !accountMenu.hidden;
+}
+
+function closeAccountMenu() {
+  if (accountMenu) accountMenu.hidden = true;
 }
 
 async function signInWithGoogleFromAuth() {
@@ -993,7 +1009,6 @@ function renderAccount() {
     googleButtonText.textContent = state.profile?.nickname || state.profile?.name || currentUser.displayName || currentUser.email || 'Google account';
     planStatus.textContent = state.pro ? 'Plus' : 'Normal';
     planStatus.hidden = false;
-    signOutButton.hidden = false;
     saveStatus.textContent = state.phoneVerified
       ? `Phone verified. Chats sync with Firebase for ${currentUser.email || 'this account'}.`
       : `Phone not verified. Free credits are ${formatMoney(activeFreePlan().daily)} daily.`;
@@ -1001,13 +1016,13 @@ function renderAccount() {
     googleButtonText.textContent = 'Log in or sign up';
     planStatus.textContent = 'Normal';
     planStatus.hidden = true;
-    signOutButton.hidden = true;
+    closeAccountMenu();
     saveStatus.textContent = 'Sign in with Google to save chats with Firebase.';
   } else {
     googleButtonText.textContent = 'Firebase not configured';
     planStatus.textContent = 'Normal';
     planStatus.hidden = true;
-    signOutButton.hidden = true;
+    closeAccountMenu();
     saveStatus.textContent = 'Add Firebase env vars in Vercel to enable Google login.';
   }
 
@@ -1021,11 +1036,16 @@ function renderAccount() {
   acctEmail.textContent = currentUser?.email || 'Log in to save chats and Plus.';
   acctPlanBadge.textContent = state.pro ? 'Plus' : 'Normal';
   acctPlanBadge.classList.toggle('pro', state.pro);
-  acctUpgradeBlock.hidden = false;
+  acctAccountBlock.hidden = accountView !== 'account';
+  acctUpgradeBlock.hidden = accountView !== 'upgrade';
   checkoutButton.disabled = Boolean(state.pro);
   checkoutButton.textContent = state.pro ? 'Already have Plus' : 'Buy Plus - $15 / month';
   if (acctProActive) acctProActive.hidden = true;
   accountSignOutBtn.hidden = !currentUser;
+  if (phoneVerifyBadge) {
+    phoneVerifyBadge.textContent = state.phoneVerified ? 'Verified' : 'Not verified';
+    phoneVerifyBadge.classList.toggle('pro', state.phoneVerified);
+  }
 }
 
 function renderComputerChats() {
@@ -1876,7 +1896,14 @@ document.addEventListener('click', (event) => {
   const profileLink = event.target.closest?.('#googleButton');
   if (profileLink) {
     event.preventDefault();
-    openAccountPage();
+    if (currentUser) {
+      toggleAccountMenu();
+    } else {
+      openAuthPage('account');
+    }
+    return;
+  }
+  if (event.target.closest?.('#accountMenu')) {
     return;
   }
   const upgradeClick = event.target.closest?.('#upgradeButton, .message-action');
@@ -1885,6 +1912,7 @@ document.addEventListener('click', (event) => {
     openAccountPage(true);
     return;
   }
+  closeAccountMenu();
   if (!modelMenu.contains(event.target) && !modelButton.contains(event.target)) {
     closeModelMenu();
   }
@@ -1914,12 +1942,16 @@ messageInput.addEventListener('keydown', (event) => {
 
 googleButton.addEventListener('click', async (event) => {
   event.preventDefault();
-  openAccountPage();
+  event.stopPropagation();
+  if (currentUser) {
+    toggleAccountMenu();
+  } else {
+    openAuthPage('account');
+  }
 });
 
-signOutButton.addEventListener('click', async () => {
-  if (auth) await signOut(auth);
-});
+accountMenuAccount?.addEventListener('click', () => openAccountPage(false));
+accountMenuUpgrade?.addEventListener('click', () => openAccountPage(true));
 
 accountSignOutBtn?.addEventListener('click', async () => {
   closeAccountPage();
@@ -1945,12 +1977,19 @@ if (window.location.hash === '#authPage' || window.location.hash === '#login') {
   openAuthPage('account');
 }
 
-if (window.location.hash === '#pro' || window.location.hash === '#account') {
+if (window.location.hash === '#pro') {
   startUpgrade();
 }
 
+if (window.location.hash === '#account') {
+  openAccountPage(false);
+}
+
 window.addEventListener('hashchange', () => {
-  if (window.location.hash === '#account' || window.location.hash === '#pro') {
+  if (window.location.hash === '#account') {
+    openAccountPage(false);
+  }
+  if (window.location.hash === '#pro') {
     startUpgrade();
   }
   if (window.location.hash === '#authPage' || window.location.hash === '#login') {

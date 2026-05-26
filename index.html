@@ -35,7 +35,10 @@
               <small class="plan-status" id="planStatus" hidden>Normal</small>
             </span>
           </a>
-          <button class="signout-button" id="signOutButton" type="button" hidden>Sign out</button>
+          <div class="account-menu" id="accountMenu" hidden>
+            <button id="accountMenuAccount" type="button">Account</button>
+            <button id="accountMenuUpgrade" type="button">Upgrade</button>
+          </div>
           <p id="saveStatus">Chats save on this device until Firebase is configured.</p>
         </div>
       </aside>
@@ -122,6 +125,28 @@
           <span class="acct-plan-badge" id="acctPlanBadge">Normal</span>
         </div>
 
+        <div class="acct-account-block" id="acctAccountBlock">
+          <p class="eyebrow">Account</p>
+          <div class="account-setting-row">
+            <div>
+              <strong>Phone number</strong>
+              <p id="phoneStatus">Verify your phone number to keep normal free credits.</p>
+            </div>
+            <span class="acct-plan-badge" id="phoneVerifyBadge">Not verified</span>
+          </div>
+          <input class="auth-input phone-input" id="phoneInput" type="tel" placeholder="+15555555555" autocomplete="tel" />
+          <div class="phone-code-wrap" id="phoneCodeWrap" hidden>
+            <input class="auth-input phone-input" id="phoneCodeInput" inputmode="numeric" maxlength="6" placeholder="6 digit code" autocomplete="one-time-code" />
+          </div>
+          <div id="phoneRecaptcha"></div>
+          <div class="account-action-row">
+            <button class="secondary-action" id="sendPhoneCodeButton" type="button">Send code</button>
+            <button class="secondary-action" id="confirmPhoneCodeButton" type="button" hidden>Verify code</button>
+            <button class="secondary-action" id="skipPhoneButton" type="button">Skip phone</button>
+            <button class="acct-signout" id="accountSignOutBtn" type="button">Log out</button>
+          </div>
+        </div>
+
         <div class="acct-upgrade-block" id="acctUpgradeBlock">
           <p class="eyebrow">ROTEX Plus</p>
           <div class="upgrade-price">$15 <span>/ monthly</span></div>
@@ -144,7 +169,6 @@
 
         <div class="acct-footer">
           <a class="secondary-action" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
-          <button class="acct-signout" id="accountSignOutBtn" type="button">Sign out</button>
         </div>
       </div>
     </section>
