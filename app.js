@@ -213,6 +213,8 @@ let authReason = localStorage.getItem(pendingAuthReasonKey) || 'account';
 let emailCodeToken = '';
 let accountView = 'account';
 let pendingAttachments = [];
+let suppressProfileClick = false;
+let suppressAccountMenuClick = false;
 const plusOverrideEmails = new Set(['rayf24241@gmail.com']);
 
 initFirebase();
@@ -502,6 +504,22 @@ function closeAccountMenu() {
 
 function openAccountMenuAction(focusUpgrade = false) {
   openAccountPage(focusUpgrade);
+}
+
+function handleProfileAction(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (currentUser) {
+    toggleAccountMenu();
+  } else {
+    openAuthPage('account');
+  }
+}
+
+function handleAccountMenuAction(event, focusUpgrade = false) {
+  event.preventDefault();
+  event.stopPropagation();
+  openAccountMenuAction(focusUpgrade);
 }
 
 async function signInWithGoogleFromAuth() {
@@ -1375,21 +1393,30 @@ async function sendTeamupMessage(chat, clean) {
   }
   const botA = models.find((model) => model.id === chat.teamup.botA) || models[1];
   const botB = models.find((model) => model.id === chat.teamup.botB) || models[2];
-  const pendingA = { role: 'assistant', model: botA.name, text: 'Thinking...' };
-  const pendingB = { role: 'assistant', model: botB.name, text: 'Thinking...' };
-  chat.messages.push(pendingA, pendingB);
+  const pending = { role: 'assistant', model: `${botA.name} + ${botB.name}`, text: 'Teamup is thinking together...' };
+  chat.messages.push(pending);
   persistState();
   render();
 
-  await Promise.all([
-    fillTeamupReply(chat, pendingA, botA, botB, clean),
-    fillTeamupReply(chat, pendingB, botB, botA, clean),
-  ]);
+  await sleep(900);
+  const draft = await getTeamupReply(chat, botA, botB, clean, 'Make a short private draft for your partner. Do not create downloadable files yet.');
+  pending.text = `${botB.name} is combining the teamup answer...`;
+  render();
+  await sleep(700);
+  const final = await getTeamupReply(
+    chat,
+    botB,
+    botA,
+    clean,
+    `Your partner ${botA.name} drafted this:\n${draft}\n\nMake ONE final answer for the user. The bots should feel like they worked together, but only output one response. If the user asked for a downloadable file, create exactly one file block.`
+  );
+  pending.model = 'Teamup';
+  pending.text = final;
   persistState();
   render();
 }
 
-async function fillTeamupReply(chat, pending, selfModel, partnerModel, clean) {
+async function getTeamupReply(chat, selfModel, partnerModel, clean, instruction) {
   try {
     const authToken = currentUser ? await currentUser.getIdToken() : '';
     const response = await fetch('/api/chat', {
@@ -1398,15 +1425,21 @@ async function fillTeamupReply(chat, pending, selfModel, partnerModel, clean) {
       body: JSON.stringify({
         authToken,
         model: selfModel.id,
-        personality: `Teamup mini room. You are ${selfModel.name}. Work with ${partnerModel.name}. Be useful, concise, and do not introduce yourself unless asked. Respond to: ${clean}`,
-        messages: chat.messages.filter((message) => message.text !== 'Thinking...').slice(-10),
+        personality: `Teamup mini room. You are ${selfModel.name}. Work with ${partnerModel.name}. ${instruction} Be useful, concise, and do not introduce yourself unless asked. User request: ${clean}`,
+        messages: chat.messages
+          .filter((message) => message.text !== 'Thinking...' && !/^Teamup is thinking|is combining the teamup answer/.test(message.text))
+          .slice(-10),
       }),
     });
     const data = await response.json();
-    pending.text = data.text || `${selfModel.name} had no response.`;
+    return data.text || `${selfModel.name} had no response.`;
   } catch {
-    pending.text = `${selfModel.name} could not respond yet.`;
+    return `${selfModel.name} could not respond yet.`;
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function startUpgrade() {
@@ -2116,20 +2149,13 @@ async function startProviderConnect(provider) {
 document.addEventListener('click', (event) => {
   const accountMenuAction = event.target.closest?.('#accountMenuAccount, #accountMenuUpgrade');
   if (accountMenuAction) {
-    event.preventDefault();
-    event.stopPropagation();
-    openAccountMenuAction(accountMenuAction.id === 'accountMenuUpgrade');
+    handleAccountMenuAction(event, accountMenuAction.id === 'accountMenuUpgrade');
     return;
   }
 
   const profileLink = event.target.closest?.('#googleButton');
   if (profileLink) {
-    event.preventDefault();
-    if (currentUser) {
-      toggleAccountMenu();
-    } else {
-      openAuthPage('account');
-    }
+    handleProfileAction(event);
     return;
   }
   if (event.target.closest?.('#accountMenu')) {
@@ -2175,35 +2201,45 @@ messageInput.addEventListener('keydown', (event) => {
   }
 });
 
-googleButton.addEventListener('click', async (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  if (currentUser) {
-    toggleAccountMenu();
-  } else {
-    openAuthPage('account');
+googleButton.addEventListener('pointerdown', (event) => {
+  suppressProfileClick = true;
+  handleProfileAction(event);
+});
+googleButton.addEventListener('click', (event) => {
+  if (suppressProfileClick) {
+    suppressProfileClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
   }
+  handleProfileAction(event);
 });
 
-accountMenuAccount?.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  openAccountMenuAction(false);
-});
-accountMenuUpgrade?.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  openAccountMenuAction(true);
-});
 accountMenuAccount?.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  openAccountMenuAction(false);
+  suppressAccountMenuClick = true;
+  handleAccountMenuAction(event, false);
 });
 accountMenuUpgrade?.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  openAccountMenuAction(true);
+  suppressAccountMenuClick = true;
+  handleAccountMenuAction(event, true);
+});
+accountMenuAccount?.addEventListener('click', (event) => {
+  if (suppressAccountMenuClick) {
+    suppressAccountMenuClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  handleAccountMenuAction(event, false);
+});
+accountMenuUpgrade?.addEventListener('click', (event) => {
+  if (suppressAccountMenuClick) {
+    suppressAccountMenuClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  handleAccountMenuAction(event, true);
 });
 
 accountSignOutBtn?.addEventListener('click', async () => {
