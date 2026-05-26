@@ -18,7 +18,7 @@ const MODELS = {
   'rod-brain': {
     name: 'Rod brain',
     provider: 'anthropic',
-    providerModel: process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-3-5-haiku-latest',
+    providerModel: process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
     purpose: 'smart everyday help',
     temperature: 0.45,
     maxTokens: 1100,
@@ -68,6 +68,7 @@ module.exports = async function handler(request, response) {
   const authResult = await verifyFirebaseToken(authToken);
 
   const selected = MODELS[model] || MODELS['rod-1'];
+  const modelGuide = buildModelGuide();
   const connectionStatus = summarizeConnections(computerConnections, pcBridge);
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
@@ -82,6 +83,10 @@ module.exports = async function handler(request, response) {
     content: [
       'You are a ROTEX web assistant.',
       'Chat naturally. Do not start with a giant capability list, identity speech, or "I am your assistant" intro unless the user asks what you can do. Keep normal answers short and useful.',
+      `ROTEX model lineup: ${modelGuide}`,
+      `Current selected model: ${selected.name}. If the user asks which model is best, compare these ROTEX model names only, not provider names.`,
+      'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
+      'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
       personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
       connectionStatus,
       'If the user asks whether GitHub, Google Drive, PC, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
@@ -143,6 +148,12 @@ module.exports = async function handler(request, response) {
     });
   }
 };
+
+function buildModelGuide() {
+  return Object.values(MODELS)
+    .map((item) => `${item.name}: ${item.purpose}`)
+    .join('; ');
+}
 
 function summarizeConnections(computerConnections, pcBridge) {
   const services = ['Google Drive', 'GitHub', 'PC'];

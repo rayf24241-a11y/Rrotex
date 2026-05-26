@@ -671,6 +671,89 @@ h1 {
   display: block;
 }
 
+.rich-message {
+  display: grid;
+  gap: 10px;
+}
+
+.rich-message p {
+  margin: 0;
+}
+
+.message-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.message-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.message-table th,
+.message-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-table th {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 900;
+}
+
+.message-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.code-block {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #181818;
+}
+
+.code-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: #252525;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.code-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.code-actions button,
+.code-actions a {
+  padding: 4px 8px;
+  color: var(--text);
+  background: #343434;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.code-block pre {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .composer {
   position: relative;
   grid-template-columns: auto minmax(0, 1fr) auto;

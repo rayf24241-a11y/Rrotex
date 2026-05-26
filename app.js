@@ -981,8 +981,13 @@ function renderMessages() {
     const item = document.createElement('div');
     item.className = `message ${message.role}`;
     const downloads = message.role === 'assistant' ? extractDownloadFiles(message.text) : [];
-    const visibleText = downloads.length ? stripDownloadBlocks(message.text) : message.text;
-    item.innerHTML = `<span class="message-meta">${message.role === 'user' ? 'You' : escapeHtml(message.model)}</span><span class="message-text">${escapeHtml(visibleText)}</span>`;
+    const safeText = normalizeAssistantText(message.text, message.model);
+    const visibleText = downloads.length ? stripDownloadBlocks(safeText) : safeText;
+    const meta = document.createElement('span');
+    meta.className = 'message-meta';
+    meta.textContent = message.role === 'user' ? 'You' : message.model;
+    item.appendChild(meta);
+    item.appendChild(message.role === 'assistant' ? renderRichMessage(visibleText) : renderPlainMessage(visibleText));
     if (message.action === 'upgrade') {
       const button = document.createElement('button');
       button.type = 'button';
@@ -1648,6 +1653,133 @@ function renderDownloadList(files) {
     list.appendChild(link);
   });
   return list;
+}
+
+function normalizeAssistantText(text, modelName = 'ROTEX') {
+  const value = String(text || '');
+  if (/backend key is missing|server environment keys|Check Vercel env keys/i.test(value)) {
+    return `${modelName || 'ROTEX'} could not answer right now. Try again in a moment, or switch to another ROTEX model for this message.`;
+  }
+  return value;
+}
+
+function renderPlainMessage(text) {
+  const span = document.createElement('span');
+  span.className = 'message-text';
+  span.textContent = text;
+  return span;
+}
+
+function renderRichMessage(text) {
+  const container = document.createElement('span');
+  container.className = 'message-text rich-message';
+  const parts = String(text || '').split(/```([a-zA-Z0-9_-]*)?\r?\n([\s\S]*?)```/g);
+  parts.forEach((part, index) => {
+    if (index % 3 === 0) {
+      appendMarkdownText(container, part);
+      return;
+    }
+    if (index % 3 === 1) return;
+    const language = parts[index - 1] || 'text';
+    container.appendChild(renderCodeBlock(part.replace(/\s+$/, ''), language));
+  });
+  return container;
+}
+
+function appendMarkdownText(container, text) {
+  const lines = String(text || '').split(/\r?\n/);
+  let paragraph = [];
+  let index = 0;
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    const p = document.createElement('p');
+    p.textContent = paragraph.join(' ').trim();
+    if (p.textContent) container.appendChild(p);
+    paragraph = [];
+  };
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (isMarkdownTableStart(lines, index)) {
+      flushParagraph();
+      const tableLines = [];
+      while (index < lines.length && /^\s*\|.*\|\s*$/.test(lines[index])) {
+        tableLines.push(lines[index]);
+        index += 1;
+      }
+      container.appendChild(renderMarkdownTable(tableLines));
+      continue;
+    }
+    if (!line.trim()) {
+      flushParagraph();
+    } else {
+      paragraph.push(line);
+    }
+    index += 1;
+  }
+  flushParagraph();
+}
+
+function isMarkdownTableStart(lines, index) {
+  return /^\s*\|.*\|\s*$/.test(lines[index] || '') && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1] || '');
+}
+
+function renderMarkdownTable(lines) {
+  const table = document.createElement('table');
+  table.className = 'message-table';
+  const rows = lines
+    .filter((line, index) => index !== 1)
+    .map((line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim()));
+  rows.forEach((cells, index) => {
+    const tr = document.createElement('tr');
+    cells.forEach((cell) => {
+      const node = document.createElement(index === 0 ? 'th' : 'td');
+      node.textContent = cell;
+      tr.appendChild(node);
+    });
+    table.appendChild(tr);
+  });
+  const wrap = document.createElement('div');
+  wrap.className = 'message-table-wrap';
+  wrap.appendChild(table);
+  return wrap;
+}
+
+function renderCodeBlock(code, language) {
+  const wrap = document.createElement('div');
+  wrap.className = 'code-block';
+  const bar = document.createElement('div');
+  bar.className = 'code-bar';
+  const label = document.createElement('span');
+  label.textContent = language || 'code';
+  const actions = document.createElement('span');
+  actions.className = 'code-actions';
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.textContent = 'Copy';
+  copy.addEventListener('click', async () => {
+    await navigator.clipboard?.writeText(code);
+    copy.textContent = 'Copied';
+    setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
+  });
+  const download = document.createElement('a');
+  const ext = codeExtension(language);
+  download.download = `rotex-code.${ext}`;
+  download.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' }));
+  download.textContent = 'Download';
+  actions.append(copy, download);
+  bar.append(label, actions);
+  const pre = document.createElement('pre');
+  const codeNode = document.createElement('code');
+  codeNode.textContent = code;
+  pre.appendChild(codeNode);
+  wrap.append(bar, pre);
+  return wrap;
+}
+
+function codeExtension(language) {
+  const map = { javascript: 'js', js: 'js', typescript: 'ts', ts: 'ts', html: 'html', css: 'css', json: 'json', python: 'py', py: 'py', bash: 'sh', shell: 'sh', text: 'txt' };
+  return map[String(language || '').toLowerCase()] || 'txt';
 }
 
 function openPcDialog() {
