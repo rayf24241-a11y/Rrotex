@@ -885,10 +885,16 @@ h1 {
 
 .connect-dialog {
   width: min(520px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
   padding: 0;
   color: var(--text);
   background: transparent;
   border: 0;
+  overflow: hidden;
+}
+
+.connect-dialog#teamupDialog {
+  width: min(620px, calc(100vw - 28px));
 }
 
 .connect-dialog::backdrop {
@@ -900,12 +906,17 @@ h1 {
   position: relative;
   display: grid;
   gap: 14px;
+  box-sizing: border-box;
+  width: 100%;
+  max-height: calc(100vh - 28px);
   padding: 24px;
   background: rgba(13, 17, 24, 0.98);
   border: 1px solid var(--line);
   border-radius: 20px;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
   animation: floatIn 180ms ease both;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .auth-back {
@@ -949,6 +960,7 @@ h1 {
   margin: 0;
   font-size: 40px;
   line-height: 0.95;
+  overflow-wrap: anywhere;
 }
 
 .connect-grid {
@@ -962,7 +974,6 @@ h1 {
 }
 
 .teamup-card {
-  width: min(620px, calc(100vw - 28px));
   gap: 18px;
   padding: 28px;
   background:
@@ -977,7 +988,7 @@ h1 {
 }
 
 .teamup-hero h2 {
-  font-size: clamp(34px, 7vw, 58px);
+  font-size: clamp(32px, 6vw, 48px);
 }
 
 .teamup-pickers {
