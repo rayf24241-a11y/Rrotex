@@ -94,6 +94,9 @@ const appShell = document.querySelector('#appShell');
 const messagesEl = document.querySelector('#messages');
 const composer = document.querySelector('#composer');
 const messageInput = document.querySelector('#messageInput');
+const attachmentTray = document.querySelector('#attachmentTray');
+const attachmentInput = document.querySelector('#attachmentInput');
+const attachButton = document.querySelector('#attachButton');
 const newChatButton = document.querySelector('#newChatButton');
 const teamupEntry = document.querySelector('#teamupEntry');
 const teamupCreditStatus = document.querySelector('#teamupCreditStatus');
@@ -209,6 +212,7 @@ let phoneConfirmation = null;
 let authReason = localStorage.getItem(pendingAuthReasonKey) || 'account';
 let emailCodeToken = '';
 let accountView = 'account';
+let pendingAttachments = [];
 const plusOverrideEmails = new Set(['rayf24241@gmail.com']);
 
 initFirebase();
@@ -988,6 +992,9 @@ function renderMessages() {
     meta.textContent = message.role === 'user' ? 'You' : message.model;
     item.appendChild(meta);
     item.appendChild(message.role === 'assistant' ? renderRichMessage(visibleText) : renderPlainMessage(visibleText));
+    if (Array.isArray(message.attachments) && message.attachments.length) {
+      item.appendChild(renderAttachmentList(message.attachments));
+    }
     if (message.action === 'upgrade') {
       const button = document.createElement('button');
       button.type = 'button';
@@ -1210,7 +1217,8 @@ function createTeamupRoom() {
 async function sendMessage(text) {
   const chat = activeChat();
   const clean = text.trim();
-  if (!clean || !chat) return;
+  const attachments = pendingAttachments.slice();
+  if ((!clean && !attachments.length) || !chat) return;
   if (chat.teamup) {
     await sendTeamupMessage(chat, clean);
     return;
@@ -1264,12 +1272,15 @@ async function sendMessage(text) {
   if (state.computerMode && !state.pro) {
     state.computerUsage.count += 1;
   }
-  chat.messages.push({ role: 'user', text: clean, model: 'You' });
+  const userText = clean || `Attached ${attachments.length} file${attachments.length === 1 ? '' : 's'}.`;
+  chat.messages.push({ role: 'user', text: userText, model: 'You', attachments: attachments.map(publicAttachment) });
+  pendingAttachments = [];
+  renderAttachments();
   if (chat.title === 'New ROTEX chat') {
-    chat.title = clean.length > 32 ? `${clean.slice(0, 32)}...` : clean;
+    chat.title = userText.length > 32 ? `${userText.slice(0, 32)}...` : userText;
   }
 
-  const localStatus = localConnectionAnswer(clean);
+  const localStatus = localConnectionAnswer(userText);
   if (localStatus) {
     chat.messages.push({ role: 'assistant', model: model.name, text: localStatus });
     persistState();
@@ -1296,6 +1307,7 @@ async function sendMessage(text) {
         computerConnections: state.computerConnections,
         pcBridge: state.pcBridge,
         personality: personalities[chat.personality || 'normal'],
+        attachments,
         messages: chat.messages.filter((message) => message.text !== 'Thinking...'),
       }),
     });
@@ -1653,6 +1665,75 @@ function renderDownloadList(files) {
     list.appendChild(link);
   });
   return list;
+}
+
+function renderAttachmentList(files) {
+  const list = document.createElement('div');
+  list.className = 'attachment-list';
+  files.forEach((file) => {
+    const chip = document.createElement('span');
+    chip.className = 'attachment-chip';
+    chip.textContent = `${file.kind === 'image' ? 'Image' : 'File'}: ${file.name}`;
+    list.appendChild(chip);
+  });
+  return list;
+}
+
+function publicAttachment(file) {
+  return {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    kind: file.kind,
+  };
+}
+
+async function handleAttachmentSelection(files) {
+  const selected = Array.from(files || []).slice(0, 5 - pendingAttachments.length);
+  if (!selected.length) return;
+  const loaded = await Promise.all(selected.map(readAttachment));
+  pendingAttachments = [...pendingAttachments, ...loaded.filter(Boolean)].slice(0, 5);
+  renderAttachments();
+}
+
+function renderAttachments() {
+  if (!attachmentTray) return;
+  attachmentTray.innerHTML = '';
+  attachmentTray.hidden = pendingAttachments.length === 0;
+  pendingAttachments.forEach((file, index) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'attachment-pill';
+    chip.textContent = `${file.kind === 'image' ? 'Image' : 'File'} ${file.name} x`;
+    chip.addEventListener('click', () => {
+      pendingAttachments.splice(index, 1);
+      renderAttachments();
+    });
+    attachmentTray.appendChild(chip);
+  });
+}
+
+function readAttachment(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    const kind = file.type.startsWith('image/') ? 'image' : 'file';
+    reader.onerror = () => resolve(null);
+    reader.onload = () => {
+      const raw = String(reader.result || '');
+      resolve({
+        name: safeFileName(file.name) || 'attachment',
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        kind,
+        content: kind === 'image' ? raw : raw.slice(0, 12000),
+      });
+    };
+    if (kind === 'image') {
+      reader.readAsDataURL(file);
+    } else {
+      reader.readAsText(file);
+    }
+  });
 }
 
 function normalizeAssistantText(text, modelName = 'ROTEX') {
@@ -2066,6 +2147,12 @@ composer.addEventListener('submit', (event) => {
   event.preventDefault();
   sendMessage(messageInput.value);
   messageInput.value = '';
+});
+
+attachButton?.addEventListener('click', () => attachmentInput?.click());
+attachmentInput?.addEventListener('change', async () => {
+  await handleAttachmentSelection(attachmentInput.files);
+  attachmentInput.value = '';
 });
 
 messageInput.addEventListener('keydown', (event) => {

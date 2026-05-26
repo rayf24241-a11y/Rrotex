@@ -63,12 +63,13 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const { authToken = '', model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {}, personality = '' } = request.body || {};
+  const { authToken = '', model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {}, personality = '', attachments = [] } = request.body || {};
   // Auth is optional — logged-in users get cloud sync, guests can still chat
   const authResult = await verifyFirebaseToken(authToken);
 
   const selected = MODELS[model] || MODELS['rod-1'];
   const modelGuide = buildModelGuide();
+  const cleanAttachments = normalizeAttachments(attachments);
   const connectionStatus = summarizeConnections(computerConnections, pcBridge);
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
@@ -77,12 +78,17 @@ module.exports = async function handler(request, response) {
       role: message.role,
       content: String(message.text || message.content || '').slice(0, 8000),
     }));
+  const lastUser = [...cleanMessages].reverse().find((message) => message.role === 'user');
+  if (lastUser && cleanAttachments.length) {
+    lastUser.content = `${lastUser.content}\n\n${attachmentPrompt(cleanAttachments, selected.provider === 'anthropic')}`.slice(0, 16000);
+  }
 
   cleanMessages.unshift({
     role: 'system',
     content: [
       'You are a ROTEX web assistant.',
-      'Chat naturally. Do not start with a giant capability list, identity speech, or "I am your assistant" intro unless the user asks what you can do. Keep normal answers short and useful.',
+      'Chat naturally. Never answer with a giant capability list, marketing pitch, or "I am your assistant" intro. If asked what you can do, answer in 1-3 casual sentences.',
+      'Do not use bold headings like "Main capabilities" or "Current setup" unless the user specifically asks for a formatted list.',
       `ROTEX model lineup: ${modelGuide}`,
       `Current selected model: ${selected.name}. If the user asks which model is best, compare these ROTEX model names only, not provider names.`,
       'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
@@ -90,8 +96,9 @@ module.exports = async function handler(request, response) {
       personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
       connectionStatus,
       'If the user asks whether GitHub, Google Drive, PC, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
-      'You CAN generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files — never just paste raw code when a file was asked for.',
-      'You cannot directly access, read, or modify files already on the user\'s device.',
+      'You can generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files.',
+      'You can read files and images the user attaches in chat when their content is provided. Do not claim you cannot see an attachment that is listed in the prompt.',
+      'You cannot directly access, read, or modify files already on the user\'s device unless they attach them or use approved computer-mode connections.',
       computerMode
         ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive, GitHub, or Connect PC'}. PC pairing status: ${pcBridge?.connected ? 'connected' : 'not connected'}. PC folder status: ${pcBridge?.folderReady ? `approved folder ${pcBridge.folderName || ''}` : 'no approved folder'}. You may mention that real PC file reads/writes require the connected PC page/helper to stay open and must ask for approval before reading or changing files.`
         : 'Computer mode is off. Do not ask for external service access unless the user explicitly asks about connecting apps.',
@@ -112,6 +119,7 @@ module.exports = async function handler(request, response) {
         apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
         model: selected.providerModel,
         messages: cleanMessages,
+        attachments: cleanAttachments,
         temperature: selected.temperature,
         maxTokens: selected.maxTokens,
       });
@@ -153,6 +161,28 @@ function buildModelGuide() {
   return Object.values(MODELS)
     .map((item) => `${item.name}: ${item.purpose}`)
     .join('; ');
+}
+
+function normalizeAttachments(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 5).map((item) => ({
+    name: String(item?.name || 'attachment').slice(0, 100),
+    type: String(item?.type || 'application/octet-stream').slice(0, 80),
+    kind: item?.kind === 'image' ? 'image' : 'file',
+    size: Number(item?.size) || 0,
+    content: String(item?.content || '').slice(0, item?.kind === 'image' ? 2500000 : 12000),
+  })).filter((item) => item.content);
+}
+
+function attachmentPrompt(attachments, canReadImages) {
+  const lines = attachments.map((item, index) => {
+    const base = `${index + 1}. ${item.name} (${item.type || item.kind}, ${item.size || 0} bytes)`;
+    if (item.kind === 'image') {
+      return `${base}: ${canReadImages ? 'image attached for visual reading.' : 'image attached, but this selected model can only see the file name/type.'}`;
+    }
+    return `${base}:\n${item.content.slice(0, 4000)}`;
+  });
+  return `User attached files:\n${lines.join('\n\n')}`;
 }
 
 function summarizeConnections(computerConnections, pcBridge) {
@@ -228,7 +258,7 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
   return data.choices?.[0]?.message?.content || 'No response text returned.';
 }
 
-async function callAnthropic({ apiKey, model, messages, temperature = 0.7, maxTokens = 900 }) {
+async function callAnthropic({ apiKey, model, messages, attachments = [], temperature = 0.7, maxTokens = 900 }) {
   if (!apiKey) {
     throw new Error('Missing Anthropic key');
   }
@@ -243,6 +273,22 @@ async function callAnthropic({ apiKey, model, messages, temperature = 0.7, maxTo
       role: message.role,
       content: message.content,
     }));
+  const imageParts = attachments
+    .filter((item) => item.kind === 'image' && item.content.startsWith('data:image/'))
+    .map((item) => {
+      const [meta, data] = item.content.split(',', 2);
+      const mediaType = (meta.match(/^data:(.*?);base64$/) || [])[1] || item.type || 'image/png';
+      return {
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType, data },
+      };
+    });
+  if (imageParts.length) {
+    const lastUser = [...chatMessages].reverse().find((message) => message.role === 'user');
+    if (lastUser) {
+      lastUser.content = [{ type: 'text', text: String(lastUser.content || '') }, ...imageParts];
+    }
+  }
 
   const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
