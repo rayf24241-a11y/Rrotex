@@ -71,12 +71,12 @@ const models = [
   {
     id: 'tex-2-5',
     name: 'Tex 2.5',
-    short: 'Pro code',
+    short: 'Plus code',
     api: 'ROTEX',
     cost: 0.035,
     computerCost: 0.12,
     proOnly: true,
-    description: 'Pro-only hardest code, Stripe, architecture, and deep debugging.',
+    description: 'Plus-only hardest code, Stripe, architecture, and deep debugging.',
   },
   {
     id: 'treesearch-q',
@@ -179,7 +179,6 @@ const makeTeamupRoomButton = document.querySelector('#makeTeamupRoomButton');
 const storageKey = 'rotex:web:v2';
 const pendingActivationKey = 'rotex:pending-activation';
 const pendingAuthReasonKey = 'rotex:pending-auth-reason';
-const testingPlanResetKey = 'rotex:testing-plan-reset-v1';
 const creditPlans = {
   normal: { daily: 0.3, weekly: 0.9, monthly: 1.5 },
   limited: { daily: 0.1, weekly: 0.3, monthly: 0.5 },
@@ -205,8 +204,7 @@ let phoneVerifier = null;
 let phoneConfirmation = null;
 let authReason = localStorage.getItem(pendingAuthReasonKey) || 'account';
 let emailCodeToken = '';
-const testingResetEmails = new Set(['rayf24241@gmail.com']);
-const testingPlanResetVersion = 'stripe-test-2026-05-25';
+const plusOverrideEmails = new Set(['rayf24241@gmail.com']);
 
 initFirebase();
 applyPendingActivation();
@@ -384,7 +382,7 @@ function applyComputerUsageReset() {
 function persistState() {
   applyCreditRefill();
   applyComputerUsageReset();
-  applyTestingPlanReset();
+  applyAccountOverrides();
   localStorage.setItem(storageKey, JSON.stringify(state));
   if (!currentUser || !db) return;
 
@@ -409,16 +407,16 @@ async function loadCloudState() {
   const snap = await getDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'));
   if (snap.exists()) {
     state = normalizeState(snap.data());
-    const planWasReset = applyTestingPlanReset();
+    const planWasChanged = applyAccountOverrides();
     localStorage.setItem(storageKey, JSON.stringify(state));
-    if (planWasReset) {
+    if (planWasChanged) {
       await setDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'), {
         ...state,
         updatedAt: serverTimestamp(),
       });
     }
   } else {
-    applyTestingPlanReset();
+    applyAccountOverrides();
     await setDoc(doc(db, 'users', currentUser.uid, 'chatState', 'main'), {
       ...state,
       updatedAt: serverTimestamp(),
@@ -427,16 +425,12 @@ async function loadCloudState() {
   setCloudStatus('Synced');
 }
 
-function applyTestingPlanReset() {
+function applyAccountOverrides() {
   const email = currentUser?.email?.toLowerCase?.() || '';
-  if (!testingResetEmails.has(email)) return false;
-  const marker = localStorage.getItem(testingPlanResetKey);
-  if (marker === testingPlanResetVersion) return false;
-  localStorage.setItem(testingPlanResetKey, testingPlanResetVersion);
-  if (!state.pro) return false;
-  state.pro = false;
-  state.creditUsage = normalizeCreditUsage(state.creditUsage, false, state.credits, state);
-  state.credits = remainingMonthlyCredits(false, state.creditUsage);
+  if (!plusOverrideEmails.has(email) || state.pro) return false;
+  state.pro = true;
+  state.creditUsage = normalizeCreditUsage(state.creditUsage, true, state.credits, state);
+  state.credits = remainingMonthlyCredits(true, state.creditUsage);
   return true;
 }
 
@@ -884,8 +878,8 @@ function renderModelMenu() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `model-option${item.id === state.activeModel ? ' active' : ''}${disabled ? ' disabled' : ''}`;
-    const status = proLocked ? 'Pro only' : disabled ? 'Not in computer mode' : `${formatMoney(price)} per message${state.computerMode ? ' ICM' : ''}`;
-    button.innerHTML = `<strong>${item.name}${item.proOnly ? '<em>Pro only</em>' : ''}</strong><span>${item.description}</span><span>${status}</span>`;
+    const status = proLocked ? 'Plus only' : disabled ? 'Not in computer mode' : `${formatMoney(price)} per message${state.computerMode ? ' ICM' : ''}`;
+    button.innerHTML = `<strong>${item.name}${item.proOnly ? '<em>Plus only</em>' : ''}</strong><span>${item.description}</span><span>${status}</span>`;
     button.addEventListener('click', () => {
       if (proLocked) {
         closeModelMenu();
@@ -982,7 +976,7 @@ function renderAccount() {
   renderModeShell();
   if (currentUser) {
     googleButtonText.textContent = state.profile?.nickname || state.profile?.name || currentUser.displayName || currentUser.email || 'Google account';
-    planStatus.textContent = state.pro ? 'Pro' : 'Normal';
+    planStatus.textContent = state.pro ? 'Plus' : 'Normal';
     planStatus.hidden = false;
     signOutButton.hidden = false;
     saveStatus.textContent = state.phoneVerified
@@ -1009,12 +1003,12 @@ function renderAccount() {
   const nickname = state.profile?.nickname || displayName;
   acctAvatar.textContent = currentUser ? nickname.trim().charAt(0).toUpperCase() || 'R' : '?';
   acctName.textContent = currentUser ? displayName : 'Not signed in';
-  acctEmail.textContent = currentUser?.email || 'Log in to save chats and Pro.';
-  acctPlanBadge.textContent = state.pro ? 'Pro' : 'Normal';
+  acctEmail.textContent = currentUser?.email || 'Log in to save chats and Plus.';
+  acctPlanBadge.textContent = state.pro ? 'Plus' : 'Normal';
   acctPlanBadge.classList.toggle('pro', state.pro);
   acctUpgradeBlock.hidden = false;
   checkoutButton.disabled = Boolean(state.pro);
-  checkoutButton.textContent = state.pro ? 'Already have plan' : 'Buy Pro - $15 / month';
+  checkoutButton.textContent = state.pro ? 'Already have Plus' : 'Buy Plus - $15 / month';
   if (acctProActive) acctProActive.hidden = true;
   accountSignOutBtn.hidden = !currentUser;
 }
@@ -1131,7 +1125,7 @@ function createTeamupRoom() {
     return;
   }
   if (state.teamupRooms.length >= 1) {
-    teamupStatus.textContent = 'Pro includes 1 mini private teamup room. Opening your room.';
+    teamupStatus.textContent = 'Plus includes 1 mini private teamup room. Opening your room.';
     const room = state.teamupRooms[0];
     const existing = state.chats.find((chat) => chat.teamup?.id === room.id);
     if (existing) {
@@ -1191,8 +1185,8 @@ async function sendMessage(text) {
   if (isModelLocked(model)) {
     chat.messages.push({
       role: 'assistant',
-      model: 'ROTEX Pro',
-      text: `${model.name} is Pro only. Upgrade?`,
+      model: 'ROTEX Plus',
+      text: `${model.name} is Plus only. Upgrade?`,
       action: 'upgrade',
     });
     persistState();
@@ -1202,7 +1196,7 @@ async function sendMessage(text) {
   if (state.computerMode && !state.pro && computerMessagesLeft() <= 0) {
     chat.messages.push({
       role: 'assistant',
-      model: 'ROTEX Pro',
+      model: 'ROTEX Plus',
       text: 'Free computer mode limit reached for today. Upgrade?',
       action: 'upgrade',
     });
@@ -1301,7 +1295,7 @@ function localConnectionAnswer(text) {
 
 async function sendTeamupMessage(chat, clean) {
   if (!hasProAccess()) {
-    chat.messages.push({ role: 'assistant', model: 'ROTEX Pro', text: 'Teamup rooms are Pro only. Upgrade?', action: 'upgrade' });
+    chat.messages.push({ role: 'assistant', model: 'ROTEX Plus', text: 'Teamup rooms are Plus only. Upgrade?', action: 'upgrade' });
     persistState();
     render();
     return;
@@ -1418,7 +1412,7 @@ async function handleCheckoutReturn() {
   const sessionId = params.get('session_id');
   if (params.get('checkout') !== 'success' || !sessionId || !currentUser) return;
 
-  setCloudStatus('Verifying Pro');
+  setCloudStatus('Verifying Plus');
   try {
     const response = await fetch('/api/verify-checkout-session', {
       method: 'POST',
@@ -1435,7 +1429,7 @@ async function handleCheckoutReturn() {
     state.creditUsage = normalizeCreditUsage({}, true, creditPlans.pro.monthly);
     state.credits = remainingMonthlyCredits(true, state.creditUsage);
     persistState();
-    setCloudStatus('Pro active');
+    setCloudStatus('Plus active');
     history.replaceState('', document.title, window.location.pathname);
     closeAccountPage();
     render();
@@ -1689,7 +1683,7 @@ teamupEntry.addEventListener('click', () => {
   }
   closeComputerMode();
   populateTeamupSelectors();
-  teamupStatus.textContent = `Pro teamup ready. ${remainingTeamupTokens().toLocaleString()} weekly tokens left.`;
+  teamupStatus.textContent = `Plus teamup ready. ${remainingTeamupTokens().toLocaleString()} weekly tokens left.`;
   teamupDialog.showModal();
 });
 

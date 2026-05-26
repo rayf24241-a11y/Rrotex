@@ -11,7 +11,7 @@ Current web features:
 - Single-screen chatbot layout
 - Vercel ROTEX backend at `/api/chat`
 - Normal user credits: `$0.300` daily, `$0.900` weekly, `$1.500` monthly
-- Pro user credits: `$2.500` daily, `$5.000` monthly
+- Plus user credits: `$2.500` daily, `$5.000` monthly
 
 Model costs:
 
@@ -33,7 +33,7 @@ Computer mode is available to everyone, but it has separate pricing:
 
 Computer mode asks the user to connect Google Drive, GitHub, Connect PC, or all of them before external-work actions. Direct PC file access requires a paired trusted PC helper; the website alone cannot read or edit local PC files.
 
-Free users can use computer mode a few times per day. Pro removes that heavier-use cap once payment/webhook activation is connected.
+Free users can use computer mode a few times per day. Plus removes that heavier-use cap once payment/webhook activation is connected.
 
 When a user hits a daily, weekly, or monthly credit limit, the app shows `your out of credits, upgrade?` with an Upgrade button.
 
@@ -96,7 +96,7 @@ STRIPE_SECRET_KEY
 STRIPE_PRICE_ID
 ```
 
-The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id, `$5` credits, and the Pro benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
+The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id, `$5` credits, and the Plus benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
 
 ## Local preview
 
@@ -116,7 +116,7 @@ Do not put Stripe secret keys in this website. The website should call a backend
 POST /api/create-checkout-session
 ```
 
-That backend uses the Stripe secret key to create a Checkout Session for the $15 monthly Pro plan, then returns the checkout URL to the website.
+That backend uses the Stripe secret key to create a Checkout Session for the $15 monthly Plus plan, then returns the checkout URL to the website.
 
 ## ROTEX backend plan
 
