@@ -2029,6 +2029,14 @@ async function startProviderConnect(provider) {
 }
 
 document.addEventListener('click', (event) => {
+  const accountMenuAction = event.target.closest?.('#accountMenuAccount, #accountMenuUpgrade');
+  if (accountMenuAction) {
+    event.preventDefault();
+    event.stopPropagation();
+    openAccountPage(accountMenuAction.id === 'accountMenuUpgrade');
+    return;
+  }
+
   const profileLink = event.target.closest?.('#googleButton');
   if (profileLink) {
     event.preventDefault();
@@ -2086,8 +2094,16 @@ googleButton.addEventListener('click', async (event) => {
   }
 });
 
-accountMenuAccount?.addEventListener('click', () => openAccountPage(false));
-accountMenuUpgrade?.addEventListener('click', () => openAccountPage(true));
+accountMenuAccount?.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  openAccountPage(false);
+});
+accountMenuUpgrade?.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  openAccountPage(true);
+});
 
 accountSignOutBtn?.addEventListener('click', async () => {
   closeAccountPage();
