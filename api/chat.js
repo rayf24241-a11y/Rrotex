@@ -70,6 +70,7 @@ module.exports = async function handler(request, response) {
   const selected = MODELS[model] || MODELS['rod-1'];
   const modelGuide = buildModelGuide();
   const cleanAttachments = normalizeAttachments(attachments);
+  const hasImages = cleanAttachments.some((item) => item.kind === 'image');
   const connectionStatus = summarizeConnections(computerConnections, pcBridge);
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
@@ -91,6 +92,7 @@ module.exports = async function handler(request, response) {
       'Do not use bold headings like "Main capabilities" or "Current setup" unless the user specifically asks for a formatted list.',
       `ROTEX model lineup: ${modelGuide}`,
       `Current selected model: ${selected.name}. If the user asks which model is best, compare these ROTEX model names only, not provider names.`,
+      hasImages && selected.provider !== 'anthropic' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
       'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
       'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
       personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
@@ -114,10 +116,10 @@ module.exports = async function handler(request, response) {
 
   try {
     let text = '';
-    if (selected.provider === 'anthropic') {
+    if (selected.provider === 'anthropic' || hasImages) {
       text = await callAnthropic({
         apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
-        model: selected.providerModel,
+        model: selected.provider === 'anthropic' ? selected.providerModel : supportedVisionModel(),
         messages: cleanMessages,
         attachments: cleanAttachments,
         temperature: selected.temperature,
@@ -161,6 +163,10 @@ function buildModelGuide() {
   return Object.values(MODELS)
     .map((item) => `${item.name}: ${item.purpose}`)
     .join('; ');
+}
+
+function supportedVisionModel() {
+  return process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-haiku-4-5-20251001';
 }
 
 function normalizeAttachments(value) {

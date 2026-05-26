@@ -500,6 +500,10 @@ function closeAccountMenu() {
   if (accountMenu) accountMenu.hidden = true;
 }
 
+function openAccountMenuAction(focusUpgrade = false) {
+  openAccountPage(focusUpgrade);
+}
+
 async function signInWithGoogleFromAuth() {
   if (!auth) {
     authStatus.textContent = 'Firebase is starting, try again in a second.';
@@ -2114,7 +2118,7 @@ document.addEventListener('click', (event) => {
   if (accountMenuAction) {
     event.preventDefault();
     event.stopPropagation();
-    openAccountPage(accountMenuAction.id === 'accountMenuUpgrade');
+    openAccountMenuAction(accountMenuAction.id === 'accountMenuUpgrade');
     return;
   }
 
@@ -2184,12 +2188,22 @@ googleButton.addEventListener('click', async (event) => {
 accountMenuAccount?.addEventListener('click', (event) => {
   event.preventDefault();
   event.stopPropagation();
-  openAccountPage(false);
+  openAccountMenuAction(false);
 });
 accountMenuUpgrade?.addEventListener('click', (event) => {
   event.preventDefault();
   event.stopPropagation();
-  openAccountPage(true);
+  openAccountMenuAction(true);
+});
+accountMenuAccount?.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  openAccountMenuAction(false);
+});
+accountMenuUpgrade?.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  openAccountMenuAction(true);
 });
 
 accountSignOutBtn?.addEventListener('click', async () => {
