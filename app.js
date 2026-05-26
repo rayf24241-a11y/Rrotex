@@ -1009,9 +1009,13 @@ function renderAccount() {
     googleButtonText.textContent = state.profile?.nickname || state.profile?.name || currentUser.displayName || currentUser.email || 'Google account';
     planStatus.textContent = state.pro ? 'Plus' : 'Normal';
     planStatus.hidden = false;
-    saveStatus.textContent = state.phoneVerified
-      ? `Phone verified. Chats sync with Firebase for ${currentUser.email || 'this account'}.`
-      : `Phone not verified. Free credits are ${formatMoney(activeFreePlan().daily)} daily.`;
+    if (state.pro) {
+      saveStatus.textContent = `Plus active. Chats sync with Firebase for ${currentUser.email || 'this account'}.`;
+    } else {
+      saveStatus.textContent = state.phoneVerified
+        ? `Phone verified. Chats sync with Firebase for ${currentUser.email || 'this account'}.`
+        : `Phone not verified. Free credits are ${formatMoney(activeFreePlan().daily)} daily.`;
+    }
   } else if (cloudReady) {
     googleButtonText.textContent = 'Log in or sign up';
     planStatus.textContent = 'Normal';
