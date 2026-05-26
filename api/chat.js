@@ -290,6 +290,16 @@ async function callAnthropic({ apiKey, model, messages, attachments = [], temper
     }
   }
 
+  const body = {
+    model,
+    system,
+    messages: chatMessages.length ? chatMessages : [{ role: 'user', content: 'Hello' }],
+    max_tokens: maxTokens,
+  };
+  if (!/opus-4-7|opus-4-6|sonnet-4-6/.test(model)) {
+    body.temperature = temperature;
+  }
+
   const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -297,13 +307,7 @@ async function callAnthropic({ apiKey, model, messages, attachments = [], temper
       'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model,
-      system,
-      messages: chatMessages.length ? chatMessages : [{ role: 'user', content: 'Hello' }],
-      temperature,
-      max_tokens: maxTokens,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!providerResponse.ok) {
