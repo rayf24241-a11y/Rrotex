@@ -1297,7 +1297,7 @@ async function sendMessage(text) {
     const data = await response.json();
     pending.text = data.text || 'ROTEX backend is online, but no response came back.';
   } catch (error) {
-    pending.text = 'ROTEX backend could not respond yet. Check Vercel env keys when real AI is connected.';
+    pending.text = `${model.name} had trouble reaching ROTEX. Try again in a moment, or switch models for this message.`;
   }
 
   persistState();

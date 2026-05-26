@@ -132,9 +132,14 @@ module.exports = async function handler(request, response) {
 
     response.status(200).json({ model: selected.name, text });
   } catch (error) {
+    console.error('ROTEX backend provider failed', {
+      model: selected.name,
+      provider: selected.provider,
+      message: error?.message || String(error),
+    });
     response.status(500).json({
       error: 'backend_unavailable',
-      text: `${selected.name} is not ready yet because a ROTEX backend key is missing or failed. Check the server environment keys in Vercel.`,
+      text: `${selected.name} could not answer right now. Try again in a moment, or switch to another ROTEX model for this message.`,
     });
   }
 };

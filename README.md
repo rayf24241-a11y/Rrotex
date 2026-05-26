@@ -63,6 +63,7 @@ Add these to Vercel Project Settings -> Environment Variables:
 ```text
 GROQ_API_KEY
 DEEPSEEK_API_KEY
+CLAUDE_API_KEY
 ```
 
 ## Computer mode connectors
