@@ -908,6 +908,20 @@ function setCloudStatus(text) {
 
 function renderModelMenu() {
   ensureComputerModel();
+  const chat = activeChat();
+  if (chat?.teamup) {
+    const botA = models.find((item) => item.id === chat.teamup.botA) || models[1];
+    const botB = models.find((item) => item.id === chat.teamup.botB) || models[2];
+    selectedModelName.textContent = 'Teamup';
+    selectedModelShort.textContent = `${botA.name} + ${botB.name}`;
+    modelButton.classList.add('teamup-locked');
+    modelButton.setAttribute('aria-disabled', 'true');
+    modelMenu.innerHTML = '';
+    closeModelMenu();
+    return;
+  }
+  modelButton.classList.remove('teamup-locked');
+  modelButton.removeAttribute('aria-disabled');
   const model = activeModel();
   selectedModelName.textContent = model.name;
   selectedModelShort.textContent = state.computerMode ? 'Computer mode' : model.short;
@@ -988,7 +1002,7 @@ function renderChats() {
 
 function renderMessages() {
   const chat = activeChat();
-  const model = activeModel();
+  const model = chat?.teamup ? teamupDisplayModel(chat) : activeModel();
   messagesEl.innerHTML = '';
 
   if (!chat || chat.messages.length === 0) {
@@ -1031,6 +1045,16 @@ function renderMessages() {
     messagesEl.appendChild(item);
   });
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function teamupDisplayModel(chat) {
+  const botA = models.find((item) => item.id === chat?.teamup?.botA) || models[1];
+  const botB = models.find((item) => item.id === chat?.teamup?.botB) || models[2];
+  return {
+    name: `${botA.name} + ${botB.name}`,
+    description: 'Your two selected ROTEX models work together and return one final answer.',
+    short: 'Teamup',
+  };
 }
 
 function renderAccount() {
@@ -1411,9 +1435,22 @@ async function sendTeamupMessage(chat, clean) {
     `Your partner ${botA.name} drafted this:\n${draft}\n\nMake ONE final answer for the user. The bots should feel like they worked together, but only output one response. If the user asked for a downloadable file, create exactly one file block.`
   );
   pending.model = 'Teamup';
-  pending.text = final;
+  pending.text = enforceRepeatedFileRequest(final, clean);
   persistState();
   render();
+}
+
+function enforceRepeatedFileRequest(answer, requestText) {
+  const match = String(requestText || '').match(/\b(?:says?|write|repeat|contains?)\s+["']?([^"',.?!\n]+?)["']?\s+(?:in\s+it\s+)?(?:x\s*)?(\d{1,4})\s+times?\b/i)
+    || String(requestText || '').match(/\b["']?([^"',.?!\n]+?)["']?\s+(?:x\s*)?(\d{1,4})\s+times?\b/i);
+  if (!match) return answer;
+  const phrase = match[1].trim();
+  const count = Math.min(1000, Math.max(1, Number(match[2]) || 0));
+  if (!phrase || !count) return answer;
+  return String(answer || '').replace(/```file:([^\n\r]+)\r?\n[\s\S]*?```/, (_block, rawName) => {
+    const name = safeFileName(rawName) || 'output.txt';
+    return `\`\`\`file:${name}\n${Array.from({ length: count }, () => phrase).join('\n')}\n\`\`\``;
+  });
 }
 
 async function getTeamupReply(chat, selfModel, partnerModel, clean, instruction) {
@@ -1929,6 +1966,10 @@ function escapeHtml(value) {
 }
 
 function toggleModelMenu() {
+  if (activeChat()?.teamup) {
+    closeModelMenu();
+    return;
+  }
   const open = !modelMenu.classList.contains('open');
   modelMenu.classList.toggle('open', open);
   modelMenu.setAttribute('aria-hidden', String(!open));

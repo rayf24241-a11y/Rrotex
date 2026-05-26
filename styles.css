@@ -838,6 +838,10 @@ h1 {
   font-weight: 850;
 }
 
+.model-select.teamup-locked {
+  cursor: default;
+}
+
 .model-menu {
   position: absolute;
   left: 0;
