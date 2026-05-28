@@ -144,8 +144,13 @@
           <div class="attachment-tray" id="attachmentTray" hidden></div>
           <input id="attachmentInput" type="file" multiple accept="image/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.html,.css,.py,.csv,.xml,.yml,.yaml,.zip,.pdf,.doc,.docx" hidden />
           <input id="folderInput" type="file" multiple webkitdirectory directory hidden />
-          <button class="attach-button" id="attachButton" type="button" aria-label="Attach files">+</button>
-          <button class="attach-button folder-button" id="folderButton" type="button" aria-label="Attach folder">Folder</button>
+          <div class="attach-wrap">
+            <button class="attach-button" id="attachButton" type="button" aria-label="Attach files or folders">+</button>
+            <div class="attach-menu" id="attachMenu" hidden>
+              <button id="attachFilesButton" type="button">Files</button>
+              <button id="attachFolderButton" type="button">Folder</button>
+            </div>
+          </div>
           <textarea id="messageInput" rows="1" placeholder="Message ROTEX..."></textarea>
           <button class="send-button" type="submit">Send</button>
         </form>

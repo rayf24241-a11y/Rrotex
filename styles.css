@@ -774,7 +774,7 @@ h1 {
 
 .composer {
   position: relative;
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 10px;
   padding: 14px max(18px, calc((100% - 900px) / 2)) 20px;
   border-top: 1px solid var(--line);
@@ -805,11 +805,44 @@ h1 {
   line-height: 1;
 }
 
-.folder-button {
-  width: auto;
-  padding: 0 12px;
-  font-size: 12px;
-  font-weight: 900;
+.attach-wrap {
+  position: relative;
+  display: flex;
+}
+
+.attach-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: grid;
+  min-width: 140px;
+  padding: 6px;
+  background: #252525;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.attach-menu[hidden] {
+  display: none;
+}
+
+.attach-menu button {
+  justify-content: flex-start;
+  min-height: 38px;
+  padding: 0 10px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.attach-menu button:hover {
+  background: #343434;
 }
 
 .attachment-pill,

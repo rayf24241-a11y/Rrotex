@@ -98,7 +98,9 @@ const attachmentTray = document.querySelector('#attachmentTray');
 const attachmentInput = document.querySelector('#attachmentInput');
 const folderInput = document.querySelector('#folderInput');
 const attachButton = document.querySelector('#attachButton');
-const folderButton = document.querySelector('#folderButton');
+const attachMenu = document.querySelector('#attachMenu');
+const attachFilesButton = document.querySelector('#attachFilesButton');
+const attachFolderButton = document.querySelector('#attachFolderButton');
 const newChatButton = document.querySelector('#newChatButton');
 const teamupEntry = document.querySelector('#teamupEntry');
 const teamupCreditStatus = document.querySelector('#teamupCreditStatus');
@@ -2124,6 +2126,18 @@ function closeModelMenu() {
   modelButton.setAttribute('aria-expanded', 'false');
 }
 
+function closeAttachMenu() {
+  if (attachMenu) {
+    attachMenu.hidden = true;
+  }
+}
+
+function toggleAttachMenu() {
+  if (attachMenu) {
+    attachMenu.hidden = !attachMenu.hidden;
+  }
+}
+
 function closeComputerMode() {
   state.computerMode = false;
   closeModelMenu();
@@ -2351,6 +2365,9 @@ document.addEventListener('click', (event) => {
     return;
   }
   closeAccountMenu();
+  if (!event.target.closest?.('#attachMenu') && !event.target.closest?.('#attachButton')) {
+    closeAttachMenu();
+  }
   if (!modelMenu.contains(event.target) && !modelButton.contains(event.target)) {
     closeModelMenu();
   }
@@ -2362,8 +2379,21 @@ composer.addEventListener('submit', (event) => {
   messageInput.value = '';
 });
 
-attachButton?.addEventListener('click', () => attachmentInput?.click());
-folderButton?.addEventListener('click', () => folderInput?.click());
+attachButton?.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  toggleAttachMenu();
+});
+attachFilesButton?.addEventListener('click', (event) => {
+  event.preventDefault();
+  closeAttachMenu();
+  attachmentInput?.click();
+});
+attachFolderButton?.addEventListener('click', (event) => {
+  event.preventDefault();
+  closeAttachMenu();
+  folderInput?.click();
+});
 attachmentInput?.addEventListener('change', async () => {
   await handleAttachmentSelection(attachmentInput.files);
   attachmentInput.value = '';
