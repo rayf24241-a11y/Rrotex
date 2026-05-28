@@ -124,14 +124,22 @@ module.exports = async function handler(request, response) {
   try {
     let text = '';
     if (selected.provider === 'anthropic' || hasImages) {
-      text = await callAnthropic({
+      const anthropicRequest = {
         apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
         model: selected.provider === 'anthropic' ? selected.providerModel : supportedVisionModel(),
         messages: cleanMessages,
         attachments: cleanAttachments,
         temperature: selected.temperature,
         maxTokens: selected.maxTokens,
-      });
+      };
+      try {
+        text = await callAnthropic(anthropicRequest);
+      } catch (imageError) {
+        if (!hasImages || !/process image|image/i.test(imageError?.message || '')) {
+          throw imageError;
+        }
+        text = await callAnthropic({ ...anthropicRequest, attachments: [] });
+      }
     } else if (selected.provider === 'deepseek') {
       text = await callOpenAiCompatible({
         apiKey: process.env.DEEPSEEK_API_KEY,
@@ -197,7 +205,7 @@ function attachmentPrompt(attachments, canReadImages) {
   const lines = attachments.map((item, index) => {
     const base = `${index + 1}. ${item.path || item.name} (${item.type || item.kind}, ${item.size || 0} bytes)`;
     if (item.kind === 'image') {
-      return `${base}: ${canReadImages ? 'image attached for visual reading.' : 'image attached, but this selected model can only see the file name/type.'}`;
+      return `${base}: ${canReadImages ? 'image attached for visual reading.' : 'image attached, and the app will include it as an asset.'} Suggested bundle path: images/${safeAssetName(item.name)}.`;
     }
     if (item.kind === 'zip') {
       return `${base}: zip archive contents:\n${item.zipText || 'No readable text files found in this zip.'}`;
@@ -208,6 +216,10 @@ function attachmentPrompt(attachments, canReadImages) {
     return `${base}:\n${item.content.slice(0, 4000)}`;
   });
   return `User attached files:\n${lines.join('\n\n')}`;
+}
+
+function safeAssetName(name) {
+  return String(name || 'image.png').replace(/[<>:"/\\|?*]/g, '-').slice(0, 80);
 }
 
 function readZipText(dataUrl) {
