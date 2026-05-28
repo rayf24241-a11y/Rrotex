@@ -8,7 +8,7 @@ module.exports = function handler(request, response) {
     return;
   }
 
-  const origin = request.headers.origin || 'https://www.rrotex.com';
+  const origin = process.env.PUBLIC_SITE_URL || 'https://www.rrotex.com';
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: `${origin}/api/connect/github-callback`,

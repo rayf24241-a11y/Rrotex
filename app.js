@@ -197,7 +197,7 @@ const creditPlans = {
 };
 const freeComputerMessagesPerDay = 3;
 const weeklyTeamupTokens = 10000;
-const connectableServices = ['Google Drive', 'GitHub', 'PC'];
+const connectableServices = ['Google Drive', 'GitHub'];
 const personalities = {
   normal: 'Normal: direct, useful, friendly, no big intro.',
   fast: 'Fast: short answers first, no fluff.',
@@ -2191,7 +2191,7 @@ connectOptions.forEach((button) => {
     const provider = button.dataset.provider;
     if (value === 'all') {
       state.computerConnections = [...connectableServices];
-      announceActivation('Google Drive, GitHub, and PC');
+      announceActivation('Google Drive and GitHub');
     } else if (value === 'PC') {
       activateService('PC');
       openPcDialog();
@@ -2216,7 +2216,7 @@ connectorCards.forEach((button) => {
     const provider = button.dataset.provider;
     if (value === 'all') {
       state.computerConnections = [...connectableServices];
-      announceActivation('Google Drive, GitHub, and PC');
+      announceActivation('Google Drive and GitHub');
     } else if (value === 'PC') {
       activateService('PC');
       persistState();
@@ -2331,15 +2331,23 @@ newComputerChatButton?.addEventListener('click', () => {
 
 async function startProviderConnect(provider) {
   try {
+    if (!provider) {
+      alert('That connection is not ready yet.');
+      return;
+    }
     const response = await fetch(`/api/connect/${provider}`, { cache: 'no-store' });
+    if (!response.ok) {
+      alert(`${provider} connect failed with status ${response.status}.`);
+      return;
+    }
     const data = await response.json();
     if (data.url) {
-      window.location.href = data.url;
+      window.location.assign(data.url);
       return;
     }
     alert(data.message || `${provider} is not configured yet.`);
-  } catch {
-    alert(`${provider} connect is not ready yet.`);
+  } catch (error) {
+    alert(`${provider} connect is not ready yet. ${error?.message || ''}`.trim());
   }
 }
 

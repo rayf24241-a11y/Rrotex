@@ -104,12 +104,12 @@ module.exports = async function handler(request, response) {
       'The conversation may include a compact summary of older messages. Treat it as memory and continue from the recent messages.',
       personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
       connectionStatus,
-      'If the user asks whether GitHub, Google Drive, PC, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
+      'If the user asks whether GitHub, Google Drive, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
       'You can generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files.',
       'You can read files and images the user attaches in chat when their content is provided. Do not claim you cannot see an attachment that is listed in the prompt.',
       'You cannot directly access, read, or modify files already on the user\'s device unless they attach them or use approved computer-mode connections.',
       computerMode
-        ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive, GitHub, or Connect PC'}. PC pairing status: ${pcBridge?.connected ? 'connected' : 'not connected'}. PC folder status: ${pcBridge?.folderReady ? `approved folder ${pcBridge.folderName || ''}` : 'no approved folder'}. You may mention that real PC file reads/writes require the connected PC page/helper to stay open and must ask for approval before reading or changing files.`
+        ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive or GitHub'}. Do not ask for PC pairing from the website computer-mode picker.`
         : 'Computer mode is off. Do not ask for external service access unless the user explicitly asks about connecting apps.',
     ].join(' '),
   });
@@ -247,20 +247,14 @@ function isReadablePath(name) {
 }
 
 function summarizeConnections(computerConnections, pcBridge) {
-  const services = ['Google Drive', 'GitHub', 'PC'];
+  const services = ['Google Drive', 'GitHub'];
   const connected = Array.isArray(computerConnections)
     ? [...new Set(computerConnections.filter((item) => services.includes(item)))]
     : [];
   const missing = services.filter((service) => !connected.includes(service));
-  const pcFolder = pcBridge?.folderReady
-    ? `yes${pcBridge.folderName ? ` (${pcBridge.folderName})` : ''}`
-    : 'no';
-
   return [
     `ROTEX connection status: connected services: ${connected.length ? connected.join(', ') : 'none'}.`,
     `Not connected: ${missing.length ? missing.join(', ') : 'none'}.`,
-    `PC paired: ${pcBridge?.connected ? 'yes' : 'no'}.`,
-    `PC folder approved: ${pcFolder}.`,
   ].join(' ');
 }
 
