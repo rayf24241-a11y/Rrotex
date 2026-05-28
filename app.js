@@ -1025,8 +1025,9 @@ function renderMessages() {
     const item = document.createElement('div');
     item.className = `message ${message.role}`;
     const downloads = message.role === 'assistant' ? extractDownloadFiles(message.text) : [];
+    const bundledDownloads = downloads.length ? mergeRecentUploadedAssets(chat, message, downloads) : downloads;
     const safeText = normalizeAssistantText(message.text, message.model);
-    const visibleText = downloads.length ? stripDownloadBlocks(safeText) : safeText;
+    const visibleText = bundledDownloads.length ? stripDownloadBlocks(safeText) : safeText;
     const meta = document.createElement('span');
     meta.className = 'message-meta';
     meta.textContent = message.role === 'user' ? 'You' : message.model;
@@ -1043,8 +1044,8 @@ function renderMessages() {
       button.addEventListener('click', startUpgrade);
       item.appendChild(button);
     }
-    if (downloads.length) {
-      item.appendChild(renderDownloadList(downloads));
+    if (bundledDownloads.length) {
+      item.appendChild(renderDownloadList(bundledDownloads));
     }
     messagesEl.appendChild(item);
   });
@@ -1323,7 +1324,7 @@ async function sendMessage(text) {
     state.computerUsage.count += 1;
   }
   const userText = clean || `Attached ${attachments.length} file${attachments.length === 1 ? '' : 's'}.`;
-  chat.messages.push({ role: 'user', text: userText, model: 'You', attachments: attachments.map(publicAttachment) });
+  chat.messages.push({ role: 'user', text: userText, model: 'You', attachments: attachments.map(publicAttachment), assetAttachments: attachments.map(bundleAttachment).filter(Boolean) });
   pendingAttachments = [];
   renderAttachments();
   if (chat.title === 'New ROTEX chat') {
@@ -1843,6 +1844,26 @@ function renderAttachmentList(files) {
   return list;
 }
 
+function mergeRecentUploadedAssets(chat, assistantMessage, downloads) {
+  const index = chat.messages.indexOf(assistantMessage);
+  const priorMessages = index >= 0 ? chat.messages.slice(Math.max(0, index - 4), index).reverse() : [];
+  const userWithAssets = priorMessages.find((message) => message.role === 'user' && Array.isArray(message.assetAttachments) && message.assetAttachments.length);
+  if (!userWithAssets) return downloads;
+  const assetFiles = userWithAssets.assetAttachments
+    .map((file) => ({ ...file, name: assetBundlePath(file) }))
+    .filter((file) => file.name && !downloads.some((download) => download.name === file.name));
+  return assetFiles.length ? [...downloads, ...assetFiles] : downloads;
+}
+
+function assetBundlePath(file) {
+  const original = safeDownloadPath(file.path || file.name);
+  if (!original) return '';
+  if (original.includes('/')) return original;
+  if (file.kind === 'image' || /\.(png|jpe?g|gif|webp|svg)$/i.test(original)) return `images/${original}`;
+  if (file.kind === 'zip') return `assets/${original}`;
+  return `assets/${original}`;
+}
+
 function publicAttachment(file) {
   return {
     name: file.name,
@@ -1851,6 +1872,25 @@ function publicAttachment(file) {
     size: file.size,
     kind: file.kind,
   };
+}
+
+function bundleAttachment(file) {
+  if (!file?.content) return null;
+  const base64 = file.kind === 'image' || file.kind === 'zip' || String(file.content).startsWith('data:');
+  return {
+    name: file.name,
+    path: file.path,
+    type: file.type,
+    size: file.size,
+    kind: file.kind,
+    base64,
+    content: base64 ? dataUrlPayload(file.content) : file.content,
+  };
+}
+
+function dataUrlPayload(value) {
+  const text = String(value || '');
+  return text.includes(',') ? text.split(',', 2)[1] : text;
 }
 
 async function handleAttachmentSelection(files) {

@@ -100,6 +100,7 @@ module.exports = async function handler(request, response) {
       'You can create multiple downloadable files and folders. For a folder, use file blocks with paths like ```file:project/src/app.js. For binary/image files, use ```file:name.ext;base64 and put only base64 content inside. If the user asks for a zip, create multiple file blocks and the app can zip them together.',
       'If the user asks for a website zip or a bunch of website files, make a sensible starter website immediately unless critical details are missing. Include index.html, styles.css, script.js, README.md, and an images/ folder with SVG images such as images/logo.svg or images/hero.svg when images are requested.',
       'You can make images as SVG files directly. Use paths like ```file:images/hero.svg and write valid SVG markup inside.',
+      'If the user uploaded an image or asset and asks for a website/folder/zip, reference that uploaded file in the generated code using its path or an images/assets path. The app will include uploaded assets in the downloadable bundle.',
       'The conversation may include a compact summary of older messages. Treat it as memory and continue from the recent messages.',
       personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
       connectionStatus,
