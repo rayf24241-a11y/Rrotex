@@ -31,7 +31,7 @@ Computer mode is available to everyone, but it has separate pricing:
 | Tex 0 (ICM) | `$0.040/message` |
 | Tex 1.5 (ICM) | `$0.070/message` |
 
-Computer mode asks the user to connect Google Drive, GitHub, Connect PC, or all of them before external-work actions. Direct PC file access requires a paired trusted PC helper; the website alone cannot read or edit local PC files.
+Computer mode asks the user to connect Google Drive or GitHub before external-work actions. Direct PC file access requires the separate PC helper app; the website computer-mode picker does not offer PC pairing.
 
 Free users can use computer mode a few times per day. Plus removes that heavier-use cap once payment/webhook activation is connected.
 
@@ -83,8 +83,6 @@ Callback URLs:
 https://www.rrotex.com/api/connect/github-callback
 https://www.rrotex.com/api/connect/google-drive-callback
 ```
-
-Connect PC uses the in-app 3 digit pairing UI. Real phone-to-PC file access still needs a desktop helper app/server to run on the PC and approve file operations.
 
 The PC helper source lives in `pc_app/rotex_pc_app.py`. The downloadable Windows build is served from `downloads/ROTEX-PC-App.exe`.
 

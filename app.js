@@ -91,6 +91,10 @@ const models = [
 
 const chatList = document.querySelector('#chatList');
 const appShell = document.querySelector('#appShell');
+const sidebar = document.querySelector('#sidebar');
+const mobileMenuButton = document.querySelector('#mobileMenuButton');
+const mobileSidebarBackdrop = document.querySelector('#mobileSidebarBackdrop');
+const mobileNewChatButton = document.querySelector('#mobileNewChatButton');
 const messagesEl = document.querySelector('#messages');
 const composer = document.querySelector('#composer');
 const messageInput = document.querySelector('#messageInput');
@@ -368,6 +372,30 @@ function detectDeviceRole() {
   const narrowScreen = window.matchMedia?.('(max-width: 760px)').matches;
   const mobileUserAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   return coarsePointer && (narrowScreen || mobileUserAgent) ? 'phone' : 'pc';
+}
+
+function isMobileLayout() {
+  return window.matchMedia?.('(max-width: 920px)').matches || deviceRole === 'phone';
+}
+
+function setMobileLayout() {
+  document.body.classList.toggle('mobile-layout', isMobileLayout());
+  if (!isMobileLayout()) {
+    closeMobileSidebar();
+  }
+}
+
+function openMobileSidebar() {
+  if (!isMobileLayout()) return;
+  document.body.classList.add('mobile-sidebar-open');
+  mobileMenuButton?.setAttribute('aria-expanded', 'true');
+  if (mobileSidebarBackdrop) mobileSidebarBackdrop.hidden = false;
+}
+
+function closeMobileSidebar() {
+  document.body.classList.remove('mobile-sidebar-open');
+  mobileMenuButton?.setAttribute('aria-expanded', 'false');
+  if (mobileSidebarBackdrop) mobileSidebarBackdrop.hidden = true;
 }
 
 function normalizeComputerUsage(value) {
@@ -1200,12 +1228,9 @@ function renderModeShell() {
   computerEntrySub.textContent = state.computerMode ? 'Open workspace' : 'Connect apps';
   connectorCards.forEach((card) => {
     const value = card.dataset.connect;
-    const active = value === 'all'
-      ? connectableServices.every((item) => state.computerConnections.includes(item))
-      : state.computerConnections.includes(value);
+    const active = state.computerConnections.includes(value);
     card.classList.toggle('active', active);
   });
-  renderPcBridge();
 }
 
 function createChat(personality = 'normal') {
@@ -1681,9 +1706,7 @@ function monthKey() {
 function renderConnectOptions() {
   connectOptions.forEach((button) => {
     const value = button.dataset.connect;
-    const active = value === 'all'
-      ? connectableServices.every((item) => state.computerConnections.includes(item))
-      : state.computerConnections.includes(value);
+    const active = state.computerConnections.includes(value);
     button.classList.toggle('active', active);
   });
 }
@@ -2082,6 +2105,7 @@ function codeExtension(language) {
 }
 
 function openPcDialog() {
+  if (!pcDialog) return;
   renderPcBridge();
   if (!pcDialog.open) {
     pcDialog.showModal();
@@ -2144,14 +2168,36 @@ function closeComputerMode() {
   if (connectDialog.open) {
     connectDialog.close();
   }
-  if (pcDialog.open) {
+  if (pcDialog?.open) {
     pcDialog.close();
   }
 }
 
 newChatButton.addEventListener('click', () => {
   closeComputerMode();
+  closeMobileSidebar();
   personalityDialog.showModal();
+});
+
+mobileNewChatButton?.addEventListener('click', () => {
+  closeComputerMode();
+  closeMobileSidebar();
+  personalityDialog.showModal();
+});
+
+mobileMenuButton?.addEventListener('click', () => {
+  if (document.body.classList.contains('mobile-sidebar-open')) {
+    closeMobileSidebar();
+  } else {
+    openMobileSidebar();
+  }
+});
+
+mobileSidebarBackdrop?.addEventListener('click', closeMobileSidebar);
+sidebar?.addEventListener('click', (event) => {
+  if (event.target.closest?.('.chat-item, .chat-row, .brand, .computer-entry, .teamup-entry')) {
+    closeMobileSidebar();
+  }
 });
 
 personalityOptions.forEach((button) => {
@@ -2187,23 +2233,7 @@ computerEntry.addEventListener('click', () => {
 
 connectOptions.forEach((button) => {
   button.addEventListener('click', async () => {
-    const value = button.dataset.connect;
     const provider = button.dataset.provider;
-    if (value === 'all') {
-      state.computerConnections = [...connectableServices];
-      announceActivation('Google Drive and GitHub');
-    } else if (value === 'PC') {
-      activateService('PC');
-      openPcDialog();
-    } else if (state.computerConnections.includes(value)) {
-      setConnection(value, false);
-    } else if (provider) {
-      setConnection(value, true);
-    } else {
-      activateService(value);
-    }
-    persistState();
-    render();
     if (provider) {
       await startProviderConnect(provider);
     }
@@ -2212,31 +2242,12 @@ connectOptions.forEach((button) => {
 
 connectorCards.forEach((button) => {
   button.addEventListener('click', async () => {
-    const value = button.dataset.connect;
     const provider = button.dataset.provider;
-    if (value === 'all') {
-      state.computerConnections = [...connectableServices];
-      announceActivation('Google Drive and GitHub');
-    } else if (value === 'PC') {
-      activateService('PC');
-      persistState();
-      render();
-      openPcDialog();
-      return;
-    } else {
-      setConnection(value, true);
-    }
-    persistState();
-    render();
-    if (provider === 'all') {
-      connectDialog.showModal();
-      return;
-    }
     await startProviderConnect(provider);
   });
 });
 
-makePcCodeButton.addEventListener('click', () => {
+makePcCodeButton?.addEventListener('click', () => {
   if (deviceRole !== 'phone') {
     pcPairStatus.textContent = 'Make the code from your phone. PC-to-PC pairing is blocked.';
     return;
@@ -2256,7 +2267,7 @@ makePcCodeButton.addEventListener('click', () => {
   openPcDialog();
 });
 
-pairPcButton.addEventListener('click', () => {
+pairPcButton?.addEventListener('click', () => {
   if (deviceRole !== 'pc') {
     pcPairStatus.textContent = 'Enter the code from your PC. Phone-to-phone pairing is blocked.';
     return;
@@ -2280,7 +2291,7 @@ pairPcButton.addEventListener('click', () => {
   openPcDialog();
 });
 
-choosePcFolderButton.addEventListener('click', async () => {
+choosePcFolderButton?.addEventListener('click', async () => {
   if (deviceRole !== 'pc') {
     pcPairStatus.textContent = 'Folders can only be approved on the connected PC.';
     return;
@@ -2307,7 +2318,7 @@ choosePcFolderButton.addEventListener('click', async () => {
   }
 });
 
-disconnectPcButton.addEventListener('click', () => {
+disconnectPcButton?.addEventListener('click', () => {
   state.pcBridge = normalizePcBridge({});
   setConnection('PC', false);
   pcCodeInput.value = '';
@@ -2345,7 +2356,8 @@ async function startProviderConnect(provider) {
       window.location.assign(data.url);
       return;
     }
-    alert(data.message || `${provider} is not configured yet.`);
+    const details = data.redirect_uri ? ` Redirect URI: ${data.redirect_uri}` : '';
+    alert(`${data.message || `${provider} is not configured yet.`}${details}`);
   } catch (error) {
     alert(`${provider} connect is not ready yet. ${error?.message || ''}`.trim());
   }
@@ -2511,6 +2523,9 @@ window.addEventListener('hashchange', () => {
     openAuthPage('account');
   }
 });
+
+setMobileLayout();
+window.addEventListener('resize', setMobileLayout);
 
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 document.addEventListener('keydown', (event) => {

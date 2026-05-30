@@ -45,7 +45,7 @@
       <p>ROTEX is an AI chat, coding, and research workspace with downloadable files, image and zip reading, Plus models, teamup rooms, and phone-to-PC computer mode through a Windows backend.</p>
     </section>
     <main class="app-shell" id="appShell">
-      <aside class="sidebar" aria-label="Saved chats">
+      <aside class="sidebar" id="sidebar" aria-label="Saved chats">
         <a class="brand" href="#" aria-label="ROTEX home">
           <span class="brand-mark">R</span>
           <span>ROTEX</span>
@@ -79,8 +79,17 @@
           <p id="saveStatus">Chats save on this device until Firebase is configured.</p>
         </div>
       </aside>
+      <button class="mobile-sidebar-backdrop" id="mobileSidebarBackdrop" type="button" aria-label="Close navigation" hidden></button>
 
       <section class="chat-panel" id="chatPanel">
+        <div class="mobile-topbar">
+          <button class="mobile-menu-button" id="mobileMenuButton" type="button" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+          <a class="mobile-brand" href="#" aria-label="ROTEX home">
+            <span class="brand-mark">R</span>
+            <span>ROTEX</span>
+          </a>
+          <button class="mobile-new-chat" id="mobileNewChatButton" type="button" aria-label="New chat">+</button>
+        </div>
         <header class="topbar">
           <div>
             <p class="eyebrow" id="modeEyebrow">ROTEX web</p>
@@ -308,24 +317,6 @@
       </form>
     </dialog>
 
-    <dialog class="connect-dialog" id="pcDialog">
-      <form method="dialog" class="connect-card">
-        <button class="dialog-x" type="submit" value="cancel" aria-label="Close">X</button>
-        <p class="eyebrow">Connect PC</p>
-        <h2>Pair with code</h2>
-        <p class="upgrade-copy" id="pcPairStatus">Make a 3 digit code on your phone, then type it on your PC from Settings > Share.</p>
-        <div class="pc-code" id="pcPairCode">---</div>
-        <input class="pc-input" id="pcCodeInput" inputmode="numeric" maxlength="3" placeholder="000" aria-label="3 digit PC code" />
-        <div class="pc-folder" id="pcFolderStatus">No PC folder approved yet.</div>
-        <div class="dialog-actions">
-          <button id="makePcCodeButton" type="button" class="secondary-action">Make code</button>
-          <button id="pairPcButton" type="button" class="checkout-action">Connect</button>
-          <button id="choosePcFolderButton" type="button" class="secondary-action">Choose folder</button>
-          <button id="disconnectPcButton" type="button" class="secondary-action">Disable</button>
-          <button value="cancel" type="submit" class="secondary-action">Close</button>
-        </div>
-      </form>
-    </dialog>
 
   <script type="module" src="./app.js?v=20260525-20"></script>
   </body>
