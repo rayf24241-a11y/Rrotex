@@ -30,7 +30,7 @@ const models = [
     api: 'ROTEX',
     cost: 0.001,
     computerCost: null,
-    description: 'Everyday tasks, quick answers, normal chat, and simple work.',
+    description: 'Quick answers, everyday tasks, and simple work.',
   },
   {
     id: 'rod-thinking',
@@ -39,7 +39,7 @@ const models = [
     api: 'ROTEX',
     cost: 0.004,
     computerCost: 0.01,
-    description: 'Harder tasks that need more reasoning, planning, and careful answers.',
+    description: 'Careful reasoning, planning, and harder questions.',
   },
   {
     id: 'rod-brain',
@@ -48,7 +48,7 @@ const models = [
     api: 'ROTEX',
     cost: 0.004,
     computerCost: 0.012,
-    description: 'Smarter everyday help for Stripe, planning, and careful answers.',
+    description: 'Smarter everyday help for decisions and detailed answers.',
   },
   {
     id: 'tex-0',
@@ -57,7 +57,7 @@ const models = [
     api: 'ROTEX',
     cost: 0.007,
     computerCost: 0.04,
-    description: 'Code help, debugging, implementation, and file-aware project work.',
+    description: 'Coding help, debugging, and practical implementation.',
   },
   {
     id: 'tex-1-5',
@@ -66,7 +66,7 @@ const models = [
     api: 'ROTEX',
     cost: 0.015,
     computerCost: 0.07,
-    description: 'Complex code, larger builds, deeper architecture, and tougher fixes.',
+    description: 'Larger builds, deeper architecture, and tougher fixes.',
   },
   {
     id: 'tex-2-5',
@@ -76,7 +76,7 @@ const models = [
     cost: 0.035,
     computerCost: 0.12,
     proOnly: true,
-    description: 'Plus-only hardest code, Stripe, architecture, and deep debugging.',
+    description: 'The hardest coding, architecture, and deep debugging work.',
   },
   {
     id: 'treesearch-q',
@@ -85,7 +85,7 @@ const models = [
     api: 'ROTEX',
     cost: 0.002,
     computerCost: null,
-    description: 'Research mode for searching, comparing, and explaining. It cannot create files.',
+    description: 'Research, comparisons, and clear explanations. No file creation.',
   },
 ];
 
@@ -502,7 +502,8 @@ function openAccountPage(focusUpgrade = false) {
   accountPage.hidden = false;
   window.location.hash = focusUpgrade ? 'pro' : 'account';
   renderAccount();
-  if (focusUpgrade) {
+  window.scrollTo({ top: 0, left: 0 });
+  if (focusUpgrade && !isMobileLayout()) {
     acctUpgradeBlock?.scrollIntoView({ block: 'center' });
   }
 }
@@ -510,6 +511,7 @@ function openAccountPage(focusUpgrade = false) {
 function closeAccountPage() {
   accountPage.hidden = true;
   appShell.hidden = false;
+  window.scrollTo({ top: 0, left: 0 });
   if (window.location.hash === '#account' || window.location.hash === '#pro') {
     history.pushState('', document.title, window.location.pathname + window.location.search);
   }
@@ -965,11 +967,10 @@ function renderModelGroup(label, groupModels) {
   groupModels.forEach((item) => {
     const proLocked = isModelLocked(item);
     const disabled = proLocked || (state.computerMode && item.computerCost === null);
-    const price = state.computerMode ? item.computerCost : item.cost;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `model-option${item.id === state.activeModel ? ' active' : ''}${disabled ? ' disabled' : ''}`;
-    const status = proLocked ? 'Plus only' : disabled ? 'Not in computer mode' : `${formatMoney(price)} per message${state.computerMode ? ' ICM' : ''}`;
+    const status = proLocked ? 'Plus only' : disabled ? 'Not in computer mode' : `Best for: ${item.short.toLowerCase()}`;
     button.innerHTML = `<strong>${item.name}${item.proOnly ? '<em>Plus only</em>' : ''}</strong><span>${item.description}</span><span>${status}</span>`;
     button.addEventListener('click', () => {
       if (proLocked) {
@@ -1028,14 +1029,46 @@ function renderMessages() {
   messagesEl.innerHTML = '';
 
   if (!chat || chat.messages.length === 0) {
-    messagesEl.innerHTML = `
-      <div class="empty-state">
-        <p class="eyebrow">${chat?.teamup ? 'Teamup room' : 'Ready'}</p>
-        <h2>${model.name}</h2>
-        <p>${chat?.teamup ? 'Two ROTEX bots will answer together in this mini room.' : model.description}</p>
-        <p>${model.name} is built for ${model.short.toLowerCase()}${state.computerMode ? ' in computer mode' : ''}. Costs ${formatMoney(activeCost())} per message. Free limits are ${formatMoney(activeFreePlan().daily)} daily, ${formatMoney(activeFreePlan().weekly)} weekly, and ${formatMoney(activeFreePlan().monthly)} monthly.</p>
-      </div>
-    `;
+    messagesEl.innerHTML = chat?.teamup
+      ? `
+        <div class="empty-state teamup-empty-state">
+          <p class="eyebrow">Private Teamup room</p>
+          <h2>Two models. One stronger answer.</h2>
+          <p class="empty-lead">${model.name} will work together and return one useful response.</p>
+        </div>
+      `
+      : `
+        <div class="empty-state">
+          <p class="eyebrow">${state.computerMode ? 'ROTEX computer mode' : 'ROTEX AI workspace'}</p>
+          <h2>${state.computerMode ? 'Bring ROTEX into your work.' : 'Chat, build, and research in one place.'}</h2>
+          <p class="empty-lead">${state.computerMode
+            ? 'Connect Google Drive or GitHub, then ask ROTEX to help with your project.'
+            : 'Choose a ROTEX model, attach your work, and turn ideas into useful answers or downloadable files.'}</p>
+          <div class="empty-proof" aria-label="ROTEX features">
+            <span>7 focused models</span>
+            <span>Files, folders, and images</span>
+            <span>Saved chats</span>
+          </div>
+          <div class="starter-grid" aria-label="Try ROTEX">
+            <button class="starter-prompt" type="button" data-starter-prompt="Help me turn an idea into a clear plan.">
+              <strong>Plan an idea</strong>
+              <span>Get a useful next-step plan</span>
+            </button>
+            <button class="starter-prompt" type="button" data-starter-prompt="Help me build a clean website for my idea.">
+              <strong>Build something</strong>
+              <span>Start a project or debug code</span>
+            </button>
+            <button class="starter-prompt" type="button" data-starter-prompt="Compare my options and recommend the best one in a table.">
+              <strong>Research options</strong>
+              <span>Compare choices clearly</span>
+            </button>
+          </div>
+          <div class="empty-footer">
+            <span><strong>${model.name}</strong> is selected for ${model.short.toLowerCase()}.</span>
+            <button type="button" data-open-plus>Explore Plus</button>
+          </div>
+        </div>
+      `;
     return;
   }
 
@@ -1210,8 +1243,8 @@ function renderModeShell() {
   modeEyebrow.textContent = state.computerMode ? 'ROTEX computer' : 'ROTEX web';
   modeTitle.textContent = state.computerMode ? 'Computer mode' : 'Chat with ROTEX';
   modeSubtitle.textContent = state.computerMode
-    ? 'Workspace connections and approvals live here.'
-    : 'Fast chat, code, and research with ROTEX.';
+    ? 'Connect Google Drive or GitHub, then bring ROTEX into your work.'
+    : 'Ask questions, attach your work, and build with a focused ROTEX model.';
   computerEntrySub.textContent = state.computerMode ? 'Open workspace' : 'Connect apps';
   connectorCards.forEach((card) => {
     const value = card.dataset.connect;
@@ -1325,7 +1358,7 @@ async function sendMessage(text) {
     chat.messages.push({
       role: 'assistant',
       model: 'ROTEX credits',
-      text: 'your out of credits, upgrade?',
+      text: "You're out of credits. Upgrade?",
       action: 'upgrade',
     });
     persistState();
@@ -2219,6 +2252,16 @@ async function startProviderConnect(provider) {
 }
 
 document.addEventListener('click', (event) => {
+  const starterPrompt = event.target.closest?.('.starter-prompt');
+  if (starterPrompt) {
+    messageInput.value = starterPrompt.dataset.starterPrompt || '';
+    messageInput.focus();
+    return;
+  }
+  if (event.target.closest?.('[data-open-plus]')) {
+    openAccountPage(true);
+    return;
+  }
   const accountMenuAction = event.target.closest?.('#accountMenuAccount, #accountMenuUpgrade');
   if (accountMenuAction) {
     handleAccountMenuAction(event, accountMenuAction.id === 'accountMenuUpgrade');
