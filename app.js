@@ -113,7 +113,6 @@ const googleButtonText = document.querySelector('#googleButtonText');
 const accountMenu = document.querySelector('#accountMenu');
 const accountMenuAccount = document.querySelector('#accountMenuAccount');
 const accountMenuUpgrade = document.querySelector('#accountMenuUpgrade');
-const pcShareButton = document.querySelector('#pcShareButton');
 const planStatus = document.querySelector('#planStatus');
 const saveStatus = document.querySelector('#saveStatus');
 const syncStatus = document.querySelector('#syncStatus');
@@ -128,10 +127,8 @@ const acctEmail = document.querySelector('#acctEmail');
 const acctPlanBadge = document.querySelector('#acctPlanBadge');
 const acctUpgradeBlock = document.querySelector('#acctUpgradeBlock');
 const acctAccountBlock = document.querySelector('#acctAccountBlock');
-const acctProActive = document.querySelector('#acctProActive');
 const accountSignOutBtn = document.querySelector('#accountSignOutBtn');
 const authPage = document.querySelector('#authPage');
-const closeAuthPageButton = document.querySelector('#closeAuthPageButton');
 const authBackButton = document.querySelector('#authBackButton');
 const authTitle = document.querySelector('#authTitle');
 const authStatus = document.querySelector('#authStatus');
@@ -164,15 +161,6 @@ const selectedModelShort = document.querySelector('#selectedModelShort');
 const checkoutButton = document.querySelector('#checkoutButton');
 const connectDialog = document.querySelector('#connectDialog');
 const connectOptions = document.querySelectorAll('.connect-option');
-const pcDialog = document.querySelector('#pcDialog');
-const pcPairStatus = document.querySelector('#pcPairStatus');
-const pcPairCode = document.querySelector('#pcPairCode');
-const pcCodeInput = document.querySelector('#pcCodeInput');
-const pcFolderStatus = document.querySelector('#pcFolderStatus');
-const makePcCodeButton = document.querySelector('#makePcCodeButton');
-const pairPcButton = document.querySelector('#pairPcButton');
-const choosePcFolderButton = document.querySelector('#choosePcFolderButton');
-const disconnectPcButton = document.querySelector('#disconnectPcButton');
 const phoneStatus = document.querySelector('#phoneStatus');
 const phoneInput = document.querySelector('#phoneInput');
 const phoneCodeWrap = document.querySelector('#phoneCodeWrap');
@@ -1137,7 +1125,6 @@ function renderAccount() {
   acctUpgradeBlock.hidden = accountView !== 'upgrade';
   checkoutButton.disabled = Boolean(state.pro);
   checkoutButton.textContent = state.pro ? 'Already have Plus' : 'Buy Plus - $15 / month';
-  if (acctProActive) acctProActive.hidden = true;
   accountSignOutBtn.hidden = !currentUser;
   if (phoneVerifyBadge) {
     phoneVerifyBadge.textContent = state.phoneVerified ? 'Verified' : 'Not verified';
@@ -1408,20 +1395,12 @@ function localConnectionAnswer(text) {
     ['github', 'GitHub'],
     ['google drive', 'Google Drive'],
     ['drive', 'Google Drive'],
-    ['pc', 'PC'],
-    ['computer', 'PC'],
   ];
   const found = targets.find(([needle]) => lower.includes(needle));
   if (!found) return '';
 
   const service = found[1];
   const connected = state.computerConnections.includes(service);
-  if (service === 'PC') {
-    if (!connected) return 'PC is not connected yet.';
-    return state.pcBridge?.folderReady
-      ? `PC is connected, and the approved folder is ${state.pcBridge.folderName || 'ready'}.`
-      : 'PC is connected, but no folder is approved yet.';
-  }
   return connected
     ? `${service} is connected successfully.`
     : `${service} is not connected yet.`;
@@ -1709,32 +1688,6 @@ function renderConnectOptions() {
     const active = state.computerConnections.includes(value);
     button.classList.toggle('active', active);
   });
-}
-
-function renderPcBridge() {
-  if (deviceRole === 'phone' && state.pcBridge.connected) {
-    pcPairStatus.textContent = 'Your phone is connected to a PC. Use the PC page to approve folders or disable access here anytime.';
-  } else if (deviceRole === 'pc' && state.pcBridge.connected) {
-    pcPairStatus.textContent = 'PC connected. Keep this page open on the PC when you want ROTEX to work with approved files.';
-  } else if (deviceRole === 'phone' && state.pcBridge.code) {
-    pcPairStatus.textContent = 'Code ready. Type it on your PC from Settings / Share. This blocks phone-to-phone pairing.';
-  } else if (deviceRole === 'pc' && state.pcBridge.code) {
-    pcPairStatus.textContent = 'Type this code on your PC from Settings > Share to finish pairing.';
-  } else if (deviceRole === 'pc') {
-    pcPairStatus.textContent = 'Open ROTEX on your phone first and make a code. This blocks PC-to-PC pairing.';
-  } else {
-    pcPairStatus.textContent = 'Make a 3 digit code on your phone, then type it on your PC from Settings / Share.';
-  }
-  pcPairCode.textContent = state.pcBridge.code || '---';
-  pcFolderStatus.textContent = state.pcBridge.folderReady
-    ? `Approved PC folder: ${state.pcBridge.folderName || 'selected folder'}`
-    : 'No PC folder approved yet. On the PC, connect first, then choose a folder.';
-  makePcCodeButton.hidden = deviceRole !== 'phone';
-  pcCodeInput.hidden = deviceRole !== 'pc';
-  pairPcButton.hidden = deviceRole !== 'pc';
-  choosePcFolderButton.hidden = deviceRole !== 'pc';
-  choosePcFolderButton.disabled = deviceRole !== 'pc' || !state.pcBridge.connected;
-  disconnectPcButton.disabled = !state.pcBridge.connected && !state.pcBridge.code;
 }
 
 function announceActivation(service) {
@@ -2104,17 +2057,6 @@ function codeExtension(language) {
   return map[String(language || '').toLowerCase()] || 'txt';
 }
 
-function openPcDialog() {
-  if (!pcDialog) return;
-  renderPcBridge();
-  if (!pcDialog.open) {
-    pcDialog.showModal();
-  }
-  if (deviceRole === 'pc') {
-    pcCodeInput.focus();
-  }
-}
-
 function setConnection(value, enabled) {
   if (enabled && !state.computerConnections.includes(value)) {
     state.computerConnections = [...state.computerConnections, value];
@@ -2167,9 +2109,6 @@ function closeComputerMode() {
   closeModelMenu();
   if (connectDialog.open) {
     connectDialog.close();
-  }
-  if (pcDialog?.open) {
-    pcDialog.close();
   }
 }
 
@@ -2245,90 +2184,6 @@ connectorCards.forEach((button) => {
     const provider = button.dataset.provider;
     await startProviderConnect(provider);
   });
-});
-
-makePcCodeButton?.addEventListener('click', () => {
-  if (deviceRole !== 'phone') {
-    pcPairStatus.textContent = 'Make the code from your phone. PC-to-PC pairing is blocked.';
-    return;
-  }
-  state.pcBridge = {
-    code: String(Math.floor(100 + Math.random() * 900)),
-    connected: false,
-    requesterRole: 'phone',
-    connectedRole: '',
-    folderName: '',
-    folderReady: false,
-    createdAt: Date.now(),
-  };
-  activateService('PC', false);
-  persistState();
-  render();
-  openPcDialog();
-});
-
-pairPcButton?.addEventListener('click', () => {
-  if (deviceRole !== 'pc') {
-    pcPairStatus.textContent = 'Enter the code from your PC. Phone-to-phone pairing is blocked.';
-    return;
-  }
-  if (state.pcBridge.requesterRole !== 'phone') {
-    pcPairStatus.textContent = 'Make a fresh code on your phone first. PC-to-PC pairing is blocked.';
-    return;
-  }
-  const typedCode = pcCodeInput.value.trim();
-  if (!state.pcBridge.code || typedCode !== state.pcBridge.code) {
-    pcPairStatus.textContent = 'That code does not match. Check the 3 digits and try again.';
-    return;
-  }
-  state.pcBridge.connected = true;
-  state.pcBridge.connectedRole = 'pc';
-  state.pcBridge.pairedAt = Date.now();
-  activateService('PC', false);
-  announceActivation('PC');
-  persistState();
-  render();
-  openPcDialog();
-});
-
-choosePcFolderButton?.addEventListener('click', async () => {
-  if (deviceRole !== 'pc') {
-    pcPairStatus.textContent = 'Folders can only be approved on the connected PC.';
-    return;
-  }
-  if (!state.pcBridge.connected) {
-    pcPairStatus.textContent = 'Connect this PC with the 3 digit code first.';
-    return;
-  }
-  if (!window.showDirectoryPicker) {
-    pcPairStatus.textContent = 'Folder access needs desktop Chrome or Edge. This browser cannot approve a PC folder.';
-    return;
-  }
-  try {
-    const folder = await window.showDirectoryPicker({ mode: 'readwrite' });
-    state.pcBridge.folderName = folder.name;
-    state.pcBridge.folderReady = true;
-    activateService('PC', false);
-    announceActivation(`PC folder ${folder.name}`);
-    persistState();
-    render();
-    openPcDialog();
-  } catch (error) {
-    pcPairStatus.textContent = 'Folder approval was cancelled.';
-  }
-});
-
-disconnectPcButton?.addEventListener('click', () => {
-  state.pcBridge = normalizePcBridge({});
-  setConnection('PC', false);
-  pcCodeInput.value = '';
-  persistState();
-  render();
-  openPcDialog();
-});
-
-pcShareButton?.addEventListener('click', () => {
-  openPcDialog();
 });
 
 newComputerChatButton?.addEventListener('click', () => {
@@ -2485,7 +2340,6 @@ accountSignOutBtn?.addEventListener('click', async () => {
   if (auth) await signOut(auth);
 });
 
-closeAuthPageButton?.addEventListener('click', closeAuthPage);
 closeAccountBtn?.addEventListener('click', closeAccountPage);
 accountBackBtn?.addEventListener('click', closeAccountPage);
 authGoogleButton.addEventListener('click', signInWithGoogleFromAuth);

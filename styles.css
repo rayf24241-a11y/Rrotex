@@ -2,9 +2,9 @@
   color-scheme: dark;
   --bg: #212121;
   --sidebar: #171717;
-  --panel: #2f2f2f;
-  --panel-2: #3a3a3a;
-  --line: #3f3f3f;
+  --panel: #292929;
+  --panel-2: #333333;
+  --line: #363636;
   --text: #ececec;
   --muted: #b4b4b4;
   --quiet: #8b8b8b;
@@ -58,7 +58,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 284px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   height: 100vh;
   animation: appIn 520ms ease both;
 }
@@ -71,9 +71,9 @@ button {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-height: 0;
-  padding: 18px;
+  padding: 12px;
   background: var(--sidebar);
   border-right: 1px solid var(--line);
   box-shadow: none;
@@ -100,19 +100,21 @@ button {
 
 .brand {
   gap: 10px;
+  min-height: 42px;
+  padding: 0 4px;
   font-weight: 950;
   letter-spacing: 0.08em;
 }
 
 .brand-mark {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   color: var(--sidebar);
   background: var(--text);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: none;
 }
 
@@ -139,10 +141,11 @@ button {
 
 .new-chat {
   width: 100%;
-  padding: 13px 14px;
-  margin-top: 10px;
+  min-height: 42px;
+  padding: 10px 12px;
+  margin-top: 4px;
   color: var(--text);
-  background: #2a2a2a;
+  background: #252525;
   border-color: var(--line);
   box-shadow: none;
 }
@@ -152,8 +155,8 @@ button {
   align-items: flex-start;
   gap: 3px;
   width: 100%;
-  min-height: 64px;
-  padding: 13px 14px;
+  min-height: 52px;
+  padding: 10px 12px;
   color: var(--text);
   background: #202020;
   border-color: var(--line);
@@ -184,8 +187,8 @@ button {
   align-items: flex-start;
   gap: 3px;
   width: 100%;
-  min-height: 64px;
-  padding: 13px 14px;
+  min-height: 52px;
+  padding: 10px 12px;
   color: var(--text);
   background: #34312a;
   border: 1px solid #5c5140;
@@ -219,7 +222,7 @@ button {
 
 .chat-list {
   display: grid;
-  gap: 8px;
+  gap: 2px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -231,19 +234,19 @@ button {
   gap: 10px;
   width: 100%;
   min-width: 0;
-  min-height: 48px;
+  min-height: 40px;
   padding: 0;
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .chat-row:hover,
 .chat-row.active {
   color: var(--text);
   background: #2a2a2a;
-  border-color: var(--line);
+  border-color: transparent;
   box-shadow: none;
 }
 
@@ -252,8 +255,8 @@ button {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  min-height: 46px;
-  padding: 10px 0 10px 12px;
+  min-height: 38px;
+  padding: 8px 0 8px 10px;
   color: inherit;
   text-align: left;
   background: transparent;
@@ -275,8 +278,8 @@ button {
 
 .delete-chat {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   margin-right: 7px;
   place-items: center;
   color: var(--quiet);
@@ -296,9 +299,9 @@ button {
 .account-panel {
   position: relative;
   display: grid;
-  gap: 9px;
+  gap: 7px;
   margin-top: auto;
-  padding-top: 14px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 
@@ -307,7 +310,7 @@ button {
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 12px;
   color: var(--text);
   background: #202020;
   border-color: var(--line);
@@ -402,8 +405,9 @@ button {
 
 .topbar {
   justify-content: space-between;
-  gap: 20px;
-  padding: 18px clamp(18px, 4vw, 44px) 14px;
+  gap: 14px;
+  min-height: 62px;
+  padding: 10px clamp(18px, 3vw, 32px);
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
@@ -425,21 +429,22 @@ p {
 
 h1 {
   margin-bottom: 0;
-  font-size: clamp(24px, 3vw, 34px);
+  font-size: 21px;
   line-height: 1.05;
   letter-spacing: 0;
 }
 
 .mode-subtitle {
   max-width: 520px;
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   color: var(--muted);
+  font-size: 13px;
   line-height: 1.45;
 }
 
 .status-pill {
   gap: 8px;
-  padding: 9px 12px;
+  padding: 7px 10px;
   color: var(--muted);
   background: #2b2b2b;
   border: 1px solid var(--line);
@@ -449,14 +454,14 @@ h1 {
 }
 
 .top-actions {
-  gap: 10px;
+  gap: 7px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 .credit-pill {
   gap: 8px;
-  padding: 9px 12px;
+  padding: 7px 10px;
   color: var(--muted);
   background: #2b2b2b;
   border: 1px solid var(--line);
@@ -468,13 +473,13 @@ h1 {
 .messages {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   height: 100%;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 26px max(18px, calc((100% - 850px) / 2)) 34px;
+  padding: 24px max(20px, calc((100% - 780px) / 2)) 28px;
   scrollbar-gutter: stable;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
@@ -629,37 +634,37 @@ h1 {
 
 
 .empty-state {
-  max-width: 680px;
+  max-width: 520px;
   margin: auto;
   text-align: center;
   animation: floatIn 520ms ease both;
 }
 
 .empty-state h2 {
-  margin-bottom: 12px;
-  font-size: clamp(36px, 6vw, 72px);
-  line-height: 0.95;
+  margin-bottom: 10px;
+  font-size: clamp(34px, 4vw, 48px);
+  line-height: 1;
 }
 
 .empty-state p {
   color: var(--muted);
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1.55;
 }
 
 .message {
-  max-width: min(760px, 92%);
-  padding: 14px 16px;
+  max-width: min(760px, 94%);
+  padding: 11px 14px;
   border: 1px solid transparent;
-  border-radius: 18px;
+  border-radius: 14px;
   line-height: 1.55;
   animation: messageIn 220ms ease both;
 }
 
 .message.user {
   align-self: flex-end;
-  background: #303030;
-  border-color: #3a3a3a;
+  background: #2f2f2f;
+  border-color: #3b3b3b;
 }
 
 .message.assistant {
@@ -769,9 +774,9 @@ h1 {
 .composer {
   position: relative;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 14px max(18px, calc((100% - 900px) / 2)) 20px;
-  border-top: 1px solid var(--line);
+  gap: 8px;
+  padding: 10px max(20px, calc((100% - 820px) / 2)) 18px;
+  border-top: 0;
   background: var(--bg);
   backdrop-filter: none;
 }
@@ -788,14 +793,14 @@ h1 {
 }
 
 .attach-button {
-  width: 52px;
-  min-height: 52px;
+  width: 46px;
+  min-height: 46px;
   padding: 0;
   color: var(--text);
-  background: #2b2b2b;
+  background: #292929;
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 24px;
+  font-size: 21px;
   line-height: 1;
 }
 
@@ -876,11 +881,11 @@ h1 {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  min-width: 172px;
+  min-width: 148px;
   height: 100%;
-  padding: 9px 12px;
+  padding: 7px 10px;
   color: var(--text);
-  background: #2b2b2b;
+  background: #292929;
   border-color: var(--line);
 }
 
@@ -901,13 +906,13 @@ h1 {
   z-index: 20;
   display: grid;
   gap: 5px;
-  width: min(330px, calc(100vw - 36px));
+  width: min(310px, calc(100vw - 36px));
   max-height: none;
   overflow: visible;
   padding: 7px;
   background: #2b2b2b;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 10px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
   opacity: 0;
   transform: translateY(8px) scale(0.98);
@@ -996,13 +1001,13 @@ h1 {
 .composer textarea {
   width: 100%;
   max-height: 140px;
-  min-height: 52px;
+  min-height: 46px;
   resize: none;
-  padding: 15px 15px;
+  padding: 12px 14px;
   color: var(--text);
-  background: #2f2f2f;
+  background: #292929;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -1013,15 +1018,16 @@ h1 {
 }
 
 .send-button {
-  min-width: 92px;
-  padding: 0 18px;
+  min-width: 74px;
+  min-height: 46px;
+  padding: 0 15px;
   color: #171717;
   background: var(--text);
   box-shadow: none;
 }
 
 .upgrade-button {
-  padding: 9px 16px;
+  padding: 7px 12px;
   color: var(--text);
   background: #2b2b2b;
   border-color: var(--line);
@@ -1036,7 +1042,7 @@ h1 {
 
 .message-action,
 .download-app-button {
-  padding: 10px 13px;
+  padding: 8px 11px;
   color: var(--text);
   background: #2b2b2b;
   border: 1px solid var(--line);
@@ -1098,10 +1104,10 @@ h1 {
   box-sizing: border-box;
   width: 100%;
   max-height: calc(100vh - 28px);
-  padding: 24px;
-  background: rgba(13, 17, 24, 0.98);
+  padding: 22px;
+  background: #242424;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: 12px;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
   animation: floatIn 180ms ease both;
   overflow-x: hidden;
@@ -1147,8 +1153,8 @@ h1 {
 
 .connect-card h2 {
   margin: 0;
-  font-size: 40px;
-  line-height: 0.95;
+  font-size: 30px;
+  line-height: 1;
   overflow-wrap: anywhere;
 }
 
@@ -1164,10 +1170,8 @@ h1 {
 
 .teamup-card {
   gap: 18px;
-  padding: 28px;
-  background:
-    linear-gradient(145deg, rgba(35, 44, 59, 0.96), rgba(11, 15, 23, 0.98)),
-    rgba(13, 17, 24, 0.98);
+  padding: 24px;
+  background: #242424;
 }
 
 .teamup-hero {
@@ -1177,7 +1181,7 @@ h1 {
 }
 
 .teamup-hero h2 {
-  font-size: clamp(32px, 6vw, 48px);
+  font-size: clamp(28px, 5vw, 38px);
 }
 
 .teamup-pickers {
@@ -1190,12 +1194,12 @@ h1 {
   grid-template-columns: minmax(0, 1fr) minmax(190px, 260px);
   gap: 14px;
   align-items: center;
-  min-height: 86px;
-  padding: 14px;
+  min-height: 74px;
+  padding: 12px;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.045);
+  background: #2b2b2b;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
 }
 
 .teamup-slot span {
@@ -1229,11 +1233,11 @@ h1 {
 }
 
 .connect-option {
-  min-height: 58px;
+  min-height: 52px;
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 9px;
   font-weight: 900;
 }
 
