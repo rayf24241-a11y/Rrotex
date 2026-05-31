@@ -111,7 +111,7 @@ const teamupCreditStatus = document.querySelector('#teamupCreditStatus');
 const googleButton = document.querySelector('#googleButton');
 const googleButtonText = document.querySelector('#googleButtonText');
 const accountMenu = document.querySelector('#accountMenu');
-const accountMenuAccount = document.querySelector('#accountMenuAccount');
+const accountMenuLogout = document.querySelector('#accountMenuLogout');
 const accountMenuUpgrade = document.querySelector('#accountMenuUpgrade');
 const planStatus = document.querySelector('#planStatus');
 const saveStatus = document.querySelector('#saveStatus');
@@ -544,6 +544,14 @@ function handleAccountMenuAction(event, focusUpgrade = false) {
   event.preventDefault();
   event.stopPropagation();
   openAccountMenuAction(focusUpgrade);
+}
+
+async function logOutCurrentAccount(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  closeAccountMenu();
+  closeAccountPage();
+  if (auth) await signOut(auth);
 }
 
 async function signInWithGoogleFromAuth() {
@@ -1116,7 +1124,7 @@ function teamupDisplayModel(chat) {
 function renderAccount() {
   applyCreditRefill();
   applyComputerUsageReset();
-  creditStatus.textContent = `${formatMoney(remainingDailyCredits())} today / ${formatMoney(remainingMonthlyCredits())} month`;
+  creditStatus.textContent = `${remainingCreditPercent()}% credits`;
   renderConnectOptions();
   renderModeShell();
   if (currentUser) {
@@ -1128,7 +1136,7 @@ function renderAccount() {
     } else {
       saveStatus.textContent = state.phoneVerified
         ? `Phone verified. Chats sync with Firebase for ${currentUser.email || 'this account'}.`
-        : `Phone not verified. Free credits are ${formatMoney(activeFreePlan().daily)} daily.`;
+        : 'Phone not verified. Verify your phone to restore the normal free limit.';
     }
   } else if (cloudReady) {
     googleButtonText.textContent = 'Log in or sign up';
@@ -1664,6 +1672,12 @@ function remainingWeeklyCredits(pro = state.pro, usage = state.creditUsage) {
 function remainingMonthlyCredits(pro = state.pro, usage = state.creditUsage) {
   const plan = activeCreditPlan(pro);
   return Math.max(0, plan.monthly - (Number(usage?.monthSpent) || 0));
+}
+
+function remainingCreditPercent() {
+  const monthly = activeCreditPlan().monthly;
+  if (!monthly) return 0;
+  return Math.max(0, Math.min(100, Math.round((remainingMonthlyCredits() / monthly) * 100)));
 }
 
 function remainingTeamupTokens() {
@@ -2262,9 +2276,13 @@ document.addEventListener('click', (event) => {
     openAccountPage(true);
     return;
   }
-  const accountMenuAction = event.target.closest?.('#accountMenuAccount, #accountMenuUpgrade');
+  const accountMenuAction = event.target.closest?.('#accountMenuLogout, #accountMenuUpgrade');
   if (accountMenuAction) {
-    handleAccountMenuAction(event, accountMenuAction.id === 'accountMenuUpgrade');
+    if (accountMenuAction.id === 'accountMenuLogout') {
+      logOutCurrentAccount(event);
+    } else {
+      handleAccountMenuAction(event, true);
+    }
     return;
   }
 
@@ -2351,22 +2369,22 @@ googleButton.addEventListener('click', (event) => {
   handleProfileAction(event);
 });
 
-accountMenuAccount?.addEventListener('pointerdown', (event) => {
+accountMenuLogout?.addEventListener('pointerdown', (event) => {
   suppressAccountMenuClick = true;
-  handleAccountMenuAction(event, false);
+  logOutCurrentAccount(event);
 });
 accountMenuUpgrade?.addEventListener('pointerdown', (event) => {
   suppressAccountMenuClick = true;
   handleAccountMenuAction(event, true);
 });
-accountMenuAccount?.addEventListener('click', (event) => {
+accountMenuLogout?.addEventListener('click', (event) => {
   if (suppressAccountMenuClick) {
     suppressAccountMenuClick = false;
     event.preventDefault();
     event.stopPropagation();
     return;
   }
-  handleAccountMenuAction(event, false);
+  logOutCurrentAccount(event);
 });
 accountMenuUpgrade?.addEventListener('click', (event) => {
   if (suppressAccountMenuClick) {

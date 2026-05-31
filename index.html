@@ -19,7 +19,7 @@
     <meta name="twitter:description" content="A focused AI workspace with ROTEX models, attachments, downloadable files, saved chats, and computer mode." />
     <meta name="twitter:image" content="https://www.rrotex.com/og-image.svg" />
     <link rel="manifest" href="./site.webmanifest" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260530-1" />
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script type="application/ld+json">
       {
@@ -73,7 +73,7 @@
             </span>
           </a>
           <div class="account-menu" id="accountMenu" hidden>
-            <button id="accountMenuAccount" type="button">Account</button>
+            <button id="accountMenuLogout" type="button">Log out</button>
             <button id="accountMenuUpgrade" type="button">Upgrade</button>
           </div>
           <p id="saveStatus">Chats save on this device until Firebase is configured.</p>
@@ -99,7 +99,7 @@
         <div class="top-actions">
             <a class="download-app-button" id="downloadPcAppTop" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
             <button class="upgrade-button" id="upgradeButton" type="button">Get Plus</button>
-            <div class="credit-pill" id="creditStatus">$0.300 today / $1.500 month</div>
+            <div class="credit-pill" id="creditStatus">100% credits</div>
             <div class="status-pill" id="syncStatus">Local mode</div>
           </div>
         </header>
@@ -318,6 +318,6 @@
     </dialog>
 
 
-  <script type="module" src="./app.js?v=20260525-20"></script>
+  <script type="module" src="./app.js?v=20260530-1"></script>
   </body>
 </html>

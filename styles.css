@@ -1835,11 +1835,9 @@ body:has(.account-page:target) .app-shell {
 @keyframes appIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
