@@ -111,11 +111,17 @@ ipcMain.handle('create-folder', async (event, dirPath) => {
 ipcMain.handle('exec-command', async (event, command, cwd) => {
   const { exec } = require('child_process');
   return new Promise((resolve) => {
-    exec(command, { cwd: cwd || process.cwd(), timeout: 30000 }, (error, stdout, stderr) => {
+    const options = {
+      cwd: cwd || process.cwd(),
+      timeout: 30000,
+      shell: true,
+      env: { ...process.env },
+    };
+    exec(command, options, (error, stdout, stderr) => {
       resolve({
         stdout: stdout || '',
         stderr: stderr || '',
-        exitCode: error ? error.code || 1 : 0,
+        exitCode: error ? (error.code || 1) : 0,
       });
     });
   });

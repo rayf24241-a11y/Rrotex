@@ -322,7 +322,9 @@
     }));
 
     try {
-      const resp = await fetch('/api/chat', {
+      // Use absolute URL for Electron (no local server), relative for web
+      const apiBase = window.rotexDesktop ? 'https://rrotex.com' : '';
+      const resp = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -452,34 +454,81 @@
     }
   });
 
-  function applyCodeToFile(filename, code) {
+  async function applyCodeToFile(filename, code) {
     const language = detectLanguage(filename);
     if (state.openFiles.has(filename)) {
-      // Update existing open file
       const file = state.openFiles.get(filename);
       file.content = code;
-      file.modified = true;
+      file.modified = false; // We're saving immediately
       const editor = editorInstances.get(filename);
       if (editor) editor.setValue(code);
       activateTab(filename);
     } else {
-      // Open as new tab
-      state.openFiles.set(filename, { content: code, language, modified: true });
+      state.openFiles.set(filename, { content: code, language, modified: false });
       createTab(filename, filename.split('/').pop());
       createEditorPane(filename, code, language);
       activateTab(filename);
     }
+
+    // Write to disk
+    await writeFileToDisk(filename, code);
   }
 
-  function applyCodeToCurrentFile(code) {
+  async function applyCodeToCurrentFile(code) {
     const path = state.activeTab;
     const file = state.openFiles.get(path);
     if (!file) return;
     file.content = code;
-    file.modified = true;
+    file.modified = false; // Saving immediately
     const editor = editorInstances.get(path);
     if (editor) editor.setValue(code);
-    markTabModified(path);
+
+    // Write to disk
+    await writeFileToDisk(path, code);
+
+    // Update tab (remove modified indicator)
+    const tabEl = tabs.querySelector(`[data-tab="${path}"] .tab-name`);
+    if (tabEl) tabEl.textContent = tabEl.textContent.replace(' *', '');
+  }
+
+  // ─── Write File to Disk ────────────────────────────────────────────
+  async function writeFileToDisk(filePath, content) {
+    // Desktop (Electron) - use IPC to write directly
+    if (window.rotexDesktop) {
+      const fullPath = state.currentDirPath
+        ? `${state.currentDirPath}/${filePath}`
+        : filePath;
+      const success = await window.rotexDesktop.writeFile(fullPath, content);
+      if (!success) console.error('Failed to write file:', fullPath);
+      return success;
+    }
+
+    // Browser - use File System Access API if we have a directory handle
+    if (state.directoryHandle) {
+      try {
+        // Handle nested paths (e.g. "src/app.js")
+        const parts = filePath.split('/');
+        let dirHandle = state.directoryHandle;
+
+        // Navigate/create subdirectories
+        for (let i = 0; i < parts.length - 1; i++) {
+          dirHandle = await dirHandle.getDirectoryHandle(parts[i], { create: true });
+        }
+
+        // Create/overwrite the file
+        const fileHandle = await dirHandle.getFileHandle(parts[parts.length - 1], { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        return true;
+      } catch (err) {
+        console.error('Browser file write failed:', err);
+        return false;
+      }
+    }
+
+    // No filesystem access — file only exists in memory
+    return false;
   }
 
   function markTabModified(path) {
@@ -501,8 +550,19 @@
     }
   });
 
-  // ─── File System Access API ────────────────────────────────────────
+  // ─── File System ───────────────────────────────────────────────────
   async function openFolder() {
+    // Desktop (Electron) - use native dialog via IPC
+    if (window.rotexDesktop) {
+      const folderPath = await window.rotexDesktop.openFolder();
+      if (!folderPath) return;
+      state.currentDirPath = folderPath;
+      state.directoryHandle = null;
+      await buildTreeDesktop(folderPath, '');
+      return;
+    }
+
+    // Browser - use File System Access API
     try {
       const handle = await window.showDirectoryPicker();
       state.directoryHandle = handle;
@@ -513,6 +573,28 @@
     }
   }
 
+  // Desktop file tree (uses Electron IPC)
+  async function buildTreeDesktop(dirPath, basePath) {
+    const entries = await window.rotexDesktop.readDirectory(dirPath);
+    const items = entries
+      .filter(e => !e.name.startsWith('.') || e.name === '.env.example')
+      .filter(e => e.name !== 'node_modules' && e.name !== '__pycache__' && e.name !== '.git')
+      .map(e => ({
+        name: e.name,
+        path: e.path,
+        kind: e.kind,
+        children: null,
+        open: false,
+      }));
+
+    if (!basePath) {
+      state.fileTree = items;
+      renderFileTree();
+    }
+    return items;
+  }
+
+  // Browser file tree (uses File System Access API handles)
   async function buildTree(dirHandle, basePath) {
     const items = [];
     for await (const entry of dirHandle.values()) {
@@ -583,7 +665,12 @@
       if (!entry) return;
       entry.open = !entry.open;
       if (entry.open && !entry.children) {
-        entry.children = await buildTree(entry.handle, path);
+        // Desktop vs browser
+        if (window.rotexDesktop) {
+          entry.children = await buildTreeDesktop(path, path);
+        } else if (entry.handle) {
+          entry.children = await buildTree(entry.handle, path);
+        }
       }
       renderFileTree();
     } else {
@@ -609,15 +696,30 @@
     }
 
     const entry = findEntry(state.fileTree, path);
-    if (!entry || !entry.handle) return;
+    if (!entry) return;
 
     try {
-      const file = await entry.handle.getFile();
-      const content = await file.text();
-      const language = detectLanguage(entry.name);
+      let content = '';
+      const name = entry.name || path.split('/').pop() || path.split('\\').pop();
 
-      state.openFiles.set(path, { content, language, modified: false, handle: entry.handle });
-      createTab(path, entry.name);
+      if (window.rotexDesktop) {
+        // Desktop: read via IPC
+        content = await window.rotexDesktop.readFile(path);
+        if (content === null) {
+          console.error('Could not read file:', path);
+          return;
+        }
+      } else if (entry.handle) {
+        // Browser: use File System Access API
+        const file = await entry.handle.getFile();
+        content = await file.text();
+      } else {
+        return;
+      }
+
+      const language = detectLanguage(name);
+      state.openFiles.set(path, { content, language, modified: false, handle: entry.handle || null });
+      createTab(path, name);
       createEditorPane(path, content, language);
       activateTab(path);
     } catch (err) {
@@ -755,16 +857,22 @@
     if (!file || !file.modified) return;
 
     try {
-      if (file.handle) {
-        const writable = await file.handle.createWritable();
-        await writable.write(file.content);
-        await writable.close();
-      } else {
-        const entry = findEntry(state.fileTree, path);
-        if (entry && entry.handle) {
-          const writable = await entry.handle.createWritable();
-          await writable.write(file.content);
-          await writable.close();
+      const success = await writeFileToDisk(path, file.content);
+      if (success || !window.rotexDesktop) {
+        // Browser fallback: try File System Access API handles
+        if (!window.rotexDesktop) {
+          if (file.handle) {
+            const writable = await file.handle.createWritable();
+            await writable.write(file.content);
+            await writable.close();
+          } else {
+            const entry = findEntry(state.fileTree, path);
+            if (entry && entry.handle) {
+              const writable = await entry.handle.createWritable();
+              await writable.write(file.content);
+              await writable.close();
+            }
+          }
         }
       }
       file.modified = false;
