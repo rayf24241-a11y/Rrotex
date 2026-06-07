@@ -322,6 +322,7 @@ button { font: inherit; cursor: pointer; }
   letter-spacing: 0.5px;
   margin-bottom: 12px;
 }
+.model-tag.adapt { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 .model-tag.rod { background: rgba(124, 157, 255, 0.15); color: var(--accent); }
 .model-tag.tex { background: rgba(110, 231, 183, 0.15); color: var(--green); }
 .model-tag.tree { background: rgba(251, 191, 36, 0.15); color: var(--amber); }

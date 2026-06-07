@@ -8,11 +8,10 @@
     <meta name="theme-color" content="#1e1e1e" />
     <link rel="manifest" href="./site.webmanifest" />
     <link rel="stylesheet" href="./editor.css" />
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   </head>
   <body>
     <div class="editor-app" id="editorApp">
-      <!-- Activity Bar (leftmost icon strip) -->
+      <!-- Activity Bar -->
       <aside class="activity-bar" id="activityBar">
         <div class="ab-top">
           <button class="ab-icon ab-brand" title="ROTEX Home">R</button>
@@ -36,7 +35,7 @@
         </div>
       </aside>
 
-      <!-- Side Panel (file explorer, search, etc.) -->
+      <!-- Side Panel -->
       <aside class="side-panel" id="sidePanel">
         <div class="sp-header">
           <span class="sp-title" id="spTitle">EXPLORER</span>
@@ -53,7 +52,6 @@
           </div>
         </div>
         <div class="sp-content" id="spContent">
-          <!-- Explorer panel -->
           <div class="panel-view" id="explorerPanel">
             <div class="file-tree" id="fileTree">
               <div class="tree-empty">
@@ -62,14 +60,12 @@
               </div>
             </div>
           </div>
-          <!-- Search panel -->
           <div class="panel-view" id="searchPanel" hidden>
             <div class="search-box">
               <input type="text" id="searchInput" placeholder="Search files..." />
             </div>
             <div class="search-results" id="searchResults"></div>
           </div>
-          <!-- Git panel -->
           <div class="panel-view" id="gitPanel" hidden>
             <div class="git-status" id="gitStatus">
               <p class="git-empty">No repository detected</p>
@@ -80,24 +76,21 @@
 
       <!-- Main Editor Area -->
       <main class="editor-main" id="editorMain">
-        <!-- Tab bar -->
         <div class="tab-bar" id="tabBar">
           <div class="tabs" id="tabs">
-            <div class="tab tab-welcome active" data-tab="welcome">
-              <span>Welcome</span>
-              <button class="tab-close" data-tab="welcome">&times;</button>
+            <div class="tab active" data-tab="welcome">
+              <span class="tab-name">Welcome</span>
+              <button class="tab-close">&times;</button>
             </div>
           </div>
         </div>
 
-        <!-- Editor content -->
         <div class="editor-content" id="editorContent">
-          <!-- Welcome tab -->
           <div class="editor-tab-content active" data-content="welcome">
             <div class="welcome-view">
               <div class="welcome-inner">
                 <h1><span class="brand-mark">R</span> ROTEX Editor</h1>
-                <p class="welcome-sub">AI-powered code editor with 7 built-in models</p>
+                <p class="welcome-sub">AI-powered code editor with 8 built-in models</p>
                 <div class="welcome-actions">
                   <button class="welcome-btn" id="welcomeOpenFolder">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
@@ -108,17 +101,14 @@
                     New File
                   </button>
                 </div>
-                <div class="welcome-recent" id="welcomeRecent" hidden>
-                  <h3>Recent</h3>
-                  <div class="recent-list" id="recentList"></div>
-                </div>
                 <div class="welcome-shortcuts">
-                  <h3>Shortcuts</h3>
+                  <h3>Keyboard Shortcuts</h3>
                   <div class="shortcut-grid">
-                    <div class="shortcut"><kbd>Ctrl+Shift+P</kbd> Command Palette</div>
-                    <div class="shortcut"><kbd>Ctrl+P</kbd> Quick Open File</div>
-                    <div class="shortcut"><kbd>Ctrl+`</kbd> Toggle Terminal</div>
-                    <div class="shortcut"><kbd>Ctrl+Shift+A</kbd> Toggle AI Chat</div>
+                    <div class="shortcut"><kbd>Ctrl+S</kbd><span>Save File</span></div>
+                    <div class="shortcut"><kbd>Ctrl+N</kbd><span>New File</span></div>
+                    <div class="shortcut"><kbd>Ctrl+`</kbd><span>Toggle Terminal</span></div>
+                    <div class="shortcut"><kbd>Ctrl+Shift+A</kbd><span>Toggle AI Chat</span></div>
+                    <div class="shortcut"><kbd>Ctrl+B</kbd><span>Toggle Sidebar</span></div>
                   </div>
                 </div>
               </div>
@@ -130,13 +120,13 @@
         <div class="bottom-panel" id="bottomPanel" hidden>
           <div class="bp-header">
             <div class="bp-tabs">
-              <button class="bp-tab active" data-bptab="terminal">Terminal</button>
-              <button class="bp-tab" data-bptab="output">Output</button>
-              <button class="bp-tab" data-bptab="problems">Problems</button>
+              <button class="bp-tab active" data-bptab="terminal">TERMINAL</button>
+              <button class="bp-tab" data-bptab="output">OUTPUT</button>
+              <button class="bp-tab" data-bptab="problems">PROBLEMS</button>
             </div>
             <div class="bp-actions">
               <button class="bp-action" id="newTerminalBtn" title="New Terminal">+</button>
-              <button class="bp-action" id="closeBottomPanel" title="Close Panel">&times;</button>
+              <button class="bp-action" id="closeBottomPanel" title="Close">&times;</button>
             </div>
           </div>
           <div class="bp-content" id="bpContent">
@@ -160,41 +150,45 @@
             <button class="ai-action" id="aiClosePanel" title="Close">&times;</button>
           </div>
         </div>
-        <div class="ai-model-bar">
-          <button class="ai-model-select" id="aiModelButton" type="button">
-            <span id="aiSelectedModel">Rod _ 1</span>
-            <small id="aiSelectedRole">Everyday</small>
-          </button>
-          <div class="ai-model-menu" id="aiModelMenu" hidden></div>
-        </div>
         <div class="ai-messages" id="aiMessages">
           <div class="ai-welcome-msg">
             <p><strong>ROTEX AI</strong></p>
-            <p>Ask me anything about your code. I can help with writing, debugging, refactoring, and explaining.</p>
+            <p>Ask me anything about your code. I can write, edit, debug, refactor, and explain.</p>
           </div>
         </div>
+        <!-- Model selector at BOTTOM -->
         <form class="ai-composer" id="aiComposer">
           <textarea id="aiInput" rows="1" placeholder="Ask ROTEX..."></textarea>
-          <button class="ai-send" type="submit">Send</button>
+          <button class="ai-send" type="submit">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
         </form>
+        <div class="ai-model-bar">
+          <button class="ai-model-select" id="aiModelButton" type="button">
+            <span id="aiSelectedModel">Adapt</span>
+            <small id="aiSelectedRole">Auto</small>
+          </button>
+          <div class="ai-model-menu" id="aiModelMenu" hidden></div>
+        </div>
       </aside>
     </div>
 
     <!-- Status Bar -->
     <footer class="status-bar" id="statusBar">
       <div class="sb-left">
-        <span class="sb-item" id="sbBranch">main</span>
-        <span class="sb-item" id="sbErrors">0 errors</span>
+        <span class="sb-item sb-branch">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M6 9v12"/></svg>
+          <span id="sbBranch">main</span>
+        </span>
+        <span class="sb-item" id="sbErrors">0 errors, 0 warnings</span>
       </div>
       <div class="sb-right">
-        <span class="sb-item" id="sbLang">Plain Text</span>
-        <span class="sb-item" id="sbEncoding">UTF-8</span>
         <span class="sb-item" id="sbPosition">Ln 1, Col 1</span>
-        <span class="sb-item sb-credits" id="sbCredits">100% credits</span>
+        <span class="sb-item" id="sbEncoding">UTF-8</span>
+        <span class="sb-item" id="sbLang">Plain Text</span>
       </div>
     </footer>
 
-    <!-- Monaco Editor CDN -->
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
     <script src="./editor.js"></script>
   </body>
