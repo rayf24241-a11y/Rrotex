@@ -1,4 +1,12 @@
 {
+  "rewrites": [
+    { "source": "/editor", "destination": "/editor.html" },
+    { "source": "/app", "destination": "/chat.html" },
+    { "source": "/chat", "destination": "/chat.html" }
+  ],
+  "redirects": [
+    { "source": "/download", "destination": "/#download", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/(.*)",

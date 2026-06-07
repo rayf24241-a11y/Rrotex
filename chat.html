@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ROTEX - AI chat, coding, and research workspace</title>
+    <meta name="description" content="ROTEX is a focused AI workspace for chat, coding, research, attachments, downloadable files, saved chats, and connected computer work." />
+    <meta name="keywords" content="ROTEX, AI chat, AI coding, AI research, AI file tools, downloadable files, teamup AI" />
+    <meta name="theme-color" content="#222222" />
+    <link rel="canonical" href="https://www.rrotex.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ROTEX" />
+    <meta property="og:title" content="ROTEX - AI chat, coding, and research" />
+    <meta property="og:description" content="Choose a ROTEX model, attach your work, and turn ideas into useful answers and downloadable files." />
+    <meta property="og:url" content="https://www.rrotex.com/" />
+    <meta property="og:image" content="https://www.rrotex.com/og-image.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ROTEX - AI chat, coding, and research" />
+    <meta name="twitter:description" content="A focused AI workspace with ROTEX models, attachments, downloadable files, saved chats, and computer mode." />
+    <meta name="twitter:image" content="https://www.rrotex.com/og-image.svg" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="stylesheet" href="./styles.css?v=20260530-1" />
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "ROTEX",
+        "applicationCategory": "ProductivityApplication",
+        "operatingSystem": "Web, Windows, iOS, Android",
+        "url": "https://www.rrotex.com/",
+        "description": "AI chat, coding, research, file generation, attachments, saved chats, teamup rooms, and connected computer work.",
+        "offers": {
+          "@type": "Offer",
+          "price": "15",
+          "priceCurrency": "USD",
+          "category": "subscription"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <section class="seo-summary" aria-label="About ROTEX">
+      <h2>ROTEX AI workspace</h2>
+      <p>ROTEX is an AI chat, coding, and research workspace with downloadable files, image and zip reading, saved chats, Plus models, teamup rooms, and connected computer work.</p>
+    </section>
+    <main class="app-shell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Saved chats">
+        <a class="brand" href="#" aria-label="ROTEX home">
+          <span class="brand-mark">R</span>
+          <span>ROTEX</span>
+        </a>
+
+        <button class="new-chat" id="newChatButton" type="button">New chat</button>
+        <button class="teamup-entry" id="teamupEntry" type="button" hidden>
+          <span>Teamup rooms</span>
+          <small id="teamupCreditStatus">10,000 weekly tokens</small>
+        </button>
+        <button class="computer-entry" id="computerEntry" type="button" aria-pressed="false">
+          <span>Computer mode</span>
+          <small id="computerEntrySub">Connect apps</small>
+        </button>
+
+        <div class="sidebar-label">Chats</div>
+        <div class="chat-list" id="chatList"></div>
+
+        <div class="account-panel">
+          <a class="google-button" id="googleButton" href="#account" role="button">
+            <span class="google-mark">G</span>
+            <span class="google-copy">
+              <span id="googleButtonText">Log in or sign up</span>
+              <small class="plan-status" id="planStatus" hidden>Normal</small>
+            </span>
+          </a>
+          <div class="account-menu" id="accountMenu" hidden>
+            <button id="accountMenuLogout" type="button">Log out</button>
+            <button id="accountMenuUpgrade" type="button">Upgrade</button>
+          </div>
+          <p id="saveStatus">Chats save on this device until Firebase is configured.</p>
+        </div>
+      </aside>
+      <button class="mobile-sidebar-backdrop" id="mobileSidebarBackdrop" type="button" aria-label="Close navigation" hidden></button>
+
+      <section class="chat-panel" id="chatPanel">
+        <div class="mobile-topbar">
+          <button class="mobile-menu-button" id="mobileMenuButton" type="button" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+          <a class="mobile-brand" href="#" aria-label="ROTEX home">
+            <span class="brand-mark">R</span>
+            <span>ROTEX</span>
+          </a>
+          <button class="mobile-new-chat" id="mobileNewChatButton" type="button" aria-label="New chat">+</button>
+        </div>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="modeEyebrow">ROTEX web</p>
+            <h1 id="modeTitle">Chat with ROTEX</h1>
+            <p class="mode-subtitle" id="modeSubtitle">Fast chat, code, and research with ROTEX.</p>
+          </div>
+        <div class="top-actions">
+            <a class="download-app-button" id="downloadPcAppTop" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
+            <button class="upgrade-button" id="upgradeButton" type="button">Get Plus</button>
+            <div class="credit-pill" id="creditStatus">100% credits</div>
+            <div class="status-pill" id="syncStatus">Local mode</div>
+          </div>
+        </header>
+
+        <section class="messages" id="messages" aria-live="polite"></section>
+        <section class="computer-workspace" id="computerWorkspace" aria-label="Computer mode workspace">
+          <div class="cw-pane cw-chats">
+            <div class="cw-pane-head">
+              <span class="eyebrow">Computer chats</span>
+              <button class="cw-new" id="newComputerChatButton" type="button">+ New</button>
+            </div>
+            <div class="cw-list" id="computerChatList"></div>
+          </div>
+          <div class="cw-pane cw-services">
+            <div class="cw-pane-head">
+              <span class="eyebrow">Services</span>
+            </div>
+            <div class="computer-connectors" id="computerConnectors">
+              <button class="connector-card" type="button" data-connect="Google Drive" data-provider="google-drive">
+                <div class="conn-logo"><svg width="20" height="18" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path fill="#0066da" d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H4.25c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 48.4C.4 49.8 0 51.35 0 52.9h27.5z"/><path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.3z"/><path fill="#00832d" d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z"/><path fill="#2684fc" d="M59.8 52.9h27.5c0-1.55-.4-3.1-1.2-4.5L60.7 4.5c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25z"/><path fill="#ffba00" d="M27.5 52.9l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h51c1.6 0 3.15-.45 4.5-1.2L59.8 52.9z"/></svg></div>
+                <strong>Google Drive</strong>
+                <span>Docs, folders, and Drive files</span>
+              </button>
+              <button class="connector-card" type="button" data-connect="GitHub" data-provider="github">
+                <div class="conn-logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg></div>
+                <strong>GitHub</strong>
+                <span>Repos, issues, and pull requests</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <form class="composer" id="composer">
+          <div class="model-select-wrap">
+            <button class="model-select" id="modelButton" type="button" aria-expanded="false">
+              <span id="selectedModelName">Rod _ 1</span>
+              <small id="selectedModelShort">Everyday</small>
+            </button>
+            <div class="model-menu" id="modelMenu" aria-hidden="true"></div>
+          </div>
+          <div class="attachment-tray" id="attachmentTray" hidden></div>
+          <input id="attachmentInput" type="file" multiple accept="image/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.html,.css,.py,.csv,.xml,.yml,.yaml,.zip,.pdf,.doc,.docx" hidden />
+          <input id="folderInput" type="file" multiple webkitdirectory directory hidden />
+          <div class="attach-wrap">
+            <button class="attach-button" id="attachButton" type="button" aria-label="Attach files or folders">+</button>
+            <div class="attach-menu" id="attachMenu" hidden>
+              <button id="attachFilesButton" type="button">Files</button>
+              <button id="attachFolderButton" type="button">Folder</button>
+            </div>
+          </div>
+          <textarea id="messageInput" rows="1" placeholder="Message ROTEX..."></textarea>
+          <button class="send-button" type="submit">Send</button>
+        </form>
+      </section>
+    </main>
+
+    <section class="account-page" id="accountPage" hidden>
+      <div class="account-shell">
+        <button class="acct-back" id="accountBackBtn" type="button">Back to chat</button>
+        <button class="acct-close" id="closeAccountBtn" type="button" aria-label="Close">X</button>
+
+        <div class="acct-profile">
+          <div class="acct-avatar" id="acctAvatar">?</div>
+          <div class="acct-info">
+            <p class="eyebrow">Account & settings</p>
+            <h2 class="acct-name" id="acctName">Not signed in</h2>
+            <p class="acct-email" id="acctEmail"></p>
+          </div>
+          <span class="acct-plan-badge" id="acctPlanBadge">Normal</span>
+        </div>
+
+        <div class="acct-account-block" id="acctAccountBlock">
+          <p class="eyebrow">Account</p>
+          <div class="account-setting-row">
+            <div>
+              <strong>Phone number</strong>
+              <p id="phoneStatus">Verify your phone number to keep normal free credits.</p>
+            </div>
+            <span class="acct-plan-badge" id="phoneVerifyBadge">Not verified</span>
+          </div>
+          <input class="auth-input phone-input" id="phoneInput" type="tel" placeholder="+15555555555" autocomplete="tel" />
+          <div class="phone-code-wrap" id="phoneCodeWrap" hidden>
+            <input class="auth-input phone-input" id="phoneCodeInput" inputmode="numeric" maxlength="6" placeholder="6 digit code" autocomplete="one-time-code" />
+          </div>
+          <div id="phoneRecaptcha"></div>
+          <div class="account-action-row">
+            <button class="secondary-action" id="sendPhoneCodeButton" type="button">Send code</button>
+            <button class="secondary-action" id="confirmPhoneCodeButton" type="button" hidden>Verify code</button>
+            <button class="secondary-action" id="skipPhoneButton" type="button">Skip phone</button>
+            <button class="acct-signout" id="accountSignOutBtn" type="button">Log out</button>
+          </div>
+        </div>
+
+        <div class="acct-upgrade-block" id="acctUpgradeBlock">
+          <p class="eyebrow">ROTEX Plus</p>
+          <div class="upgrade-price">$15 <span>/ monthly</span></div>
+          <ul class="upgrade-list">
+            <li>More room for chats and computer mode</li>
+            <li>Tex 2.5 for the toughest coding work</li>
+            <li>One private Teamup room with two ROTEX models</li>
+            <li>10,000 Teamup tokens refreshed every week</li>
+            <li>Chats saved to your ROTEX account</li>
+          </ul>
+          <div class="plus-proof-card">
+            <div class="plus-proof-grid">
+              <span><strong>Hard builds</strong>Tex 2.5 for deeper project work</span>
+              <span><strong>Private Teamup</strong>Two models, one stronger answer</span>
+            </div>
+            <p>Built for people who use ROTEX often and want more room for serious projects.</p>
+          </div>
+          <button id="checkoutButton" type="button" class="acct-buy-btn">Buy Plus - $15 / month</button>
+        </div>
+
+        <div class="acct-footer">
+          <a class="secondary-action" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="auth-page" id="authPage" hidden>
+      <div class="auth-shell">
+        <button class="auth-back" id="authBackButton" type="button" hidden>← Back</button>
+        <p class="eyebrow">ROTEX account</p>
+        <h2 id="authTitle">Log in first</h2>
+        <p class="upgrade-copy" id="authStatus">Choose Google or email so ROTEX can save credits, chats, and Plus.</p>
+
+        <div class="auth-step" id="authMethodStep">
+          <button class="auth-google" id="authGoogleButton" type="button">
+            <span class="google-mark">G</span>
+            <span>Log in with Google</span>
+          </button>
+          <button class="auth-google" id="chooseEmailButton" type="button">
+            <span class="google-mark">@</span>
+            <span>Log in with email</span>
+          </button>
+        </div>
+
+        <div class="auth-step" id="authEmailStep" hidden>
+          <input class="auth-input" id="authEmailInput" type="email" autocomplete="email" placeholder="Email" />
+          <button class="checkout-action" id="sendEmailCodeButton" type="button">Send code</button>
+        </div>
+
+        <div class="auth-step" id="authCodeStep" hidden>
+          <input class="auth-input" id="authCodeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="Email code" />
+          <button class="checkout-action" id="emailLoginButton" type="button">Continue</button>
+          <button class="secondary-action" id="backToEmailButton" type="button">Use another email</button>
+        </div>
+
+        <div class="auth-step profile-fields" id="profileFields" hidden>
+          <input class="auth-input" id="profileNameInput" maxlength="24" autocomplete="name" placeholder="Pick your ROTEX name" />
+          <input class="auth-input" id="profileNicknameInput" maxlength="24" placeholder="Pick a nickname" />
+          <button class="checkout-action" id="saveProfileButton" type="button">Finish account</button>
+        </div>
+      </div>
+    </section>
+
+    <dialog class="connect-dialog" id="connectDialog">
+      <form method="dialog" class="connect-card">
+        <button class="dialog-x" id="connectCloseButton" type="submit" value="cancel" aria-label="Close">X</button>
+        <p class="eyebrow">Computer mode</p>
+        <h2>Connect apps</h2>
+        <p class="upgrade-copy">Pick what ROTEX should ask for when computer mode needs access.</p>
+        <div class="connect-grid">
+          <button class="connect-option" type="button" data-connect="Google Drive" data-provider="google-drive">Google Drive</button>
+          <button class="connect-option" type="button" data-connect="GitHub" data-provider="github">GitHub</button>
+        </div>
+        <div class="dialog-actions">
+          <button value="cancel" type="submit" class="secondary-action">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="connect-dialog" id="personalityDialog">
+      <form method="dialog" class="connect-card">
+        <button class="dialog-x" type="submit" value="cancel" aria-label="Close">X</button>
+        <p class="eyebrow">New chat</p>
+        <h2>Pick a personality</h2>
+        <p class="upgrade-copy">Choose how ROTEX should talk in this chat.</p>
+        <div class="connect-grid personality-grid">
+          <button class="connect-option personality-option" type="button" data-personality="normal">Normal</button>
+          <button class="connect-option personality-option" type="button" data-personality="fast">Fast</button>
+          <button class="connect-option personality-option" type="button" data-personality="coder">Coder</button>
+          <button class="connect-option personality-option" type="button" data-personality="chill">Chill</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="connect-dialog" id="teamupDialog">
+      <form method="dialog" class="connect-card teamup-card">
+        <button class="dialog-x" type="submit" value="cancel" aria-label="Close">X</button>
+        <div class="teamup-hero">
+          <p class="eyebrow">Teamup</p>
+          <h2>Make teamup room</h2>
+          <p class="upgrade-copy" id="teamupStatus">Pick two different ROTEX models. They answer together in one private mini room.</p>
+        </div>
+        <div class="teamup-pickers">
+          <label class="teamup-slot">
+            <span>
+              <strong>Bot 1</strong>
+              <small>Lead voice</small>
+            </span>
+            <select id="teamupBotA"></select>
+          </label>
+          <label class="teamup-slot">
+            <span>
+              <strong>Bot 2</strong>
+              <small>Second brain</small>
+            </span>
+            <select id="teamupBotB"></select>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button id="makeTeamupRoomButton" type="button" class="checkout-action">Make teamup room</button>
+        </div>
+      </form>
+    </dialog>
+
+
+  <script type="module" src="./app.js?v=20260530-1"></script>
+  </body>
+</html>
