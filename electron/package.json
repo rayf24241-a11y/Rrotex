@@ -1,7 +1,7 @@
 {
   "name": "rotex-editor",
-  "version": "1.0.0",
-  "description": "ROTEX - AI-Powered Code Editor",
+  "version": "2.0.0",
+  "description": "ROTEX Editor - AI-Powered Code Editor",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -27,27 +27,27 @@
       "preload.js",
       "../editor.html",
       "../editor.css",
-      "../editor.js",
-      "../landing.html",
-      "../landing.css",
-      "../og-image.svg",
-      "../site.webmanifest"
+      "../editor.js"
     ],
+    "extraResources": [],
     "win": {
       "target": "nsis",
       "icon": "icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "icon.icns"
+      "icon": "icon.icns",
+      "category": "public.app-category.developer-tools"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "icon.png"
+      "icon": "icon.png",
+      "category": "Development"
     },
     "nsis": {
       "oneClick": true,
-      "allowToChangeInstallationDirectory": false
+      "allowToChangeInstallationDirectory": false,
+      "shortcutName": "ROTEX Editor"
     }
   }
 }

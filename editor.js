@@ -9,7 +9,7 @@
     directoryHandle: null,
     fileTree: [],
     aiMessages: [],
-    aiModel: 'rod-1',
+    aiModel: 'adapt',
     terminalHistory: [],
     terminalHistoryIdx: -1,
     sidePanel: 'explorer',
@@ -20,15 +20,32 @@
 
   // ─── AI Models (IDs match /api/chat.js) ────────────────────────────
   const MODELS = [
-    { id: 'adapt', name: 'Adapt', role: 'Auto', desc: 'Picks the best model(s) for your task', family: 'adapt' },
-    { id: 'rod-1', name: 'Rod _ 1', role: 'Everyday', desc: 'Quick answers, simple tasks', family: 'rod' },
-    { id: 'rod-thinking', name: 'Rod thinking', role: 'Hard tasks', desc: 'Careful reasoning, planning', family: 'rod' },
-    { id: 'rod-brain', name: 'Rod brain', role: 'Smart help', desc: 'Smarter decisions, details', family: 'rod' },
-    { id: 'tex-0', name: 'Tex 0', role: 'Code', desc: 'Coding, debugging, implementation', family: 'tex' },
-    { id: 'tex-1-5', name: 'Tex 1.5', role: 'Complex code', desc: 'Architecture, larger builds', family: 'tex' },
-    { id: 'tex-2-5', name: 'Tex 2.5', role: 'Plus code', desc: 'Hardest coding (Plus only)', family: 'tex' },
-    { id: 'treesearch-q', name: 'Treesearch _ q', role: 'Research', desc: 'Research, comparisons', family: 'tree' },
+    { id: 'adapt', name: 'Adapt', role: 'Auto', desc: 'Picks the best model(s) for your task', family: 'adapt', pro: false },
+    { id: 'rod-1', name: 'Rod _ 1', role: 'Everyday', desc: 'Quick answers, simple tasks', family: 'rod', pro: false },
+    { id: 'rod-thinking', name: 'Rod thinking', role: 'Hard tasks', desc: 'Careful reasoning, planning', family: 'rod', pro: false },
+    { id: 'rod-brain', name: 'Rod brain', role: 'Smart help', desc: 'Smarter decisions, details', family: 'rod', pro: false },
+    { id: 'tex-0', name: 'Tex 0', role: 'Code', desc: 'Coding, debugging, implementation', family: 'tex', pro: false },
+    { id: 'tex-1-5', name: 'Tex 1.5', role: 'Complex code', desc: 'Architecture, larger builds', family: 'tex', pro: true },
+    { id: 'tex-2-5', name: 'Tex 2.5', role: 'Plus code', desc: 'Hardest coding, deep debugging', family: 'tex', pro: true },
+    { id: 'treesearch-q', name: 'Treesearch _ q', role: 'Research', desc: 'Research, comparisons', family: 'tree', pro: false },
   ];
+
+  // User plan state (will be set from auth)
+  let userIsPro = false;
+  let freeMessagesUsed = parseInt(localStorage.getItem('rotex_free_msgs') || '0');
+  const FREE_DAILY_LIMIT = 25;
+  const FREE_DAILY_KEY = 'rotex_free_msgs_date';
+
+  // Reset daily counter
+  (function resetDailyCounter() {
+    const today = new Date().toDateString();
+    const savedDate = localStorage.getItem(FREE_DAILY_KEY);
+    if (savedDate !== today) {
+      freeMessagesUsed = 0;
+      localStorage.setItem('rotex_free_msgs', '0');
+      localStorage.setItem(FREE_DAILY_KEY, today);
+    }
+  })();
 
   // ─── Adapt logic: pick model based on message content ──────────────
   function adaptPickModel(text) {
@@ -179,29 +196,71 @@
     aiMessages.innerHTML = `<div class="ai-welcome-msg"><p><strong>ROTEX AI</strong></p><p>Ask me anything about your code. I can write, edit, debug, refactor, and explain.</p></div>`;
   });
 
-  // ─── AI Model Selector (at bottom) ────────────────────────────────
+  // ─── AI Model Selector (scrollable, at bottom) ─────────────────────
   function buildModelMenu() {
-    aiModelMenu.innerHTML = MODELS.map((m) => `
-      <button class="ai-model-option" data-model="${m.id}">
-        <span class="model-name">${m.name}</span>
-        <span class="model-desc">${m.role} — ${m.desc}</span>
-      </button>
-    `).join('');
+    const familyOrder = ['adapt', 'rod', 'tex', 'tree'];
+    const familyLabels = { adapt: '', rod: 'ROD FAMILY', tex: 'TEX FAMILY', tree: 'RESEARCH' };
+    let html = '<div class="ai-model-scroll">';
+    let lastFamily = '';
+
+    for (const m of MODELS) {
+      if (m.family !== lastFamily && familyLabels[m.family]) {
+        html += `<div class="ai-model-divider">${familyLabels[m.family]}</div>`;
+        lastFamily = m.family;
+      } else if (m.family !== lastFamily) {
+        lastFamily = m.family;
+      }
+
+      const locked = m.pro && !userIsPro;
+      const activeClass = m.id === state.aiModel ? ' active' : '';
+      const lockedClass = locked ? ' locked' : '';
+      const badge = m.id === 'adapt'
+        ? '<span class="adapt-badge">AUTO</span>'
+        : m.pro ? '<span class="pro-badge">PRO</span>' : '';
+
+      html += `<button class="ai-model-option${activeClass}${lockedClass}" data-model="${m.id}" ${locked ? 'title="Upgrade to Plus to use this model"' : ''}>
+        <div class="model-option-left">
+          <span class="model-name">${m.name}</span>
+          <span class="model-desc">${m.desc}</span>
+        </div>
+        <div class="model-option-right">
+          ${badge}
+          <span class="model-role-tag">${m.role}</span>
+        </div>
+      </button>`;
+    }
+    html += '</div>';
+    aiModelMenu.innerHTML = html;
   }
   buildModelMenu();
 
   aiModelButton.addEventListener('click', () => {
     aiModelMenu.hidden = !aiModelMenu.hidden;
+    if (!aiModelMenu.hidden) buildModelMenu(); // refresh active state
   });
   aiModelMenu.addEventListener('click', (e) => {
     const opt = e.target.closest('[data-model]');
     if (!opt) return;
     const model = MODELS.find((m) => m.id === opt.dataset.model);
-    if (model) {
-      state.aiModel = model.id;
-      $('#aiSelectedModel').textContent = model.name;
-      $('#aiSelectedRole').textContent = model.role;
+    if (!model) return;
+
+    // Block locked models
+    if (model.pro && !userIsPro) {
+      // Show upgrade hint
+      const hint = aiModelMenu.querySelector('.ai-model-upgrade-hint');
+      if (!hint) {
+        const div = document.createElement('div');
+        div.className = 'ai-model-upgrade-hint';
+        div.textContent = 'Upgrade to Plus to unlock this model';
+        aiModelMenu.querySelector('.ai-model-scroll').appendChild(div);
+        setTimeout(() => div.remove(), 2500);
+      }
+      return;
     }
+
+    state.aiModel = model.id;
+    $('#aiSelectedModel').textContent = model.name;
+    $('#aiSelectedRole').textContent = model.role;
     aiModelMenu.hidden = true;
   });
   document.addEventListener('click', (e) => {
@@ -219,6 +278,16 @@
     addAIMessage('user', text);
     aiInput.value = '';
     aiInput.style.height = 'auto';
+
+    // Check free tier limit
+    if (!userIsPro) {
+      if (freeMessagesUsed >= FREE_DAILY_LIMIT) {
+        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Upgrade to Plus for more credits and access to Tex 1.5, Tex 2.5, and unlimited messages.`);
+        return;
+      }
+      freeMessagesUsed++;
+      localStorage.setItem('rotex_free_msgs', String(freeMessagesUsed));
+    }
 
     // Show typing indicator
     const typing = document.createElement('div');
@@ -579,12 +648,30 @@
       $('#sbLang').textContent = langDisplayName(file.language);
     }
 
+    // Update breadcrumb
+    updateBreadcrumb(path);
+
     // Highlight in tree
     fileTree.querySelectorAll('.tree-item').forEach((i) => i.classList.toggle('active', i.dataset.path === path));
 
     // Resize monaco
     const editor = editorInstances.get(path);
     if (editor) setTimeout(() => editor.layout(), 10);
+  }
+
+  function updateBreadcrumb(path) {
+    const bar = $('#breadcrumbBar');
+    if (!bar) return;
+    if (path === 'welcome') {
+      bar.innerHTML = '<span class="bc-active">Welcome</span>';
+      return;
+    }
+    const parts = path.split('/');
+    bar.innerHTML = parts.map((p, i) => {
+      const isLast = i === parts.length - 1;
+      const sep = i < parts.length - 1 ? '<span class="bc-sep">›</span>' : '';
+      return `<span class="${isLast ? 'bc-active' : ''}">${p}</span>${sep}`;
+    }).join('');
   }
 
   function closeTab(path) {
