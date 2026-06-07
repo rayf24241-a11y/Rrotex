@@ -47,6 +47,49 @@
     }
   })();
 
+  // ─── Usage Tracking ─────────────────────────────────────────────────
+  function getUsageData() {
+    try {
+      return JSON.parse(localStorage.getItem('rotex_usage') || '{}');
+    } catch { return {}; }
+  }
+
+  function trackUsage(modelName) {
+    const usage = getUsageData();
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    if (!usage[today]) usage[today] = { total: 0, models: {} };
+    usage[today].total++;
+    usage[today].models[modelName] = (usage[today].models[modelName] || 0) + 1;
+    localStorage.setItem('rotex_usage', JSON.stringify(usage));
+  }
+
+  function getUsageStats() {
+    const usage = getUsageData();
+    const today = new Date();
+    const todayKey = today.toISOString().slice(0, 10);
+
+    // Today's usage
+    const todayData = usage[todayKey] || { total: 0, models: {} };
+
+    // This week (last 7 days)
+    let weekTotal = 0;
+    const weekModels = {};
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const day = usage[key];
+      if (day) {
+        weekTotal += day.total;
+        for (const [m, count] of Object.entries(day.models)) {
+          weekModels[m] = (weekModels[m] || 0) + count;
+        }
+      }
+    }
+
+    return { today: todayData, weekTotal, weekModels };
+  }
+
   // ─── Adapt logic: pick model based on message content ──────────────
   function adaptPickModel(text) {
     const lower = text.toLowerCase();
@@ -298,11 +341,14 @@
 
     // Determine which model to use
     let modelId = state.aiModel;
-    let adaptNote = '';
+    let usedModelName = '';
     if (modelId === 'adapt') {
       modelId = adaptPickModel(text);
       const picked = MODELS.find(m => m.id === modelId);
-      adaptNote = picked ? `Used ${picked.name}` : '';
+      usedModelName = picked ? picked.name : modelId;
+    } else {
+      const picked = MODELS.find(m => m.id === modelId);
+      usedModelName = picked ? picked.name : modelId;
     }
 
     // Build context from current file
@@ -353,26 +399,31 @@
         return;
       }
 
-      addAIMessage('assistant', reply, adaptNote);
+      addAIMessage('assistant', reply, usedModelName);
     } catch (err) {
       typing.remove();
       addAIMessage('assistant', 'Could not connect to the AI backend. Make sure the server is running.');
     }
   });
 
-  function addAIMessage(role, content, note) {
+  function addAIMessage(role, content, modelName) {
     state.aiMessages.push({ role, content });
     const div = document.createElement('div');
     div.className = `ai-msg ai-msg-${role}`;
     div.innerHTML = formatAIContent(content, role);
-    if (note) {
-      const badge = document.createElement('div');
-      badge.className = 'ai-adapt-badge';
-      badge.textContent = note;
-      div.prepend(badge);
+    if (modelName && role === 'assistant') {
+      const meta = document.createElement('div');
+      meta.className = 'ai-msg-model';
+      meta.textContent = modelName;
+      div.appendChild(meta);
     }
     aiMessages.appendChild(div);
     aiMessages.scrollTop = aiMessages.scrollHeight;
+
+    // Track usage
+    if (role === 'assistant' && modelName) {
+      trackUsage(modelName);
+    }
   }
 
   function formatAIContent(text, role) {
@@ -992,6 +1043,91 @@
     if (e.ctrlKey && e.key === 'n') { e.preventDefault(); createNewFile(); }
     if (e.ctrlKey && e.key === 'b') { e.preventDefault(); editorApp.classList.toggle('side-collapsed'); }
   });
+
+  // ─── Profile / Usage Popup ──────────────────────────────────────────
+  const profileBtn = $('#sbProfile');
+  if (profileBtn) {
+    profileBtn.addEventListener('click', () => {
+      showUsagePopup();
+    });
+  }
+
+  function showUsagePopup() {
+    // Remove existing popup
+    const existing = document.querySelector('.usage-popup');
+    if (existing) { existing.remove(); return; }
+
+    const stats = getUsageStats();
+    const remaining = userIsPro ? 'Unlimited' : `${Math.max(0, FREE_DAILY_LIMIT - freeMessagesUsed)} / ${FREE_DAILY_LIMIT}`;
+    const planLabel = userIsPro ? 'Plus' : 'Free';
+
+    // Build model breakdown
+    let todayModels = '';
+    for (const [model, count] of Object.entries(stats.today.models || {})) {
+      todayModels += `<div class="usage-model-row"><span>${model}</span><span>${count}</span></div>`;
+    }
+    if (!todayModels) todayModels = '<div class="usage-model-row muted">No messages yet today</div>';
+
+    let weekModels = '';
+    for (const [model, count] of Object.entries(stats.weekModels || {})) {
+      weekModels += `<div class="usage-model-row"><span>${model}</span><span>${count}</span></div>`;
+    }
+    if (!weekModels) weekModels = '<div class="usage-model-row muted">No messages this week</div>';
+
+    const popup = document.createElement('div');
+    popup.className = 'usage-popup';
+    popup.innerHTML = `
+      <div class="usage-popup-header">
+        <span class="usage-plan-badge ${userIsPro ? 'pro' : 'free'}">${planLabel}</span>
+        <span class="usage-title">Usage</span>
+        <button class="usage-close">&times;</button>
+      </div>
+      <div class="usage-section">
+        <div class="usage-section-title">Today</div>
+        <div class="usage-stat-row">
+          <span>Messages</span>
+          <span class="usage-stat-value">${stats.today.total}</span>
+        </div>
+        <div class="usage-stat-row">
+          <span>Remaining</span>
+          <span class="usage-stat-value">${remaining}</span>
+        </div>
+        <div class="usage-models-title">Models used</div>
+        ${todayModels}
+      </div>
+      <div class="usage-section">
+        <div class="usage-section-title">This Week (7 days)</div>
+        <div class="usage-stat-row">
+          <span>Total messages</span>
+          <span class="usage-stat-value">${stats.weekTotal}</span>
+        </div>
+        <div class="usage-models-title">Models used</div>
+        ${weekModels}
+      </div>
+      ${!userIsPro ? '<div class="usage-upgrade"><button class="usage-upgrade-btn">Upgrade to Plus</button></div>' : ''}
+    `;
+
+    document.body.appendChild(popup);
+
+    popup.querySelector('.usage-close').addEventListener('click', () => popup.remove());
+    const upgradeBtn = popup.querySelector('.usage-upgrade-btn');
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', () => {
+        window.open('https://rrotex.com/#pricing', '_blank');
+        popup.remove();
+      });
+    }
+
+    // Close when clicking outside
+    setTimeout(() => {
+      document.addEventListener('click', function closePopup(e) {
+        if (!popup.contains(e.target) && e.target !== profileBtn) {
+          popup.remove();
+          document.removeEventListener('click', closePopup);
+        }
+      });
+    }, 10);
+  }
 
   // ─── Init ──────────────────────────────────────────────────────────
   appendTerminal('ROTEX Terminal — type "help" for commands', 'cmd');
