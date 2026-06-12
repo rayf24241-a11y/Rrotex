@@ -217,6 +217,7 @@ const readableExtensions = new Set(['txt', 'md', 'json', 'js', 'ts', 'tsx', 'jsx
 
 initFirebase();
 applyPendingActivation();
+ensureFreshProPass();
 render();
 
 async function initFirebase() {
@@ -1408,6 +1409,7 @@ async function sendMessage(text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         authToken,
+        proPass: getProPass(),
         model: model.id,
         computerMode: state.computerMode,
         computerConnections: state.computerConnections,
@@ -1542,6 +1544,7 @@ async function getTeamupReply(chat, selfModel, partnerModel, clean, instruction)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         authToken,
+        proPass: getProPass(),
         model: selfModel.id,
         personality: `Teamup mini room. You are ${selfModel.name}. Work with ${partnerModel.name}. ${instruction} Be useful, concise, and do not introduce yourself unless asked. User request: ${clean}`,
         messages: buildApiMessages(chat).slice(-12),
@@ -1616,6 +1619,54 @@ async function continueCheckout() {
   }
 }
 
+// ─── Plus pass (shared with the editor via localStorage) ───────────────
+const PRO_PASS_KEY = 'rotex_pro_pass';
+
+function getProPass() {
+  try { return localStorage.getItem(PRO_PASS_KEY) || ''; } catch { return ''; }
+}
+
+function setProPass(pass) {
+  try { if (pass) localStorage.setItem(PRO_PASS_KEY, pass); } catch {}
+}
+
+function clearProPass() {
+  try { localStorage.removeItem(PRO_PASS_KEY); } catch {}
+}
+
+function proPassExpiry(pass) {
+  try {
+    const body = pass.split('.', 2)[0];
+    const payload = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/')));
+    return Number(payload.exp) || 0;
+  } catch { return 0; }
+}
+
+async function ensureFreshProPass() {
+  const pass = getProPass();
+  if (!pass) return;
+  const exp = proPassExpiry(pass);
+  if (exp - Date.now() > 7 * 24 * 60 * 60 * 1000) return;
+  try {
+    const response = await fetch('/api/refresh-pro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proPass: pass }),
+    });
+    const data = await response.json();
+    if (data.refreshed && data.proPass) {
+      setProPass(data.proPass);
+    } else if (data.cancelled || exp < Date.now()) {
+      clearProPass();
+      if (state.pro) {
+        state.pro = false;
+        persistState();
+        render();
+      }
+    }
+  } catch { /* network issue — retry on next page load */ }
+}
+
 async function handleCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id');
@@ -1634,6 +1685,7 @@ async function handleCheckoutReturn() {
       return;
     }
     state.pro = true;
+    if (data.proPass) setProPass(data.proPass);
     state.stripeSubscriptionId = data.subscriptionId || state.stripeSubscriptionId || '';
     state.creditUsage = normalizeCreditUsage({}, true, creditPlans.pro.monthly);
     state.credits = remainingMonthlyCredits(true, state.creditUsage);

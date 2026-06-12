@@ -63,8 +63,26 @@ Add these to Vercel Project Settings -> Environment Variables:
 ```text
 GROQ_API_KEY
 DEEPSEEK_API_KEY
-CLAUDE_API_KEY
+ANTHROPIC_API_KEY   (or CLAUDE_API_KEY)
+OPENROUTER_API_KEY  (powers Tex 2; falls back to DeepSeek when missing)
+PRO_PASS_SECRET     (random 32+ char secret; signs the Plus pass)
 ```
+
+Optional model overrides: `CLAUDE_OPUS_MODEL`, `CLAUDE_HAIKU_MODEL`, `OPENROUTER_CODER_MODEL`.
+
+## Plus enforcement (no database needed)
+
+- `/api/verify-checkout-session` checks Stripe and returns a signed **Pro pass** (HMAC, 35-day expiry).
+- The web app and editor store it in `localStorage` under `rotex_pro_pass` and send it with every `/api/chat` call.
+- `/api/chat` rejects Plus models without a valid pass (HTTP 402) and gives Plus users bigger output limits.
+- `/api/refresh-pro` re-checks the Stripe subscription and reissues the pass; cancelled subs stop refreshing and expire automatically.
+
+## Editor AI
+
+- `/api/chat` streams responses (`stream: true`, SSE) and accepts `mode: 'editor'`, `agent: true`, and `projectContext`.
+- Agent mode (Plus) lets the AI propose multi-file changes as ```file:path blocks with per-file Diff/Apply and Apply All.
+- Ctrl+K = inline AI edit on the selection in Monaco.
+- `Local _ Ollama` model talks to `http://127.0.0.1:11434` directly from the editor (free/local; browser use needs `OLLAMA_ORIGINS` set).
 
 ## Computer mode connectors
 

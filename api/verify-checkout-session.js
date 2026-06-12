@@ -1,3 +1,5 @@
+const { signProPass } = require('./_lib/propass.js');
+
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'Method not allowed' });
@@ -40,10 +42,20 @@ module.exports = async function handler(request, response) {
     return;
   }
 
+  // Signed pass proves Plus status to /api/chat without a database.
+  // 35 days covers the billing month; the app refreshes it via /api/refresh-pro.
+  const proPass = signProPass({
+    uid,
+    sub: session.subscription || '',
+    plan: 'plus',
+    exp: Date.now() + 35 * 24 * 60 * 60 * 1000,
+  });
+
   response.status(200).json({
     verified: true,
     pro: true,
     subscriptionId: session.subscription || '',
+    proPass,
   });
 };
 

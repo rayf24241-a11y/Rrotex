@@ -16,6 +16,7 @@
     bottomPanelOpen: false,
     aiPanelOpen: false,
     currentDirPath: '',
+    agentMode: false,
   };
 
   // ─── AI Models (IDs match /api/chat.js) ────────────────────────────
@@ -26,15 +27,62 @@
     { id: 'rod-brain', name: 'Rod brain', role: 'Smart help', desc: 'Smarter decisions, details', family: 'rod', pro: false },
     { id: 'tex-0', name: 'Tex 0', role: 'Code', desc: 'Coding, debugging, implementation', family: 'tex', pro: false },
     { id: 'tex-1-5', name: 'Tex 1.5', role: 'Complex code', desc: 'Architecture, larger builds', family: 'tex', pro: true },
+    { id: 'tex-2', name: 'Tex 2', role: 'Big context', desc: 'Large coding tasks, big context window', family: 'tex', pro: true },
     { id: 'tex-2-5', name: 'Tex 2.5', role: 'Plus code', desc: 'Hardest coding, deep debugging', family: 'tex', pro: true },
     { id: 'treesearch-q', name: 'Treesearch _ q', role: 'Research', desc: 'Research, comparisons', family: 'tree', pro: false },
+    { id: 'ollama', name: 'Local _ Ollama', role: 'Local', desc: 'Runs on your own PC with Ollama — free and private', family: 'local', pro: false },
   ];
 
-  // User plan state (will be set from auth)
-  let userIsPro = false;
+  const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
+
+  // ─── Plus pass (shared with rrotex.com chat via localStorage) ──────
+  const PRO_PASS_KEY = 'rotex_pro_pass';
+
+  function getProPass() {
+    try { return localStorage.getItem(PRO_PASS_KEY) || ''; } catch { return ''; }
+  }
+
+  function proPassPayload(pass) {
+    try {
+      const body = pass.split('.', 2)[0];
+      return JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/')));
+    } catch { return null; }
+  }
+
+  function computeIsPro() {
+    const payload = proPassPayload(getProPass());
+    return Boolean(payload && payload.plan === 'plus' && Number(payload.exp) > Date.now());
+  }
+
+  async function ensureFreshProPass() {
+    const pass = getProPass();
+    if (!pass) return;
+    const payload = proPassPayload(pass);
+    const exp = payload ? Number(payload.exp) : 0;
+    if (exp - Date.now() > 7 * 24 * 60 * 60 * 1000) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/refresh-pro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proPass: pass }),
+      });
+      const data = await response.json();
+      if (data.refreshed && data.proPass) {
+        localStorage.setItem(PRO_PASS_KEY, data.proPass);
+      } else if (data.cancelled || exp < Date.now()) {
+        localStorage.removeItem(PRO_PASS_KEY);
+      }
+      userIsPro = computeIsPro();
+      buildModelMenu();
+    } catch { /* network issue — retry next launch */ }
+  }
+
+  // User plan state (from the signed Plus pass)
+  let userIsPro = computeIsPro();
   let freeMessagesUsed = parseInt(localStorage.getItem('rotex_free_msgs') || '0');
   const FREE_DAILY_LIMIT = 25;
   const FREE_DAILY_KEY = 'rotex_free_msgs_date';
+  setTimeout(ensureFreshProPass, 1500);
 
   // Reset daily counter
   (function resetDailyCounter() {
@@ -103,7 +151,7 @@
     const researchScore = researchSignals.filter(s => lower.includes(s)).length;
     const hardScore = hardSignals.filter(s => lower.includes(s)).length;
 
-    if (hardCodeScore >= 2 || (codeScore >= 3 && lower.length > 200)) return 'tex-1-5';
+    if (hardCodeScore >= 2 || (codeScore >= 3 && lower.length > 200)) return userIsPro ? 'tex-1-5' : 'tex-0';
     if (codeScore >= 2) return 'tex-0';
     if (researchScore >= 2) return 'treesearch-q';
     if (hardScore >= 2 || lower.length > 300) return 'rod-thinking';
@@ -241,8 +289,8 @@
 
   // ─── AI Model Selector (scrollable, at bottom) ─────────────────────
   function buildModelMenu() {
-    const familyOrder = ['adapt', 'rod', 'tex', 'tree'];
-    const familyLabels = { adapt: '', rod: 'ROD FAMILY', tex: 'TEX FAMILY', tree: 'RESEARCH' };
+    const familyOrder = ['adapt', 'rod', 'tex', 'tree', 'local'];
+    const familyLabels = { adapt: '', rod: 'ROD FAMILY', tex: 'TEX FAMILY', tree: 'RESEARCH', local: 'ON YOUR PC' };
     let html = '<div class="ai-model-scroll">';
     let lastFamily = '';
 
@@ -312,97 +360,260 @@
     }
   });
 
-  // ─── AI Chat ───────────────────────────────────────────────────────
+  // ─── Agent Mode Toggle (Plus: multi-file edits in one reply) ───────
+  const agentToggle = $('#agentToggle');
+  if (agentToggle) {
+    agentToggle.addEventListener('click', () => {
+      if (!userIsPro) {
+        showToast('Agent mode is a Plus feature — upgrade at rrotex.com/#pricing');
+        return;
+      }
+      state.agentMode = !state.agentMode;
+      agentToggle.classList.toggle('on', state.agentMode);
+      agentToggle.title = state.agentMode
+        ? 'Agent mode on: the AI can change multiple files in one reply'
+        : 'Agent mode off';
+    });
+  }
+
+  function showToast(text) {
+    document.querySelector('.rotex-toast')?.remove();
+    const toast = document.createElement('div');
+    toast.className = 'rotex-toast';
+    toast.textContent = text;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3200);
+  }
+
+  // ─── Project Context (what the AI can "see") ───────────────────────
+  function collectTreePaths(items, out, depth) {
+    for (const item of items || []) {
+      if (out.length >= 200) return;
+      out.push(`${'  '.repeat(depth)}${item.path}${item.kind === 'directory' ? '/' : ''}`);
+      if (item.children) collectTreePaths(item.children, out, depth + 1);
+    }
+  }
+
+  function buildProjectContext() {
+    const parts = [];
+    if (state.currentDirPath) parts.push(`Project root: ${state.currentDirPath}`);
+
+    const treePaths = [];
+    collectTreePaths(state.fileTree, treePaths, 0);
+    if (treePaths.length) parts.push(`File tree:\n${treePaths.join('\n')}`);
+
+    const openPaths = [...state.openFiles.keys()];
+    if (openPaths.length) parts.push(`Open tabs: ${openPaths.join(', ')}`);
+
+    const activeCap = userIsPro ? 24000 : 6000;
+    if (state.activeTab && state.activeTab !== 'welcome') {
+      const file = state.openFiles.get(state.activeTab);
+      if (file) {
+        parts.push(`Active file: ${state.activeTab} (${file.language})\n\`\`\`${file.language}\n${file.content.slice(0, activeCap)}\n\`\`\``);
+      }
+    }
+
+    // Plus: include other open files so the AI sees cross-file connections
+    if (userIsPro) {
+      let extras = 0;
+      for (const [path, file] of state.openFiles) {
+        if (path === state.activeTab || extras >= 3) continue;
+        parts.push(`Open file: ${path} (${file.language})\n\`\`\`${file.language}\n${file.content.slice(0, 4000)}\n\`\`\``);
+        extras++;
+      }
+    }
+
+    return parts.join('\n\n');
+  }
+
+  // ─── Ollama (local models on the user's PC) ────────────────────────
+  const OLLAMA_URL = 'http://127.0.0.1:11434';
+
+  function getOllamaModel() {
+    try { return localStorage.getItem('rotex_ollama_model') || ''; } catch { return ''; }
+  }
+
+  async function pickOllamaModel() {
+    const saved = getOllamaModel();
+    const resp = await fetch(`${OLLAMA_URL}/api/tags`);
+    const data = await resp.json();
+    const names = (data.models || []).map((m) => m.name);
+    if (!names.length) throw new Error('no_models');
+    const chosen = names.includes(saved) ? saved : names[0];
+    try { localStorage.setItem('rotex_ollama_model', chosen); } catch {}
+    return chosen;
+  }
+
+  const OLLAMA_HELP = [
+    'Local _ Ollama could not reach Ollama on your PC.',
+    '',
+    '**Setup:**',
+    '1. Install Ollama from `ollama.com`',
+    '2. Pull a coding model: `ollama pull qwen2.5-coder:7b`',
+    '3. Using the ROTEX website (not the desktop app)? Allow the browser to talk to Ollama, then restart it:',
+    '   Windows: `setx OLLAMA_ORIGINS "*"` then restart Ollama',
+    '',
+    'Local models are free, private, and have no daily limits.',
+  ].join('\n');
+
+  async function streamOllama(apiMessages, projectContext, agentMode, onDelta) {
+    const model = await pickOllamaModel();
+    const system = [
+      'You are ROTEX AI, the coding assistant inside the ROTEX code editor.',
+      'When showing code changes for a file, use a file block: ```file:relative/path.ext on its own line, the complete file contents, then ``` to close.',
+      agentMode ? 'AGENT MODE: you may change multiple files in one reply, one file block per file.' : '',
+      projectContext ? `PROJECT CONTEXT:\n${projectContext.slice(0, 12000)}` : '',
+    ].filter(Boolean).join('\n');
+
+    const resp = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        stream: true,
+        messages: [{ role: 'system', content: system }, ...apiMessages],
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.message?.content) onDelta(parsed.message.content);
+        } catch { /* partial line */ }
+      }
+    }
+    return `Ollama ${model}`;
+  }
+
+  // ─── AI Chat (streaming) ───────────────────────────────────────────
+  let aiBusy = false;
+
   aiComposer.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = aiInput.value.trim();
-    if (!text) return;
+    if (!text || aiBusy) return;
 
     addAIMessage('user', text);
     aiInput.value = '';
     aiInput.style.height = 'auto';
 
-    // Check free tier limit
-    if (!userIsPro) {
+    // Determine which model to use
+    let modelId = state.aiModel;
+    if (modelId === 'adapt') modelId = adaptPickModel(text);
+    const picked = MODELS.find((m) => m.id === modelId);
+    let usedModelName = picked ? picked.name : modelId;
+    const isLocal = modelId === 'ollama';
+
+    // Check free tier limit (local Ollama is always free and uncounted)
+    if (!userIsPro && !isLocal) {
       if (freeMessagesUsed >= FREE_DAILY_LIMIT) {
-        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Upgrade to Plus for more credits and access to Tex 1.5, Tex 2.5, and unlimited messages.`);
+        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Upgrade to Plus for unlimited messages and the locked Tex models — or switch to Local _ Ollama, which is free forever.`);
         return;
       }
       freeMessagesUsed++;
       localStorage.setItem('rotex_free_msgs', String(freeMessagesUsed));
     }
 
-    // Show typing indicator
-    const typing = document.createElement('div');
-    typing.className = 'ai-msg ai-msg-typing';
-    typing.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
-    aiMessages.appendChild(typing);
+    const apiMessages = state.aiMessages.slice(-12).map((m) => ({ role: m.role, content: m.content }));
+    const projectContext = buildProjectContext();
+
+    // Streaming message bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'ai-msg ai-msg-assistant ai-msg-streaming';
+    const streamBody = document.createElement('div');
+    streamBody.className = 'ai-msg-stream';
+    bubble.appendChild(streamBody);
+    aiMessages.appendChild(bubble);
     aiMessages.scrollTop = aiMessages.scrollHeight;
 
-    // Determine which model to use
-    let modelId = state.aiModel;
-    let usedModelName = '';
-    if (modelId === 'adapt') {
-      modelId = adaptPickModel(text);
-      const picked = MODELS.find(m => m.id === modelId);
-      usedModelName = picked ? picked.name : modelId;
-    } else {
-      const picked = MODELS.find(m => m.id === modelId);
-      usedModelName = picked ? picked.name : modelId;
-    }
+    let fullText = '';
+    const onDelta = (chunk) => {
+      fullText += chunk;
+      streamBody.textContent = fullText;
+      const nearBottom = aiMessages.scrollHeight - aiMessages.scrollTop - aiMessages.clientHeight < 80;
+      if (nearBottom) aiMessages.scrollTop = aiMessages.scrollHeight;
+    };
 
-    // Build context from current file
-    let fileContext = '';
-    if (state.activeTab && state.activeTab !== 'welcome') {
-      const file = state.openFiles.get(state.activeTab);
-      if (file) {
-        const content = file.content.substring(0, 4000);
-        fileContext = `\n\n[Current file: ${state.activeTab} (${file.language})]\n\`\`\`${file.language}\n${content}\n\`\`\``;
-      }
-    }
-
-    // Build messages for API
-    const apiMessages = state.aiMessages.slice(-12).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-
+    aiBusy = true;
     try {
-      // Use absolute URL for Electron (no local server), relative for web
-      const apiBase = window.rotexDesktop ? 'https://rrotex.com' : '';
-      const resp = await fetch(`${apiBase}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [
-            ...apiMessages,
-            { role: 'user', content: text + fileContext },
-          ],
-          personality: 'coder',
-        }),
-      });
+      if (isLocal) {
+        usedModelName = await streamOllama(apiMessages, projectContext, state.agentMode, onDelta);
+      } else {
+        const resp = await fetch(`${API_BASE}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: modelId,
+            messages: apiMessages,
+            mode: 'editor',
+            agent: Boolean(state.agentMode),
+            projectContext,
+            proPass: getProPass(),
+            stream: true,
+          }),
+        });
 
-      typing.remove();
+        const contentType = resp.headers.get('content-type') || '';
+        if (!resp.ok || !contentType.includes('text/event-stream')) {
+          const errData = await resp.json().catch(() => ({}));
+          bubble.remove();
+          addAIMessage('assistant', errData.text || 'Something went wrong. Try again.');
+          return;
+        }
 
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        addAIMessage('assistant', errData.text || 'Something went wrong. Try again.');
-        return;
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let streamError = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const events = buf.split('\n\n');
+          buf = events.pop() || '';
+          for (const event of events) {
+            const line = event.split('\n').find((l) => l.startsWith('data:'));
+            if (!line) continue;
+            let payload;
+            try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
+            if (payload.model) usedModelName = payload.model;
+            if (payload.d) onDelta(payload.d);
+            if (payload.error) streamError = payload.text || 'The model had trouble answering.';
+          }
+        }
+        if (streamError && !fullText) {
+          bubble.remove();
+          addAIMessage('assistant', streamError);
+          return;
+        }
       }
 
-      const data = await resp.json();
-      const reply = data.text || '';
-
-      if (!reply) {
-        addAIMessage('assistant', 'No response received. Check your API keys are set.');
+      bubble.remove();
+      if (!fullText) {
+        addAIMessage('assistant', 'No response received. Try again or switch models.');
         return;
       }
-
-      addAIMessage('assistant', reply, usedModelName);
+      addAIMessage('assistant', fullText, usedModelName);
     } catch (err) {
-      typing.remove();
-      addAIMessage('assistant', 'Could not connect to the AI backend. Make sure the server is running.');
+      bubble.remove();
+      if (isLocal) {
+        addAIMessage('assistant', OLLAMA_HELP);
+      } else {
+        addAIMessage('assistant', 'Could not connect to the AI backend. Check your internet connection and try again.');
+      }
+    } finally {
+      aiBusy = false;
     }
   });
 
@@ -431,14 +642,19 @@
 
     // Parse code blocks and add "Apply to editor" buttons
     let html = text;
+    let fileBlockCount = 0;
 
     // Handle file blocks: ```file:path
     html = html.replace(/```file:([^\n]+)\n([\s\S]*?)```/g, (_, filename, code) => {
+      fileBlockCount++;
+      const cleanName = escapeHtml(filename.trim());
+      const encoded = btoa(unescape(encodeURIComponent(code.trim())));
       const escaped = escapeHtml(code.trim());
       return `<div class="ai-code-block">
         <div class="ai-code-header">
-          <span>${escapeHtml(filename.trim())}</span>
-          <button class="ai-code-apply" data-filename="${escapeHtml(filename.trim())}" data-code="${btoa(unescape(encodeURIComponent(code.trim())))}">Apply</button>
+          <span>${cleanName}</span>
+          <button class="ai-code-diff" data-filename="${cleanName}" data-code="${encoded}">Diff</button>
+          <button class="ai-code-apply" data-filename="${cleanName}" data-code="${encoded}">Apply</button>
         </div>
         <pre><code>${escaped}</code></pre>
       </div>`;
@@ -467,6 +683,11 @@
     // Newlines
     html = html.replace(/\n/g, '<br>');
 
+    // Multiple file blocks (agent mode) → one-click Apply All
+    if (fileBlockCount > 1) {
+      html += `<div class="ai-apply-all"><button class="ai-apply-all-btn">Apply All (${fileBlockCount} files)</button></div>`;
+    }
+
     return html;
   }
 
@@ -474,10 +695,34 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // Handle Apply/Copy clicks in AI messages
+  // Handle Apply/Copy/Diff clicks in AI messages
   aiMessages.addEventListener('click', (e) => {
     const applyBtn = e.target.closest('.ai-code-apply');
     const copyBtn = e.target.closest('.ai-code-copy');
+    const diffBtn = e.target.closest('.ai-code-diff');
+    const applyAllBtn = e.target.closest('.ai-apply-all-btn');
+
+    if (applyAllBtn) {
+      const msg = applyAllBtn.closest('.ai-msg');
+      const buttons = msg ? [...msg.querySelectorAll('.ai-code-apply[data-filename]')] : [];
+      (async () => {
+        for (const btn of buttons) {
+          const code = decodeURIComponent(escape(atob(btn.dataset.code)));
+          await applyCodeToFile(btn.dataset.filename, code);
+          btn.textContent = 'Applied!';
+          btn.classList.add('applied');
+        }
+        applyAllBtn.textContent = `Applied ${buttons.length} files`;
+        applyAllBtn.disabled = true;
+      })();
+      return;
+    }
+
+    if (diffBtn) {
+      const code = decodeURIComponent(escape(atob(diffBtn.dataset.code)));
+      showDiffModal(diffBtn.dataset.filename, code);
+      return;
+    }
 
     if (copyBtn) {
       const code = decodeURIComponent(escape(atob(copyBtn.dataset.code)));
@@ -540,6 +785,87 @@
     // Update tab (remove modified indicator)
     const tabEl = tabs.querySelector(`[data-tab="${path}"] .tab-name`);
     if (tabEl) tabEl.textContent = tabEl.textContent.replace(' *', '');
+  }
+
+  // ─── Diff Preview ──────────────────────────────────────────────────
+  async function getKnownFileContent(path) {
+    const open = state.openFiles.get(path);
+    if (open) return open.content;
+    const entry = findEntry(state.fileTree, path);
+    if (!entry) return null;
+    try {
+      if (window.rotexDesktop) {
+        return await window.rotexDesktop.readFile(entry.path);
+      }
+      if (entry.handle) {
+        const file = await entry.handle.getFile();
+        return await file.text();
+      }
+    } catch { /* unreadable — treat as new file */ }
+    return null;
+  }
+
+  // Common prefix/suffix line diff — fast and good enough for previews.
+  function computeLineDiff(oldText, newText) {
+    const a = String(oldText).split('\n');
+    const b = String(newText).split('\n');
+    let start = 0;
+    while (start < a.length && start < b.length && a[start] === b[start]) start++;
+    let endA = a.length;
+    let endB = b.length;
+    while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+
+    const rows = [];
+    for (let i = Math.max(0, start - 3); i < start; i++) rows.push({ type: 'ctx', text: a[i], num: i + 1 });
+    for (let i = start; i < endA; i++) rows.push({ type: 'del', text: a[i], num: i + 1 });
+    for (let i = start; i < endB; i++) rows.push({ type: 'add', text: b[i], num: i + 1 });
+    for (let i = endA; i < Math.min(a.length, endA + 3); i++) rows.push({ type: 'ctx', text: a[i], num: i + 1 });
+    return { rows, removed: endA - start, added: endB - start };
+  }
+
+  async function showDiffModal(filename, newCode) {
+    document.querySelector('.diff-modal-overlay')?.remove();
+
+    const oldContent = await getKnownFileContent(filename);
+    const overlay = document.createElement('div');
+    overlay.className = 'diff-modal-overlay';
+
+    let bodyHtml;
+    let summary;
+    if (oldContent === null) {
+      summary = 'New file';
+      bodyHtml = newCode.split('\n').slice(0, 400)
+        .map((line, i) => `<div class="diff-line diff-add"><span class="diff-num">${i + 1}</span>${escapeHtml(line) || '&nbsp;'}</div>`)
+        .join('');
+    } else {
+      const diff = computeLineDiff(oldContent, newCode);
+      summary = `−${diff.removed} +${diff.added} lines`;
+      bodyHtml = diff.rows.slice(0, 600).map((row) => {
+        const cls = row.type === 'add' ? 'diff-add' : row.type === 'del' ? 'diff-del' : 'diff-ctx';
+        return `<div class="diff-line ${cls}"><span class="diff-num">${row.num}</span>${escapeHtml(row.text) || '&nbsp;'}</div>`;
+      }).join('');
+      if (!diff.rows.length) bodyHtml = '<div class="diff-line diff-ctx">No changes — file already matches.</div>';
+    }
+
+    overlay.innerHTML = `
+      <div class="diff-modal">
+        <div class="diff-modal-header">
+          <span class="diff-modal-title">${escapeHtml(filename)}</span>
+          <span class="diff-modal-summary">${summary}</span>
+          <button class="diff-modal-apply">Apply</button>
+          <button class="diff-modal-close">&times;</button>
+        </div>
+        <div class="diff-modal-body">${bodyHtml}</div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.closest('.diff-modal-close')) overlay.remove();
+    });
+    overlay.querySelector('.diff-modal-apply').addEventListener('click', async () => {
+      await applyCodeToFile(filename, newCode);
+      overlay.remove();
+    });
   }
 
   // ─── Write File to Disk ────────────────────────────────────────────
@@ -880,6 +1206,9 @@
 
       editorInstances.set(path, editor);
 
+      // Ctrl+K inside Monaco (Monaco swallows the document-level shortcut)
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => openInlineEdit());
+
       editor.onDidChangeModelContent(() => {
         const file = state.openFiles.get(path);
         if (file) {
@@ -1023,6 +1352,103 @@
     terminalOutput.scrollTop = terminalOutput.scrollHeight;
   }
 
+  // ─── Ctrl+K Inline Edit ────────────────────────────────────────────
+  let ctrlkOpen = false;
+
+  function openInlineEdit() {
+    if (ctrlkOpen) return;
+    const path = state.activeTab;
+    if (!path || path === 'welcome') {
+      showToast('Open a file first, then press Ctrl+K to edit with AI');
+      return;
+    }
+    const editor = editorInstances.get(path);
+    if (!editor) return;
+    ctrlkOpen = true;
+
+    const widget = document.createElement('div');
+    widget.className = 'ctrlk-widget';
+    widget.innerHTML = `
+      <input type="text" class="ctrlk-input" placeholder="Edit with AI — describe the change (Enter to run, Esc to cancel)" />
+      <span class="ctrlk-status"></span>`;
+    const host = editorContent.querySelector(`[data-content="${CSS.escape(path)}"]`) || editorContent;
+    host.appendChild(widget);
+    const input = widget.querySelector('.ctrlk-input');
+    const status = widget.querySelector('.ctrlk-status');
+    input.focus();
+
+    const close = () => { widget.remove(); ctrlkOpen = false; editor.focus(); };
+
+    input.addEventListener('keydown', async (ev) => {
+      if (ev.key === 'Escape') { close(); return; }
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      const instruction = input.value.trim();
+      if (!instruction || input.disabled) return;
+
+      const selection = editor.getSelection();
+      const model = editor.getModel();
+      const hasSelection = selection && !selection.isEmpty();
+      const selectedText = hasSelection ? model.getValueInRange(selection) : '';
+      const file = state.openFiles.get(path);
+
+      if (!userIsPro) {
+        if (freeMessagesUsed >= FREE_DAILY_LIMIT) {
+          status.textContent = 'Daily limit reached — upgrade to Plus';
+          return;
+        }
+        freeMessagesUsed++;
+        localStorage.setItem('rotex_free_msgs', String(freeMessagesUsed));
+      }
+
+      input.disabled = true;
+      status.textContent = 'Thinking...';
+
+      const prompt = [
+        `INLINE EDIT in file ${path} (${file ? file.language : 'text'}).`,
+        hasSelection
+          ? `Selected code:\n\`\`\`\n${selectedText.slice(0, 12000)}\n\`\`\``
+          : `Cursor is at line ${selection.startLineNumber}. Full file for context:\n\`\`\`\n${file ? file.content.slice(0, 12000) : ''}\n\`\`\``,
+        `Instruction: ${instruction}`,
+        hasSelection
+          ? 'Reply with ONLY the replacement for the selected code. No markdown fences, no explanation, no file blocks.'
+          : 'Reply with ONLY the code to insert at the cursor. No markdown fences, no explanation, no file blocks.',
+      ].join('\n\n');
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: userIsPro ? 'tex-1-5' : 'tex-0',
+            messages: [{ role: 'user', content: prompt }],
+            mode: 'editor',
+            proPass: getProPass(),
+          }),
+        });
+        const data = await resp.json();
+        let code = String(data.text || '').trim();
+        code = code.replace(/^```[a-zA-Z]*\r?\n?/, '').replace(/\r?\n?```\s*$/, '');
+        if (!code) {
+          status.textContent = data.error ? (data.text || 'No edit returned') : 'No edit returned';
+          input.disabled = false;
+          return;
+        }
+        const range = hasSelection
+          ? selection
+          : new monaco.Range(selection.startLineNumber, selection.startColumn, selection.startLineNumber, selection.startColumn);
+        editor.pushUndoStop();
+        editor.executeEdits('rotex-ai', [{ range, text: code }]);
+        editor.pushUndoStop();
+        showToast('AI edit applied — Ctrl+Z to undo');
+        close();
+      } catch {
+        status.textContent = 'Could not reach the AI backend';
+        input.disabled = false;
+      }
+    });
+  }
+
   // ─── Button Wiring ─────────────────────────────────────────────────
   ['#openFolderBtn', '#treeOpenBtn', '#welcomeOpenFolder'].forEach((sel) => {
     $(sel)?.addEventListener('click', openFolder);
@@ -1040,6 +1466,7 @@
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveCurrentFile(); }
     if (e.ctrlKey && e.key === '`') { e.preventDefault(); toggleTerminal(); }
     if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) { e.preventDefault(); toggleAIPanel(); }
+    if (e.ctrlKey && !e.shiftKey && e.key === 'k') { e.preventDefault(); openInlineEdit(); }
     if (e.ctrlKey && e.key === 'n') { e.preventDefault(); createNewFile(); }
     if (e.ctrlKey && e.key === 'b') { e.preventDefault(); editorApp.classList.toggle('side-collapsed'); }
   });

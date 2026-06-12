@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ROTEX Editor</title>
-    <meta name="description" content="ROTEX AI-powered code editor with 7 built-in models." />
+    <meta name="description" content="ROTEX AI-powered code editor — streaming AI chat, agent mode, inline Ctrl+K edits, and local Ollama models." />
     <meta name="theme-color" content="#1e1e1e" />
     <link rel="manifest" href="./site.webmanifest" />
     <link rel="stylesheet" href="./editor.css" />
@@ -107,6 +107,7 @@
                 <div class="welcome-shortcuts">
                   <h3>Keyboard Shortcuts</h3>
                   <div class="shortcut-grid">
+                    <div class="shortcut"><kbd>Ctrl+K</kbd><span>AI Edit Selection</span></div>
                     <div class="shortcut"><kbd>Ctrl+S</kbd><span>Save File</span></div>
                     <div class="shortcut"><kbd>Ctrl+N</kbd><span>New File</span></div>
                     <div class="shortcut"><kbd>Ctrl+`</kbd><span>Toggle Terminal</span></div>
@@ -170,6 +171,10 @@
           <button class="ai-model-select" id="aiModelButton" type="button">
             <span id="aiSelectedModel">Adapt</span>
             <small id="aiSelectedRole">Auto</small>
+          </button>
+          <button class="agent-toggle" id="agentToggle" type="button" title="Agent mode: the AI can change multiple files in one reply (Plus)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Agent
           </button>
           <div class="ai-model-menu" id="aiModelMenu" hidden></div>
         </div>

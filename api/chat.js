@@ -1,5 +1,8 @@
 const AdmZip = require('adm-zip');
+const { verifyProPass } = require('./_lib/propass.js');
 
+// maxTokens = free tier output cap, proMaxTokens = Plus output cap.
+// pro: true models require a valid signed Pro pass (enforced server-side).
 const MODELS = {
   'rod-1': {
     name: 'Rod _ 1',
@@ -7,7 +10,9 @@ const MODELS = {
     providerModel: 'llama-3.1-8b-instant',
     purpose: 'everyday tasks',
     temperature: 0.65,
-    maxTokens: 700,
+    maxTokens: 1024,
+    proMaxTokens: 2048,
+    pro: false,
   },
   'rod-thinking': {
     name: 'Rod thinking',
@@ -15,7 +20,9 @@ const MODELS = {
     providerModel: 'llama-3.3-70b-versatile',
     purpose: 'harder tasks',
     temperature: 0.55,
-    maxTokens: 1100,
+    maxTokens: 2048,
+    proMaxTokens: 4096,
+    pro: false,
   },
   'rod-brain': {
     name: 'Rod brain',
@@ -23,7 +30,9 @@ const MODELS = {
     providerModel: process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-haiku-4-5-20251001',
     purpose: 'smart everyday help',
     temperature: 0.45,
-    maxTokens: 1100,
+    maxTokens: 2048,
+    proMaxTokens: 4096,
+    pro: false,
   },
   'tex-0': {
     name: 'Tex 0',
@@ -31,7 +40,9 @@ const MODELS = {
     providerModel: 'deepseek-chat',
     purpose: 'code',
     temperature: 0.35,
-    maxTokens: 1200,
+    maxTokens: 2048,
+    proMaxTokens: 8192,
+    pro: false,
   },
   'tex-1-5': {
     name: 'Tex 1.5',
@@ -39,15 +50,32 @@ const MODELS = {
     providerModel: 'deepseek-reasoner',
     purpose: 'complex code',
     temperature: 0.25,
-    maxTokens: 1600,
+    maxTokens: 8192,
+    proMaxTokens: 8192,
+    pro: true,
+  },
+  'tex-2': {
+    name: 'Tex 2',
+    provider: 'openrouter',
+    providerModel: process.env.OPENROUTER_CODER_MODEL || 'qwen/qwen3-coder',
+    fallbackProvider: 'deepseek',
+    fallbackProviderModel: 'deepseek-chat',
+    purpose: 'large coding tasks, big context',
+    temperature: 0.3,
+    maxTokens: 8192,
+    proMaxTokens: 8192,
+    pro: true,
   },
   'tex-2-5': {
     name: 'Tex 2.5',
     provider: 'anthropic',
-    providerModel: process.env.CLAUDE_OPUS_MODEL || process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-7',
+    providerModel: process.env.CLAUDE_OPUS_MODEL || process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-8',
     purpose: 'pro complex code',
     temperature: 0.25,
-    maxTokens: 1800,
+    maxTokens: 8192,
+    proMaxTokens: 8192,
+    pro: true,
+    dailyCap: 100,
   },
   'treesearch-q': {
     name: 'Treesearch _ q',
@@ -55,64 +83,158 @@ const MODELS = {
     providerModel: 'llama-3.3-70b-versatile',
     purpose: 'research only',
     temperature: 0.4,
-    maxTokens: 1200,
+    maxTokens: 1536,
+    proMaxTokens: 3072,
+    pro: false,
   },
 };
 
+// Best-effort abuse protection. In-memory, so it resets on cold starts —
+// it stops casual abuse of the open endpoint, not a determined attacker.
+const FREE_DAILY_IP_LIMIT = 120;
+const ipCounters = new Map();
+const proCounters = new Map();
+
+function bumpCounter(map, key) {
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = map.get(key);
+  if (!entry || entry.date !== today) {
+    map.set(key, { date: today, count: 1 });
+    if (map.size > 5000) map.clear();
+    return 1;
+  }
+  entry.count += 1;
+  return entry.count;
+}
+
 module.exports = async function handler(request, response) {
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (request.method === 'OPTIONS') {
+    response.status(204).end();
+    return;
+  }
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
-  const { authToken = '', model = 'rod-1', messages = [], computerMode = false, computerConnections = [], pcBridge = {}, personality = '', attachments = [] } = request.body || {};
-  // Auth is optional — logged-in users get cloud sync, guests can still chat
-  const authResult = await verifyFirebaseToken(authToken);
+  const {
+    authToken = '',
+    model = 'rod-1',
+    messages = [],
+    computerMode = false,
+    computerConnections = [],
+    pcBridge = {},
+    personality = '',
+    attachments = [],
+    proPass = '',
+    stream = false,
+    mode = 'chat',
+    agent = false,
+    projectContext = '',
+  } = request.body || {};
+
+  await verifyFirebaseToken(authToken); // optional: logged-in users get cloud sync, guests can still chat
+
+  const proPayload = verifyProPass(proPass);
+  const isPro = Boolean(proPayload);
 
   const selected = MODELS[model] || MODELS['rod-1'];
+
+  // Server-side Plus enforcement — locked models reject without a valid pass.
+  if (selected.pro && !isPro) {
+    response.status(402).json({
+      error: 'pro_required',
+      text: `${selected.name} is a Plus model. Upgrade to Plus on rrotex.com to unlock it.`,
+    });
+    return;
+  }
+
+  const ip = String(request.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+  if (!isPro) {
+    const used = bumpCounter(ipCounters, ip);
+    if (used > FREE_DAILY_IP_LIMIT) {
+      response.status(429).json({
+        error: 'rate_limited',
+        text: 'Free daily limit reached for today. Upgrade to Plus for much higher limits, or come back tomorrow.',
+      });
+      return;
+    }
+  }
+  if (isPro && selected.dailyCap) {
+    const used = bumpCounter(proCounters, `${proPayload.uid}:${model}`);
+    if (used > selected.dailyCap) {
+      response.status(429).json({
+        error: 'rate_limited',
+        text: `${selected.name} daily cap reached. Switch to another Tex model for the rest of today.`,
+      });
+      return;
+    }
+  }
+
+  const maxTokens = isPro ? (selected.proMaxTokens || selected.maxTokens) : selected.maxTokens;
+  const isEditor = mode === 'editor';
   const modelGuide = buildModelGuide();
   const cleanAttachments = normalizeAttachments(attachments);
   const hasImages = cleanAttachments.some((item) => item.kind === 'image');
   const connectionStatus = summarizeConnections(computerConnections, pcBridge);
+  const perMessageCap = isEditor ? 16000 : 8000;
+  const lastMessageCap = isEditor ? 48000 : 16000;
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
-    .slice(-18)
+    .slice(isEditor ? -24 : -18)
     .map((message) => ({
       role: message.role,
-      content: String(message.text || message.content || '').slice(0, 8000),
+      content: String(message.text || message.content || '').slice(0, perMessageCap),
     }));
   const lastUser = [...cleanMessages].reverse().find((message) => message.role === 'user');
-  if (lastUser && cleanAttachments.length) {
-    lastUser.content = `${lastUser.content}\n\n${attachmentPrompt(cleanAttachments, selected.provider === 'anthropic')}`.slice(0, 16000);
+  if (lastUser) {
+    const original = messages
+      .filter((message) => message && message.role === 'user')
+      .map((message) => String(message.text || message.content || ''))
+      .pop() || '';
+    lastUser.content = original.slice(0, lastMessageCap);
+    if (cleanAttachments.length) {
+      lastUser.content = `${lastUser.content}\n\n${attachmentPrompt(cleanAttachments, selected.provider === 'anthropic')}`.slice(0, lastMessageCap + 16000);
+    }
   }
 
-  cleanMessages.unshift({
-    role: 'system',
-    content: [
-      'You are a ROTEX web assistant.',
-      'Chat naturally. Never answer with a giant capability list, marketing pitch, or "I am your assistant" intro. If asked what you can do, answer in 1-3 casual sentences.',
-      'Do not use bold headings like "Main capabilities" or "Current setup" unless the user specifically asks for a formatted list.',
-      `ROTEX model lineup: ${modelGuide}`,
-      `Current selected model: ${selected.name}. If the user asks which model is best, compare these ROTEX model names only, not provider names.`,
-      hasImages && selected.provider !== 'anthropic' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
-      'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
-      'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
-      'You can create multiple downloadable files and folders. For a folder, use file blocks with paths like ```file:project/src/app.js. For binary/image files, use ```file:name.ext;base64 and put only base64 content inside. If the user asks for a zip, create multiple file blocks and the app can zip them together.',
-      'If the user asks for a website zip or a bunch of website files, make a sensible starter website immediately unless critical details are missing. Include index.html, styles.css, script.js, README.md, and an images/ folder with SVG images such as images/logo.svg or images/hero.svg when images are requested.',
-      'You can make images as SVG files directly. Use paths like ```file:images/hero.svg and write valid SVG markup inside.',
-      'If the user uploaded an image or asset and asks for a website/folder/zip, reference that uploaded file in the generated code using its path or an images/assets path. The app will include uploaded assets in the downloadable bundle.',
-      'The conversation may include a compact summary of older messages. Treat it as memory and continue from the recent messages.',
-      personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
-      connectionStatus,
-      'If the user asks whether GitHub, Google Drive, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
-      'You can generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files.',
-      'You can read files and images the user attaches in chat when their content is provided. Do not claim you cannot see an attachment that is listed in the prompt.',
-      'You cannot directly access, read, or modify files already on the user\'s device unless they attach them or use approved computer-mode connections.',
-      computerMode
-        ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive or GitHub'}. Do not ask for PC pairing from the website computer-mode picker.`
-        : 'Computer mode is off. Do not ask for external service access unless the user explicitly asks about connecting apps.',
-    ].join(' '),
-  });
+  if (isEditor) {
+    cleanMessages.unshift({
+      role: 'system',
+      content: buildEditorSystemPrompt(selected, agent, projectContext, isPro),
+    });
+  } else {
+    cleanMessages.unshift({
+      role: 'system',
+      content: [
+        'You are a ROTEX web assistant.',
+        'Chat naturally. Never answer with a giant capability list, marketing pitch, or "I am your assistant" intro. If asked what you can do, answer in 1-3 casual sentences.',
+        'Do not use bold headings like "Main capabilities" or "Current setup" unless the user specifically asks for a formatted list.',
+        `ROTEX model lineup: ${modelGuide}`,
+        `Current selected model: ${selected.name}. If the user asks which model is best, compare these ROTEX model names only, not provider names.`,
+        hasImages && selected.provider !== 'anthropic' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
+        'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
+        'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
+        'You can create multiple downloadable files and folders. For a folder, use file blocks with paths like ```file:project/src/app.js. For binary/image files, use ```file:name.ext;base64 and put only base64 content inside. If the user asks for a zip, create multiple file blocks and the app can zip them together.',
+        'If the user asks for a website zip or a bunch of website files, make a sensible starter website immediately unless critical details are missing. Include index.html, styles.css, script.js, README.md, and an images/ folder with SVG images such as images/logo.svg or images/hero.svg when images are requested.',
+        'You can make images as SVG files directly. Use paths like ```file:images/hero.svg and write valid SVG markup inside.',
+        'If the user uploaded an image or asset and asks for a website/folder/zip, reference that uploaded file in the generated code using its path or an images/assets path. The app will include uploaded assets in the downloadable bundle.',
+        'The conversation may include a compact summary of older messages. Treat it as memory and continue from the recent messages.',
+        personality ? `Chat style: ${String(personality).slice(0, 700)}.` : '',
+        connectionStatus,
+        'If the user asks whether GitHub, Google Drive, or another ROTEX connection worked, answer from the ROTEX connection status above. Do not say you cannot check it when that status is provided.',
+        'You can generate downloadable files for the user. When asked for any file (code, text, data, etc.), wrap it exactly like this: start with ```file:filename.ext on its own line, then the file contents, then a closing ``` line. The user will see a download button. Always use this format when producing files.',
+        'You can read files and images the user attaches in chat when their content is provided. Do not claim you cannot see an attachment that is listed in the prompt.',
+        'You cannot directly access, read, or modify files already on the user\'s device unless they attach them or use approved computer-mode connections.',
+        computerMode
+          ? `Computer mode is on. Before any external-work action, ask the user to connect one of these services: ${Array.isArray(computerConnections) && computerConnections.length ? computerConnections.join(', ') : 'Google Drive or GitHub'}. Do not ask for PC pairing from the website computer-mode picker.`
+          : 'Computer mode is off. Do not ask for external service access unless the user explicitly asks about connecting apps.',
+      ].filter(Boolean).join(' '),
+    });
+  }
 
   if (model === 'treesearch-q') {
     cleanMessages.unshift({
@@ -121,58 +243,230 @@ module.exports = async function handler(request, response) {
     });
   }
 
-  try {
-    let text = '';
-    if (selected.provider === 'anthropic' || hasImages) {
-      const anthropicRequest = {
-        apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
-        model: selected.provider === 'anthropic' ? selected.providerModel : supportedVisionModel(),
-        messages: cleanMessages,
-        attachments: cleanAttachments,
-        temperature: selected.temperature,
-        maxTokens: selected.maxTokens,
-      };
-      try {
-        text = await callAnthropic(anthropicRequest);
-      } catch (imageError) {
-        if (!hasImages || !/process image|image/i.test(imageError?.message || '')) {
-          throw imageError;
-        }
-        text = await callAnthropic({ ...anthropicRequest, attachments: [] });
-      }
-    } else if (selected.provider === 'deepseek') {
-      text = await callOpenAiCompatible({
-        apiKey: process.env.DEEPSEEK_API_KEY,
-        baseUrl: 'https://api.deepseek.com/chat/completions',
-        model: selected.providerModel,
-        messages: cleanMessages,
-        temperature: selected.temperature,
-        maxTokens: selected.maxTokens,
-      });
-    } else {
-      text = await callOpenAiCompatible({
-        apiKey: process.env.GROQ_API_KEY,
-        baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
-        model: selected.providerModel,
-        messages: cleanMessages,
-        temperature: selected.temperature,
-        maxTokens: selected.maxTokens,
-      });
-    }
+  const providerCall = resolveProviderCall(selected, hasImages);
+  if (!providerCall) {
+    response.status(500).json({
+      error: 'backend_unavailable',
+      text: `${selected.name} is not configured on the server right now. Try another ROTEX model.`,
+    });
+    return;
+  }
 
-    response.status(200).json({ model: selected.name, text });
+  try {
+    if (stream) {
+      await streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens);
+    } else {
+      const text = await completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages);
+      response.status(200).json({ model: selected.name, text });
+    }
   } catch (error) {
     console.error('ROTEX backend provider failed', {
       model: selected.name,
-      provider: selected.provider,
+      provider: providerCall.provider,
       message: error?.message || String(error),
     });
+    if (stream && response.headersSent) {
+      sseWrite(response, { error: 'backend_unavailable', text: `${selected.name} could not answer right now. Try again, or switch models.` });
+      sseWrite(response, { done: true });
+      response.end();
+      return;
+    }
     response.status(500).json({
       error: 'backend_unavailable',
       text: `${selected.name} could not answer right now. Try again in a moment, or switch to another ROTEX model for this message.`,
     });
   }
 };
+
+module.exports.config = { supportsResponseStreaming: true };
+
+function buildEditorSystemPrompt(selected, agent, projectContext, isPro) {
+  const parts = [
+    'You are ROTEX AI, the coding assistant inside the ROTEX code editor (a VS Code-style editor).',
+    `You are running as the ${selected.name} model.`,
+    'Be direct and practical. Answer code questions with working code. Keep explanations short and put them after the code.',
+    'When showing code changes for a specific file, ALWAYS use a file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. The editor shows the user a diff and an Apply button for each file block.',
+    'Never use placeholder comments like "rest of the code stays the same" inside file blocks — file blocks must contain the complete file.',
+    'For small inline snippets that are not meant to replace a file, use normal ```lang code fences instead.',
+  ];
+  if (agent) {
+    parts.push(
+      'AGENT MODE is ON. You may propose changes to multiple files in one reply: output one file block per file that needs to change (created, rewritten, or updated).',
+      'Before the file blocks, write a one-line plan of what you are changing and why. After the blocks, write at most 2 sentences on how to test.',
+      'Use the PROJECT CONTEXT below to keep paths and imports consistent with the real project structure.',
+    );
+  }
+  if (projectContext) {
+    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, isPro ? 24000 : 8000)}`);
+  }
+  return parts.join('\n');
+}
+
+function resolveProviderCall(selected, hasImages) {
+  const keys = {
+    groq: process.env.GROQ_API_KEY,
+    deepseek: process.env.DEEPSEEK_API_KEY,
+    anthropic: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
+    openrouter: process.env.OPENROUTER_API_KEY,
+  };
+  const baseUrls = {
+    groq: 'https://api.groq.com/openai/v1/chat/completions',
+    deepseek: 'https://api.deepseek.com/chat/completions',
+    openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  };
+
+  let provider = selected.provider;
+  let providerModel = selected.providerModel;
+
+  // Images are handled by Anthropic vision regardless of selected model
+  if (hasImages && provider !== 'anthropic') {
+    if (!keys.anthropic) return null;
+    return { provider: 'anthropic', providerModel: supportedVisionModel(), apiKey: keys.anthropic };
+  }
+
+  if (!keys[provider] && selected.fallbackProvider && keys[selected.fallbackProvider]) {
+    provider = selected.fallbackProvider;
+    providerModel = selected.fallbackProviderModel;
+  }
+  if (!keys[provider]) return null;
+
+  return { provider, providerModel, apiKey: keys[provider], baseUrl: baseUrls[provider] };
+}
+
+async function completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages) {
+  if (providerCall.provider === 'anthropic') {
+    const anthropicRequest = {
+      apiKey: providerCall.apiKey,
+      model: providerCall.providerModel,
+      messages: cleanMessages,
+      attachments: cleanAttachments,
+      temperature: selected.temperature,
+      maxTokens,
+    };
+    try {
+      return await callAnthropic(anthropicRequest);
+    } catch (imageError) {
+      if (!hasImages || !/process image|image/i.test(imageError?.message || '')) {
+        throw imageError;
+      }
+      return await callAnthropic({ ...anthropicRequest, attachments: [] });
+    }
+  }
+  return callOpenAiCompatible({
+    apiKey: providerCall.apiKey,
+    baseUrl: providerCall.baseUrl,
+    model: providerCall.providerModel,
+    messages: cleanMessages,
+    temperature: selected.temperature,
+    maxTokens,
+  });
+}
+
+// ─── Streaming ────────────────────────────────────────────────────────
+
+function sseWrite(response, payload) {
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+async function streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens) {
+  response.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+  sseWrite(response, { model: selected.name });
+
+  if (providerCall.provider === 'anthropic') {
+    await streamAnthropic(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens);
+  } else {
+    await streamOpenAiCompatible(response, providerCall, cleanMessages, selected, maxTokens);
+  }
+
+  sseWrite(response, { done: true });
+  response.end();
+}
+
+async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens) {
+  const providerResponse = await fetch(providerCall.baseUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${providerCall.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: providerCall.providerModel,
+      messages,
+      temperature: selected.temperature,
+      max_tokens: maxTokens,
+      stream: true,
+    }),
+  });
+  if (!providerResponse.ok) {
+    throw new Error(await providerResponse.text());
+  }
+
+  for await (const event of readSseEvents(providerResponse.body)) {
+    if (event === '[DONE]') break;
+    try {
+      const parsed = JSON.parse(event);
+      const delta = parsed.choices?.[0]?.delta?.content;
+      if (delta) sseWrite(response, { d: delta });
+    } catch { /* ignore malformed keep-alive chunks */ }
+  }
+}
+
+async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens) {
+  const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, selected.temperature, maxTokens);
+  body.stream = true;
+
+  const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': providerCall.apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!providerResponse.ok) {
+    throw new Error(await providerResponse.text());
+  }
+
+  for await (const event of readSseEvents(providerResponse.body)) {
+    try {
+      const parsed = JSON.parse(event);
+      if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+        sseWrite(response, { d: parsed.delta.text });
+      }
+      if (parsed.type === 'error') {
+        throw new Error(parsed.error?.message || 'Anthropic stream error');
+      }
+    } catch (err) {
+      if (err instanceof SyntaxError) continue; // partial/non-JSON line
+      throw err;
+    }
+  }
+}
+
+// Parses an upstream SSE byte stream and yields each `data:` payload string.
+async function* readSseEvents(bodyStream) {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for await (const chunk of bodyStream) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('data:')) {
+        yield trimmed.slice(5).trim();
+      }
+    }
+  }
+}
+
+// ─── Shared helpers (attachments, prompts, providers) ────────────────
 
 function buildModelGuide() {
   return Object.values(MODELS)
@@ -313,11 +607,7 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
   return data.choices?.[0]?.message?.content || 'No response text returned.';
 }
 
-async function callAnthropic({ apiKey, model, messages, attachments = [], temperature = 0.7, maxTokens = 900 }) {
-  if (!apiKey) {
-    throw new Error('Missing Anthropic key');
-  }
-
+function buildAnthropicBody(model, messages, attachments, temperature, maxTokens) {
   const system = messages
     .filter((message) => message.role === 'system')
     .map((message) => message.content)
@@ -328,7 +618,7 @@ async function callAnthropic({ apiKey, model, messages, attachments = [], temper
       role: message.role,
       content: message.content,
     }));
-  const imageParts = attachments
+  const imageParts = (attachments || [])
     .filter((item) => item.kind === 'image' && item.content.startsWith('data:image/'))
     .map((item) => {
       const [meta, data] = item.content.split(',', 2);
@@ -351,9 +641,18 @@ async function callAnthropic({ apiKey, model, messages, attachments = [], temper
     messages: chatMessages.length ? chatMessages : [{ role: 'user', content: 'Hello' }],
     max_tokens: maxTokens,
   };
-  if (!/opus-4-7|opus-4-6|sonnet-4-6/.test(model)) {
+  if (!/opus-4-8|opus-4-7|opus-4-6|sonnet-4-6/.test(model)) {
     body.temperature = temperature;
   }
+  return body;
+}
+
+async function callAnthropic({ apiKey, model, messages, attachments = [], temperature = 0.7, maxTokens = 900 }) {
+  if (!apiKey) {
+    throw new Error('Missing Anthropic key');
+  }
+
+  const body = buildAnthropicBody(model, messages, attachments, temperature, maxTokens);
 
   const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
