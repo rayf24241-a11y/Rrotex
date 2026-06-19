@@ -31,7 +31,7 @@ function verifyProPass(pass) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    if (payload.plan !== 'pro' && payload.plan !== 'plus') return null;
+    if (payload.plan !== 'pro') return null;
     if (!payload.exp || Date.now() > Number(payload.exp)) return null;
     return payload;
   } catch {

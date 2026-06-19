@@ -9,7 +9,7 @@
     directoryHandle: null,
     fileTree: [],
     aiMessages: [],
-    aiModel: 'gbt',
+    aiModel: 'fast',
     terminalHistory: [],
     terminalHistoryIdx: -1,
     sidePanel: 'explorer',
@@ -23,16 +23,10 @@
 
   // ─── AI Models (IDs match /api/chat.js) ────────────────────────────
   const MODELS = [
-    { id: 'gbt', name: 'GBT', role: 'GPT', desc: 'Fast GPT model through OpenRouter', family: 'cloud', logo: 'G', pro: false },
-    { id: 'groq', name: 'Groq', role: 'Fast', desc: 'Fast model through OpenRouter', family: 'cloud', logo: 'Q', pro: false },
-    { id: 'gemini', name: 'Gemini', role: 'Google', desc: 'Google model through OpenRouter', family: 'cloud', logo: 'Ge', pro: false },
-    { id: 'deepseek', name: 'DeepSeek', role: 'Code', desc: 'Coding and general work through OpenRouter', family: 'cloud', logo: 'D', pro: false },
-    { id: 'claude-sonnet', name: 'Claude Sonnet', role: 'Expensive', desc: 'Expensive Pro model for careful project work and bigger fixes', family: 'cloud', logo: 'CS', pro: true },
-    { id: 'claude-opus', name: 'Claude Opus', role: 'Most expensive', desc: 'Most expensive Claude option for hard architecture and agent planning', family: 'cloud', logo: 'CO', pro: true },
-    { id: 'grok-3-4', name: 'Grok 3.4', role: 'Expensive', desc: 'Expensive Pro reasoning model for broad context and hard decisions', family: 'cloud', logo: 'X', pro: true },
-    { id: 'gbt-5-5', name: 'GBT 5.5', role: 'Expensive', desc: 'Very expensive Pro smart model for frontier-level tasks', family: 'cloud', logo: 'G5', pro: true },
-    { id: 'deepseek-smart', name: 'DeepSeek Smartest', role: 'Expensive', desc: 'Expensive Pro DeepSeek model for the smartest code and reasoning tasks', family: 'cloud', logo: 'DS', pro: true },
-    { id: 'ollama', name: 'Ollama', role: 'Local', desc: 'Runs on your own PC with Ollama - free and private', family: 'local', logo: 'O', pro: false },
+    { id: 'fast', name: 'Fast', role: '0.2x', desc: 'Groq Llama 3.1 8B Instant', family: 'cloud', logo: 'F', pro: false },
+    { id: 'balanced', name: 'Balanced', role: '0.75x', desc: 'Groq Qwen3 32B - limited on Free', family: 'cloud', logo: 'B', pro: false },
+    { id: 'smart', name: 'Smart', role: '1x', desc: 'Groq Llama 3.3 70B Versatile - small Free tests', family: 'cloud', logo: 'S', pro: false },
+    { id: 'pro-smart', name: 'Pro Smart', role: '6x', desc: 'Claude Haiku 4.5 - Pro only', family: 'cloud', logo: 'H', pro: true, confirm: true },
   ];
 
   const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
@@ -53,7 +47,7 @@
 
   function computeIsPro() {
     const payload = proPassPayload(getProPass());
-    return Boolean(payload && (payload.plan === 'pro' || payload.plan === 'plus') && Number(payload.exp) > Date.now());
+    return Boolean(payload && payload.plan === 'pro' && Number(payload.exp) > Date.now());
   }
 
   async function ensureFreshProPass() {
@@ -84,6 +78,8 @@
   let freeMessagesUsed = parseInt(localStorage.getItem('rotex_free_msgs') || '0');
   const FREE_DAILY_LIMIT = 25;
   const FREE_DAILY_KEY = 'rotex_free_msgs_date';
+  const TEX_SPENT_KEY = 'rotex_textokens_spent_today';
+  const TEX_SPENT_DATE_KEY = 'rotex_textokens_spent_date';
   setTimeout(ensureFreshProPass, 1500);
 
   // Reset daily counter
@@ -94,8 +90,38 @@
       freeMessagesUsed = 0;
       localStorage.setItem('rotex_free_msgs', '0');
       localStorage.setItem(FREE_DAILY_KEY, today);
+      localStorage.setItem(TEX_SPENT_KEY, '0');
+      localStorage.setItem(TEX_SPENT_DATE_KEY, today);
     }
   })();
+
+  function dailyTexTokenLimit() {
+    return userIsPro ? 1000000 : 150000;
+  }
+
+  function extraTexTokens() {
+    return Math.max(0, Number(localStorage.getItem('rotex_textokens_balance') || 0));
+  }
+
+  function spentTexTokensToday() {
+    const today = new Date().toDateString();
+    if (localStorage.getItem(TEX_SPENT_DATE_KEY) !== today) {
+      localStorage.setItem(TEX_SPENT_DATE_KEY, today);
+      localStorage.setItem(TEX_SPENT_KEY, '0');
+      return 0;
+    }
+    return Math.max(0, Number(localStorage.getItem(TEX_SPENT_KEY) || 0));
+  }
+
+  function texTokensLeft() {
+    return Math.max(0, dailyTexTokenLimit() - spentTexTokensToday()) + extraTexTokens();
+  }
+
+  function spendTexTokens(amount) {
+    const spent = spentTexTokensToday() + Math.max(0, Math.ceil(Number(amount) || 0));
+    localStorage.setItem(TEX_SPENT_DATE_KEY, new Date().toDateString());
+    localStorage.setItem(TEX_SPENT_KEY, String(spent));
+  }
 
   // ─── Usage Tracking ─────────────────────────────────────────────────
   function getUsageData() {
@@ -275,8 +301,7 @@
 
   // ─── AI Model Selector (scrollable, at bottom) ─────────────────────
   function buildModelMenu() {
-    const familyOrder = ['cloud', 'local'];
-    const familyLabels = { cloud: 'OPENROUTER', local: 'ON YOUR PC' };
+    const familyLabels = { cloud: 'ROTEX CLOUD' };
     let html = '<div class="ai-model-scroll">';
     let lastFamily = '';
 
@@ -347,14 +372,10 @@
   });
 
   function modelTexTokenMultiplier(modelId) {
-    if (modelId === 'groq') return 0.5;
-    if (modelId === 'deepseek') return 1.5;
-    if (modelId === 'deepseek-smart') return 18;
-    if (modelId === 'claude-sonnet') return 20;
-    if (modelId === 'claude-opus') return 30;
-    if (modelId === 'gbt') return 3;
-    if (modelId === 'gbt-5-5') return 35;
-    if (modelId === 'grok-3-4') return 28;
+    if (modelId === 'fast') return 0.2;
+    if (modelId === 'balanced') return 0.75;
+    if (modelId === 'smart') return 1;
+    if (modelId === 'pro-smart') return 6;
     return 1;
   }
 
@@ -369,12 +390,17 @@
   function updateCostPreview() {
     if (!aiCostPreview) return;
     const estimate = estimateTaskCost();
+    if (texTokensLeft() <= 0 || estimate > texTokensLeft()) {
+      alert('You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.');
+      return false;
+    }
     const mode = state.superAgentMode ? 'Super Agent' : state.agentMode ? 'Agent' : 'Chat';
     aiCostPreview.textContent = `${state.projectMode} · ${mode} · est. ${estimate.toLocaleString()} TexTokens`;
   }
 
   function confirmLargeTaskIfNeeded() {
     const estimate = estimateTaskCost();
+    if (state.aiModel === 'pro-smart' && !confirm('Claude Haiku costs more TexTokens. Continue?')) return false;
     if (estimate <= 250000) return true;
     return confirm(`This task is estimated to cost ${estimate.toLocaleString()} TexTokens. Tasks over 250k require confirmation. Run it?`);
   }
@@ -471,75 +497,6 @@
   }
 
   // ─── Ollama (local models on the user's PC) ────────────────────────
-  const OLLAMA_URL = 'http://127.0.0.1:11434';
-
-  function getOllamaModel() {
-    try { return localStorage.getItem('rotex_ollama_model') || ''; } catch { return ''; }
-  }
-
-  async function pickOllamaModel() {
-    const saved = getOllamaModel();
-    const resp = await fetch(`${OLLAMA_URL}/api/tags`);
-    const data = await resp.json();
-    const names = (data.models || []).map((m) => m.name);
-    if (!names.length) throw new Error('no_models');
-    const chosen = names.includes(saved) ? saved : names[0];
-    try { localStorage.setItem('rotex_ollama_model', chosen); } catch {}
-    return chosen;
-  }
-
-  const OLLAMA_HELP = [
-    'Ollama could not reach Ollama on your PC.',
-    '',
-    '**Setup:**',
-    '1. Install Ollama from `ollama.com`',
-    '2. Pull a coding model: `ollama pull qwen2.5-coder:7b`',
-    '3. Using the ROTEX website (not the desktop app)? Allow the browser to talk to Ollama, then restart it:',
-    '   Windows: `setx OLLAMA_ORIGINS "*"` then restart Ollama',
-    '',
-    'Local models are free, private, and have no daily limits.',
-  ].join('\n');
-
-  async function streamOllama(apiMessages, projectContext, agentMode, onDelta) {
-    const model = await pickOllamaModel();
-    const system = [
-      'You are ROTEX AI, the coding assistant inside the ROTEX code editor.',
-      'When showing code changes for a file, use a file block: ```file:relative/path.ext on its own line, the complete file contents, then ``` to close.',
-      agentMode ? 'AGENT MODE: you may change multiple files in one reply, one file block per file.' : '',
-      projectContext ? `PROJECT CONTEXT:\n${projectContext.slice(0, 12000)}` : '',
-    ].filter(Boolean).join('\n');
-
-    const resp = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        stream: true,
-        messages: [{ role: 'system', content: system }, ...apiMessages],
-      }),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line);
-          if (parsed.message?.content) onDelta(parsed.message.content);
-        } catch { /* partial line */ }
-      }
-    }
-    return `Ollama ${model}`;
-  }
-
   // ─── AI Chat (streaming) ───────────────────────────────────────────
   let aiBusy = false;
   let aiAbortController = null;
@@ -564,12 +521,9 @@
     let modelId = state.aiModel;
     const picked = MODELS.find((m) => m.id === modelId);
     let usedModelName = picked ? picked.name : modelId;
-    const isLocal = modelId === 'ollama';
-
-    // Check free tier limit (local Ollama is always free and uncounted)
-    if (!userIsPro && !isLocal) {
+    if (!userIsPro) {
       if (freeMessagesUsed >= FREE_DAILY_LIMIT) {
-        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Go Pro for Claude Sonnet, Claude Opus, Grok 3.4, GBT 5.5, and DeepSeek Smartest, or switch to Ollama, which is free forever.`);
+        addAIMessage('assistant', 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.');
         return;
       }
       freeMessagesUsed++;
@@ -599,10 +553,7 @@
     aiBusy = true;
     aiAbortController = new AbortController();
     try {
-      if (isLocal) {
-        usedModelName = await streamOllama(apiMessages, projectContext, state.agentMode, onDelta);
-      } else {
-        const resp = await fetch(`${API_BASE}/api/chat`, {
+      const resp = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: aiAbortController.signal,
@@ -615,43 +566,43 @@
             projectMode: state.projectMode,
             projectContext,
             proPass: getProPass(),
+            texTokensLeft: texTokensLeft(),
             stream: true,
           }),
-        });
+      });
 
-        const contentType = resp.headers.get('content-type') || '';
-        if (!resp.ok || !contentType.includes('text/event-stream')) {
-          const errData = await resp.json().catch(() => ({}));
-          bubble.remove();
-          addAIMessage('assistant', errData.text || 'servers are down');
-          return;
-        }
+      const contentType = resp.headers.get('content-type') || '';
+      if (!resp.ok || !contentType.includes('text/event-stream')) {
+        const errData = await resp.json().catch(() => ({}));
+        bubble.remove();
+        addAIMessage('assistant', errData.text || 'servers are down');
+        return;
+      }
 
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        let streamError = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const events = buf.split('\n\n');
-          buf = events.pop() || '';
-          for (const event of events) {
-            const line = event.split('\n').find((l) => l.startsWith('data:'));
-            if (!line) continue;
-            let payload;
-            try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
-            if (payload.model) usedModelName = payload.model;
-            if (payload.d) onDelta(payload.d);
-            if (payload.error) streamError = payload.text || 'servers are down';
-          }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let streamError = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const events = buf.split('\n\n');
+        buf = events.pop() || '';
+        for (const event of events) {
+          const line = event.split('\n').find((l) => l.startsWith('data:'));
+          if (!line) continue;
+          let payload;
+          try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (payload.model) usedModelName = payload.model;
+          if (payload.d) onDelta(payload.d);
+          if (payload.error) streamError = payload.text || 'servers are down';
         }
-        if (streamError && !fullText) {
-          bubble.remove();
-          addAIMessage('assistant', streamError);
-          return;
-        }
+      }
+      if (streamError && !fullText) {
+        bubble.remove();
+        addAIMessage('assistant', streamError);
+        return;
       }
 
       bubble.remove();
@@ -659,6 +610,7 @@
         addAIMessage('assistant', 'servers are down');
         return;
       }
+      spendTexTokens(estimateTaskCost());
       addAIMessage('assistant', fullText, usedModelName);
     } catch (err) {
       bubble.remove();
@@ -666,11 +618,7 @@
         addAIMessage('assistant', 'Stopped.');
         return;
       }
-      if (isLocal) {
-        addAIMessage('assistant', OLLAMA_HELP);
-      } else {
-        addAIMessage('assistant', 'servers are down');
-      }
+      addAIMessage('assistant', 'servers are down');
     } finally {
       aiBusy = false;
       aiAbortController = null;
@@ -1485,10 +1433,11 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: userIsPro ? 'claude-sonnet' : 'deepseek',
+            model: userIsPro ? 'pro-smart' : 'fast',
             messages: [{ role: 'user', content: prompt }],
             mode: 'editor',
             proPass: getProPass(),
+            texTokensLeft: texTokensLeft(),
           }),
         });
         const data = await resp.json();
@@ -1505,6 +1454,7 @@
         editor.pushUndoStop();
         editor.executeEdits('rotex-ai', [{ range, text: code }]);
         editor.pushUndoStop();
+        spendTexTokens(userIsPro ? 75000 : 25000);
         showToast('AI edit applied — Ctrl+Z to undo');
         close();
       } catch {

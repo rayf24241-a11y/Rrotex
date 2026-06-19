@@ -34,6 +34,7 @@ const creditPreview = document.querySelector('#creditPreview');
 const creditCheckoutButton = document.querySelector('#creditCheckoutButton');
 const creditMessage = document.querySelector('#creditMessage');
 const tokenBalance = document.querySelector('#tokenBalance');
+const currentPlan = document.querySelector('#currentPlan');
 const authState = document.querySelector('#authState');
 const accountName = document.querySelector('#accountName');
 const accountEmail = document.querySelector('#accountEmail');
@@ -86,6 +87,7 @@ function renderUser(user) {
   authState.textContent = user ? 'Signed in' : 'Not signed in';
   accountName.textContent = user?.displayName || user?.email || 'Not signed in';
   accountEmail.textContent = user?.email || 'Use Google or email to continue.';
+  renderPlan();
 }
 
 googleLogin.addEventListener('click', async () => {
@@ -294,6 +296,18 @@ function renderCreditPreview() {
 
 function renderCredits() {
   tokenBalance.textContent = `${formatTokens(creditBalance)} TexTokens`;
+  renderPlan();
+}
+
+function renderPlan() {
+  if (!currentPlan) return;
+  const pass = localStorage.getItem('rotex_pro_pass') || '';
+  let pro = false;
+  try {
+    const payload = JSON.parse(atob(pass.split('.', 2)[0].replace(/-/g, '+').replace(/_/g, '/')));
+    pro = payload.plan === 'pro' && Number(payload.exp) > Date.now();
+  } catch { /* no active pass */ }
+  currentPlan.textContent = pro ? 'Pro' : 'Free';
 }
 
 function readLocalCredits() {

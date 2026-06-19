@@ -52,6 +52,7 @@
           <section class="auth-card" id="signedInCard" hidden>
             <p class="eyebrow">Dashboard</p>
             <h2>TexTokens</h2>
+            <p class="plan-pill">Current plan: <strong id="currentPlan">Free</strong></p>
             <div class="token-balance" id="tokenBalance">0 TexTokens</div>
             <p class="panel-copy">Choose any whole dollar amount. ROTEX adds 1M TexTokens per $1 after Stripe verifies the payment.</p>
             <label class="amount-label" for="creditAmount">Credit amount</label>
@@ -63,15 +64,33 @@
             <p class="message" id="creditMessage"></p>
 
             <div class="section-line"></div>
+            <p class="eyebrow">Model access</p>
+            <div class="access-grid">
+              <div><strong>Fast</strong><span>Groq Llama 3.1 8B Instant</span></div>
+              <div><strong>Balanced</strong><span>Groq Qwen3 32B</span></div>
+              <div><strong>Smart</strong><span>Groq Llama 3.3 70B Versatile</span></div>
+              <div><strong>Pro Smart</strong><span>Claude Haiku 4.5 - Pro only</span></div>
+            </div>
+
+            <div class="section-line"></div>
+            <p class="eyebrow">Upgrade fund</p>
+            <h2>We need 200-500 subscribers to get new models and upgrade the AI.</h2>
+            <p class="panel-copy">Estimated goal: $15k.</p>
+            <div class="fund-grid">
+              <div><span>How much we have</span><strong id="fundHave">$0</strong></div>
+              <div><span>How much we need</span><strong id="fundNeed">$15,000</strong></div>
+            </div>
+
+            <div class="section-line"></div>
             <p class="eyebrow">Pro checkout</p>
             <h2>ROTEX Pro</h2>
             <div class="price">$20 <span>/ month</span></div>
             <ul>
               <li>1M TexTokens daily</li>
-              <li>10M TexTokens monthly</li>
-              <li>Claude Sonnet, Claude Opus, Grok 3.4, GBT 5.5, and DeepSeek Smartest</li>
+              <li>40M TexTokens monthly</li>
+              <li>All Groq models and Claude Haiku 4.5</li>
               <li>Agent mode and Super Agent mode</li>
-              <li>5 connected projects, better memory, and priority speed</li>
+              <li>5 connected projects, better memory, priority speed, more file edits, more computer mode, Pro badge, and early access features</li>
             </ul>
             <button class="primary" id="checkoutButton" type="button">Continue to Stripe</button>
             <button class="secondary" id="signOutButton" type="button">Sign Out</button>

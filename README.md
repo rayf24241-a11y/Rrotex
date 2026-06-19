@@ -8,37 +8,30 @@ Current web features:
 - Firebase login before Pro or TexToken purchases
 - Account dashboard for plan status, Pro checkout, and TexToken credits
 - Extra TexTokens through Stripe Checkout at `$1 = 1M TexTokens`
-- Pro user TexTokens: `1M` daily soft limit, `10M` monthly
+- Pro user TexTokens: `1M` daily soft limit, `40M` monthly
 - Desktop app/editor served from `editor.html`
 
 Model catalog:
 
 - `api/_lib/catalog.js` is the single source of truth for chat routing, public model names, tiers, and per-message credit costs.
 - `/api/models` returns the public catalog for clients.
-- Claude Sonnet and Claude Opus route through your Anthropic/Claude key first, then OpenRouter as backup.
-- GBT, GBT 5.5, Grok 3.4, Groq, Gemini, DeepSeek, and DeepSeek Smartest route through OpenRouter.
-- Pro unlocks Claude Sonnet, Claude Opus, Grok 3.4, GBT 5.5, and DeepSeek Smartest. These models are intentionally expensive.
-- Ollama is local-only and talks to the user's PC at `http://127.0.0.1:11434`.
+- Only four cloud models are enabled: Fast, Balanced, Smart, and Pro Smart.
+- Fast, Balanced, and Smart route through Groq first, with OpenRouter fallback when configured.
+- Pro Smart routes through Anthropic first, with OpenRouter fallback when configured.
+- Pro unlocks Claude Haiku 4.5 through the Pro Smart model.
 
-Computer mode is available to everyone, but it has separate pricing:
+Model access:
 
-| Computer mode model | Cost |
-| --- | ---: |
-| Regular chat | Uses each catalog model's `cost` |
-| Computer mode | Uses each catalog model's `computerCost` |
+- Free: Fast, Balanced with limits, Smart with small limits, no Claude Haiku.
+- Pro: all Groq models, Claude Haiku, Agent mode, Super Agent mode, 5 connected projects, better memory, priority speed, more file edits, more computer mode, Pro badge, and early access features.
 
-Computer mode asks the user to connect Google Drive or GitHub before external-work actions. Direct PC file access requires the separate PC helper app; the website computer-mode picker does not offer PC pairing.
+TexToken rates:
 
-Free users can use computer mode a few times per day. Pro removes that heavier-use cap once payment/webhook activation is connected.
-
-When a user hits a daily, weekly, or monthly credit limit, the app shows `your out of credits, upgrade?` with an Upgrade button.
-
-Upgrade benefits:
-
-- `$5` in credits
-- Better models
-- Computer mode
-- More plugins
+- `$1 = 1M TexTokens`
+- Fast: input `0.05`, output `0.08`, user multiplier `0.2x`
+- Balanced: input `0.29`, output `0.59`, user multiplier `0.75x`
+- Smart: input `0.59`, output `0.79`, user multiplier `1x`
+- Pro Smart / Claude Haiku: input `1`, output `5`, user multiplier `6x`
 
 ## Firebase Auth
 
@@ -58,11 +51,15 @@ Add these to Vercel Project Settings -> Environment Variables:
 
 ```text
 OPENROUTER_API_KEY
+GROQ_API_KEY
 ANTHROPIC_API_KEY   (or CLAUDE_API_KEY)
 PRO_PASS_SECRET     (random 32+ char secret; signs the Pro pass)
+PROVIDER_CREDIT_BALANCE
 ```
 
-Optional: `CLAUDE_SONNET_MODEL`, `PUBLIC_SITE_URL`.
+Optional: `CLAUDE_HAIKU_MODEL`, `PUBLIC_SITE_URL`.
+
+`PROVIDER_CREDIT_BALANCE` is the admin setting for Provider Credit Balance. If it is under `$10`, expensive models are blocked. If it is under `$5`, all AI requests are blocked. Low-credit and insufficient-credit provider errors send an email alert to `rayf24241@gmail.com` at most once every 6 hours.
 
 ## Pro enforcement (no database needed)
 
@@ -76,7 +73,6 @@ Optional: `CLAUDE_SONNET_MODEL`, `PUBLIC_SITE_URL`.
 - `/api/chat` streams responses (`stream: true`, SSE) and accepts `mode: 'editor'`, `agent: true`, and `projectContext`.
 - Agent mode (Pro) lets the AI propose multi-file changes as ```file:path blocks with per-file Diff/Apply and Apply All.
 - Ctrl+K = inline AI edit on the selection in Monaco.
-- `Ollama` talks to `http://127.0.0.1:11434` directly from the browser/editor (free/local; browser use needs `OLLAMA_ORIGINS` set).
 
 ## Computer mode connectors
 

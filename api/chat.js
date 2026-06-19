@@ -1,6 +1,13 @@
 const AdmZip = require('adm-zip');
 const { verifyProPass } = require('./_lib/propass.js');
 const { MODELS, resolveModelId } = require('./_lib/catalog.js');
+const {
+  checkCreditSafety,
+  estimateTexTokens,
+  insufficientCreditsError,
+  logUsage,
+  onInsufficientCredits,
+} = require('./_lib/credit-safety.js');
 
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
@@ -47,23 +54,18 @@ module.exports = async function handler(request, response) {
     mode = 'chat',
     agent = false,
     projectContext = '',
+    texTokensLeft = null,
+    superAgent = false,
   } = request.body || {};
 
-  await verifyFirebaseToken(authToken); // optional: logged-in users get cloud sync, guests can still chat
+  const authResult = await verifyFirebaseToken(authToken); // optional: logged-in users get cloud sync, guests can still chat
 
   const proPayload = verifyProPass(proPass);
   const isPro = Boolean(proPayload);
 
-  if (model === 'ollama') {
-    response.status(400).json({
-      error: 'local_only',
-      text: 'Ollama runs locally on your PC and is not available through the cloud chat API.',
-    });
-    return;
-  }
-
   const modelId = resolveModelId(model);
   const selected = MODELS[modelId];
+  const userId = proPayload?.uid || authResult.uid || ipFromRequest(request) || 'unknown';
 
   // Server-side Pro enforcement - locked models reject without a valid pass.
   if (selected.tier === 'pro' && !isPro) {
@@ -74,23 +76,23 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const ip = String(request.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+  const ip = ipFromRequest(request);
   if (!isPro) {
     const used = bumpCounter(ipCounters, ip);
     if (used > FREE_DAILY_IP_LIMIT) {
       response.status(429).json({
         error: 'rate_limited',
-        text: 'Free daily limit reached for today. Go Pro for 1M daily TexTokens and expensive smart models, or come back tomorrow.',
+        text: 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.',
       });
       return;
     }
   }
-  if (isPro && selected.dailyCap) {
-    const used = bumpCounter(proCounters, `${proPayload.uid}:${modelId}`);
-    if (used > selected.dailyCap) {
+  if (!isPro && selected.freeDailyCap) {
+    const used = bumpCounter(proCounters, `${ip}:${modelId}`);
+    if (used > selected.freeDailyCap) {
       response.status(429).json({
         error: 'rate_limited',
-        text: `${selected.name} daily cap reached. Switch to another premium model for the rest of today.`,
+        text: 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.',
       });
       return;
     }
@@ -158,13 +160,6 @@ module.exports = async function handler(request, response) {
     });
   }
 
-  if (modelId === 'rreas-2-1') {
-    cleanMessages.unshift({
-      role: 'system',
-      content: 'You are Rreas 2.1, a research model. Focus on research, comparison, and clear explanation. Do not create, edit, delete, or rename files.',
-    });
-  }
-
   const providerCall = resolveProviderCall(selected, hasImages);
   if (!providerCall) {
     response.status(500).json({
@@ -174,12 +169,45 @@ module.exports = async function handler(request, response) {
     return;
   }
 
+  const estimate = estimateTexTokens(selected, cleanMessages, maxTokens, { agent, superAgent });
+  const safety = await checkCreditSafety({
+    selected,
+    provider: providerCall.provider,
+    model: selected.providerName || selected.name,
+    userId,
+    estimate,
+    texTokensLeft,
+  });
+  if (!safety.ok) {
+    logUsage({
+      user_id: userId,
+      model: selected.name,
+      input_tokens: estimate.inputTokens,
+      output_tokens: 0,
+      real_provider_cost: 0,
+      textokens_charged: 0,
+      status: safety.error,
+    });
+    response.status(safety.error === 'no_textokens' ? 402 : 503).json({ error: safety.error, text: safety.text });
+    return;
+  }
+
   try {
     if (stream) {
-      await streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens);
+      await streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens, {
+        userId,
+        estimate,
+        agent,
+        superAgent,
+      });
     } else {
-      const text = await completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages);
-      response.status(200).json({ model: selected.name, text });
+      const result = await completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages, {
+        userId,
+        estimate,
+        agent,
+        superAgent,
+      });
+      response.status(200).json({ model: selected.name, text: result.text, usage: result.usage });
     }
   } catch (error) {
     console.error('ROTEX backend provider failed', {
@@ -187,15 +215,31 @@ module.exports = async function handler(request, response) {
       provider: providerCall.provider,
       message: error?.message || String(error),
     });
+    const lowCredit = insufficientCreditsError(error);
     if (stream && response.headersSent) {
-      sseWrite(response, { error: 'backend_unavailable', text: 'servers are down' });
+      sseWrite(response, {
+        error: lowCredit ? 'provider_credits_empty' : 'backend_unavailable',
+        text: lowCredit ? 'Too many requests right now. Please retry later or upgrade/add TexTokens.' : 'servers are down',
+      });
       sseWrite(response, { done: true });
       response.end();
       return;
     }
-    response.status(500).json({
-      error: 'backend_unavailable',
-      text: 'servers are down',
+    if (lowCredit) {
+      await onInsufficientCredits({ provider: providerCall.provider, model: selected.name, userId, estimate });
+    }
+    logUsage({
+      user_id: userId,
+      model: selected.name,
+      input_tokens: estimate.inputTokens,
+      output_tokens: 0,
+      real_provider_cost: 0,
+      textokens_charged: 0,
+      status: lowCredit ? 'provider_insufficient_credits' : 'failed',
+    });
+    response.status(lowCredit ? 503 : 500).json({
+      error: lowCredit ? 'provider_credits_empty' : 'backend_unavailable',
+      text: lowCredit ? 'Too many requests right now. Please retry later or upgrade/add TexTokens.' : 'servers are down',
     });
   }
 };
@@ -226,8 +270,18 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro) {
 
 function resolveProviderCall(selected) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const attempts = [];
+
+  if (selected.route === 'groq-first' && groqKey) {
+    attempts.push({
+      provider: 'groq',
+      providerModel: selected.groqModel,
+      apiKey: groqKey,
+      baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    });
+  }
 
   if (selected.route === 'anthropic-first' && anthropicKey) {
     attempts.push({
@@ -249,7 +303,7 @@ function resolveProviderCall(selected) {
   return attempts.length ? { provider: selected.route, attempts } : null;
 }
 
-async function completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages) {
+async function completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages, context) {
   const errors = [];
   for (const attempt of providerCall.attempts) {
     try {
@@ -263,15 +317,19 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
           maxTokens,
         };
         try {
-          return await callAnthropic(anthropicRequest);
+          const result = await callAnthropic(anthropicRequest);
+          logProviderUsage(result, selected, context, 'completed');
+          return result;
         } catch (imageError) {
           if (!hasImages || !/process image|image/i.test(imageError?.message || '')) {
             throw imageError;
           }
-          return await callAnthropic({ ...anthropicRequest, attachments: [] });
+          const result = await callAnthropic({ ...anthropicRequest, attachments: [] });
+          logProviderUsage(result, selected, context, 'completed');
+          return result;
         }
       }
-      return await callOpenAiCompatible({
+      const result = await callOpenAiCompatible({
         apiKey: attempt.apiKey,
         baseUrl: attempt.baseUrl,
         model: attempt.providerModel,
@@ -279,7 +337,18 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         temperature: modelTemperature(selected),
         maxTokens,
       });
+      logProviderUsage(result, selected, context, 'completed');
+      return result;
     } catch (error) {
+      if (insufficientCreditsError(error)) {
+        await onInsufficientCredits({
+          provider: attempt.provider,
+          model: selected.name,
+          userId: context.userId,
+          estimate: context.estimate,
+        });
+        throw error;
+      }
       errors.push(`${attempt.provider}: ${error?.message || error}`);
     }
   }
@@ -292,7 +361,7 @@ function sseWrite(response, payload) {
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-async function streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens) {
+async function streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens, context) {
   response.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -309,10 +378,28 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
       } else {
         await streamOpenAiCompatible(response, attempt, cleanMessages, selected, maxTokens);
       }
+      logUsage({
+        user_id: context.userId,
+        model: selected.name,
+        input_tokens: context.estimate.inputTokens,
+        output_tokens: context.estimate.outputTokens,
+        real_provider_cost: context.estimate.providerCostUsd,
+        textokens_charged: context.estimate.textokens,
+        status: 'completed_stream_estimate',
+      });
       sseWrite(response, { done: true });
       response.end();
       return;
     } catch (error) {
+      if (insufficientCreditsError(error)) {
+        await onInsufficientCredits({
+          provider: attempt.provider,
+          model: selected.name,
+          userId: context.userId,
+          estimate: context.estimate,
+        });
+        throw error;
+      }
       errors.push(`${attempt.provider}: ${error?.message || error}`);
     }
   }
@@ -324,8 +411,12 @@ function modelTemperature(selected) {
   return selected.temperature ?? 0.45;
 }
 
+function ipFromRequest(request) {
+  return String(request.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+}
+
 function resolveAnthropicModel(selected) {
-  return (selected.envModel && process.env[selected.envModel]) || process.env.ANTHROPIC_SONNET_MODEL || selected.anthropicModel;
+  return (selected.envModel && process.env[selected.envModel]) || selected.anthropicModel;
 }
 
 async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens) {
@@ -543,7 +634,13 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
   }
 
   const data = await providerResponse.json();
-  return data.choices?.[0]?.message?.content || 'No response text returned.';
+  return {
+    text: data.choices?.[0]?.message?.content || 'No response text returned.',
+    usage: {
+      inputTokens: data.usage?.prompt_tokens || 0,
+      outputTokens: data.usage?.completion_tokens || 0,
+    },
+  };
 }
 
 function openRouterHeaders() {
@@ -617,7 +714,34 @@ async function callAnthropic({ apiKey, model, messages, attachments = [], temper
   }
 
   const data = await providerResponse.json();
-  return Array.isArray(data.content)
+  const text = Array.isArray(data.content)
     ? data.content.map((part) => part.text || '').join('').trim()
     : 'No response text returned.';
+  return {
+    text,
+    usage: {
+      inputTokens: data.usage?.input_tokens || 0,
+      outputTokens: data.usage?.output_tokens || 0,
+    },
+  };
+}
+
+function logProviderUsage(result, selected, context, status) {
+  const inputTokens = result.usage?.inputTokens || context.estimate.inputTokens;
+  const outputTokens = result.usage?.outputTokens || context.estimate.outputTokens;
+  let charged = (
+    inputTokens * (selected.inputTexTokens || 1)
+    + outputTokens * (selected.outputTexTokens || 1)
+  ) * (selected.multiplier || 1);
+  if (context.agent) charged *= 2;
+  if (context.superAgent) charged *= 4;
+  logUsage({
+    user_id: context.userId,
+    model: selected.name,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    real_provider_cost: charged / 1000000,
+    textokens_charged: charged,
+    status,
+  });
 }
