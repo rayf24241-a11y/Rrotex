@@ -1,0 +1,37 @@
+name: Build desktop apps
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "electron/**"
+      - "editor.html"
+      - "editor.css"
+      - "editor.js"
+      - ".github/workflows/desktop-build.yml"
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: electron
+        run: npm install
+      - name: Build desktop package
+        working-directory: electron
+        run: npm run build
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotex-desktop-${{ matrix.os }}
+          path: downloads/desktop/**

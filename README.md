@@ -94,6 +94,12 @@ https://www.rrotex.com/api/connect/google-drive-callback
 
 The PC helper source lives in `pc_app/rotex_pc_app.py`. The downloadable Windows build is served from `downloads/ROTEX-PC-App.exe`.
 
+Desktop app builds:
+
+- Windows, macOS, and Linux Electron builds are configured in `electron/package.json`.
+- The GitHub Actions workflow `.github/workflows/desktop-build.yml` builds all three platforms and uploads artifacts.
+- macOS/Linux download links point at `downloads/desktop/ROTEX-Desktop-mac.dmg` and `downloads/desktop/ROTEX-Desktop-linux.AppImage`; copy the built artifacts there when publishing a release.
+
 ## Stripe checkout
 
 Create a Stripe product/price for the upgrade, then add:

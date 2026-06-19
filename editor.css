@@ -1309,6 +1309,120 @@ a:hover { text-decoration: underline; }
   transition: background var(--t-fast);
   position: relative;
 }
+
+.setup-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.62);
+  padding: 18px;
+}
+.setup-modal[hidden] { display: none; }
+.setup-card {
+  width: min(520px, 100%);
+  background: #252526;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+}
+.setup-eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.setup-card h2 {
+  color: var(--text-bright);
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+.setup-copy {
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.setup-options {
+  display: grid;
+  gap: 10px;
+}
+.setup-option {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+}
+.setup-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.setup-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.setup-option strong,
+.setup-option small {
+  display: block;
+}
+.setup-option small {
+  color: var(--muted);
+  margin-top: 2px;
+}
+.setup-name {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+}
+.setup-name span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.setup-name input {
+  background: #1e1e1e;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-bright);
+  min-height: 38px;
+  padding: 0 11px;
+}
+.setup-error {
+  color: var(--red);
+  min-height: 18px;
+  margin-top: 10px;
+}
+.setup-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.setup-primary,
+.setup-secondary {
+  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+}
+.setup-primary {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.setup-secondary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
 .ai-model-option:hover { background: rgba(255, 255, 255, 0.07); }
 .ai-model-option.selected { background: var(--accent-dim); }
 .ai-model-option.selected::before {

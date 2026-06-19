@@ -177,6 +177,9 @@
             <option value="Roblox">Roblox mode</option>
             <option value="Blender">Blender mode</option>
           </select>
+          <button class="agent-toggle" id="projectSetupButton" type="button" title="Edit project setup">
+            Project
+          </button>
           <button class="agent-toggle" id="agentToggle" type="button" title="Agent mode: the AI can change multiple files in one reply (Pro)">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
             Agent
@@ -211,6 +214,37 @@
         </button>
       </div>
     </footer>
+
+    <div class="setup-modal" id="projectSetupModal" hidden>
+      <form class="setup-card" id="projectSetupForm">
+        <p class="setup-eyebrow">Project setup</p>
+        <h2>What are you working on?</h2>
+        <p class="setup-copy">Pick up to two tools, then name your project.</p>
+        <div class="setup-options">
+          <label class="setup-option">
+            <input type="checkbox" name="projectTool" value="Roblox" />
+            <span><strong>Roblox</strong><small>Luau scripts, Studio logs, services</small></span>
+          </label>
+          <label class="setup-option">
+            <input type="checkbox" name="projectTool" value="Blender" />
+            <span><strong>Blender</strong><small>Python tools, scenes, assets</small></span>
+          </label>
+          <label class="setup-option">
+            <input type="checkbox" name="projectTool" value="Unity" />
+            <span><strong>Unity</strong><small>C# scripts, compile errors, gameplay</small></span>
+          </label>
+        </div>
+        <label class="setup-name">
+          <span>Project name</span>
+          <input id="projectNameInput" type="text" maxlength="60" placeholder="My game project" autocomplete="off" />
+        </label>
+        <p class="setup-error" id="projectSetupError"></p>
+        <div class="setup-actions">
+          <button class="setup-secondary" id="projectSetupLater" type="button">Later</button>
+          <button class="setup-primary" type="submit">Save Project</button>
+        </div>
+      </form>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
     <script src="./editor.js"></script>

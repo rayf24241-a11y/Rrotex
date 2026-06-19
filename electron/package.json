@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
+    "build:all": "electron-builder --win --mac --linux",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
@@ -19,6 +20,7 @@
   "build": {
     "appId": "com.rrotex.editor",
     "productName": "ROTEX Desktop",
+    "artifactName": "ROTEX-Desktop-${os}.${ext}",
     "directories": {
       "output": "../downloads/desktop"
     },
@@ -36,12 +38,18 @@
       "publisherName": "ROTEX"
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": "AppImage",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "icon.png",
       "category": "Development"
     },

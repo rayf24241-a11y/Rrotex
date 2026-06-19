@@ -18,7 +18,9 @@
     currentDirPath: '',
     agentMode: false,
     superAgentMode: false,
-    projectMode: localStorage.getItem('rotex_project_mode') || 'Unity',
+    projectModes: readProjectModes(),
+    projectName: localStorage.getItem('rotex_project_name') || '',
+    projectMode: localStorage.getItem('rotex_project_mode') || readProjectModes().join(' + ') || 'Unity',
   };
 
   // ─── AI Models (IDs match /api/chat.js) ────────────────────────────
@@ -244,6 +246,12 @@
   const aiModelMenu = $('#aiModelMenu');
   const aiModelButton = $('#aiModelButton');
   const projectModeSelect = $('#projectModeSelect');
+  const projectSetupButton = $('#projectSetupButton');
+  const projectSetupModal = $('#projectSetupModal');
+  const projectSetupForm = $('#projectSetupForm');
+  const projectSetupLater = $('#projectSetupLater');
+  const projectNameInput = $('#projectNameInput');
+  const projectSetupError = $('#projectSetupError');
   const superAgentToggle = $('#superAgentToggle');
   const stopAiButton = $('#stopAiButton');
   const aiCostPreview = $('#aiCostPreview');
@@ -390,16 +398,16 @@
   function updateCostPreview() {
     if (!aiCostPreview) return;
     const estimate = estimateTaskCost();
-    if (texTokensLeft() <= 0 || estimate > texTokensLeft()) {
-      alert('You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.');
-      return false;
-    }
     const mode = state.superAgentMode ? 'Super Agent' : state.agentMode ? 'Agent' : 'Chat';
     aiCostPreview.textContent = `${state.projectMode} · ${mode} · est. ${estimate.toLocaleString()} TexTokens`;
   }
 
   function confirmLargeTaskIfNeeded() {
     const estimate = estimateTaskCost();
+    if (texTokensLeft() <= 0 || estimate > texTokensLeft()) {
+      alert('You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.');
+      return false;
+    }
     if (state.aiModel === 'pro-smart' && !confirm('Claude Haiku costs more TexTokens. Continue?')) return false;
     if (estimate <= 250000) return true;
     return confirm(`This task is estimated to cost ${estimate.toLocaleString()} TexTokens. Tasks over 250k require confirmation. Run it?`);
@@ -423,12 +431,40 @@
   }
 
   if (projectModeSelect) {
-    projectModeSelect.value = state.projectMode;
+    renderProjectModeSelect();
     projectModeSelect.addEventListener('change', () => {
       state.projectMode = projectModeSelect.value;
       localStorage.setItem('rotex_project_mode', state.projectMode);
       updateCostPreview();
     });
+  }
+
+  projectSetupButton?.addEventListener('click', () => openProjectSetup(false));
+  projectSetupLater?.addEventListener('click', () => closeProjectSetup());
+  projectSetupForm?.addEventListener('change', enforceProjectToolLimit);
+  projectSetupForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const modes = [...projectSetupForm.querySelectorAll('input[name="projectTool"]:checked')].map((input) => input.value);
+    const name = projectNameInput.value.trim();
+    if (!modes.length) {
+      projectSetupError.textContent = 'Pick at least one tool.';
+      return;
+    }
+    if (modes.length > 2) {
+      projectSetupError.textContent = 'Pick up to two tools.';
+      return;
+    }
+    if (!name) {
+      projectSetupError.textContent = 'Name your project.';
+      return;
+    }
+    saveProjectSetup(name, modes);
+    closeProjectSetup();
+    showToast(`Project saved: ${name}`);
+  });
+
+  if (!localStorage.getItem('rotex_project_setup_done')) {
+    setTimeout(() => openProjectSetup(true), 350);
   }
 
   if (superAgentToggle) {
@@ -455,6 +491,67 @@
     setTimeout(() => toast.remove(), 3200);
   }
 
+  function readProjectModes() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('rotex_project_modes') || '[]');
+      const modes = parsed.filter((item) => ['Roblox', 'Blender', 'Unity'].includes(item));
+      return modes.slice(0, 2);
+    } catch {
+      return [];
+    }
+  }
+
+  function openProjectSetup(required) {
+    if (!projectSetupModal || !projectSetupForm) return;
+    projectSetupModal.hidden = false;
+    projectSetupLater.hidden = Boolean(required);
+    projectSetupError.textContent = '';
+    projectNameInput.value = state.projectName || '';
+    const hasSavedSetup = localStorage.getItem('rotex_project_setup_done') === '1';
+    projectSetupForm.querySelectorAll('input[name="projectTool"]').forEach((input) => {
+      input.checked = hasSavedSetup && state.projectModes.includes(input.value);
+    });
+    enforceProjectToolLimit();
+    setTimeout(() => projectNameInput.focus(), 20);
+  }
+
+  function closeProjectSetup() {
+    if (projectSetupModal) projectSetupModal.hidden = true;
+    localStorage.setItem('rotex_project_setup_done', '1');
+  }
+
+  function enforceProjectToolLimit() {
+    if (!projectSetupForm) return;
+    const checked = [...projectSetupForm.querySelectorAll('input[name="projectTool"]:checked')];
+    const atLimit = checked.length >= 2;
+    projectSetupForm.querySelectorAll('input[name="projectTool"]').forEach((input) => {
+      input.disabled = atLimit && !input.checked;
+    });
+    if (projectSetupError && checked.length <= 2) projectSetupError.textContent = '';
+  }
+
+  function saveProjectSetup(name, modes) {
+    state.projectName = name;
+    state.projectModes = modes.slice(0, 2);
+    state.projectMode = state.projectModes.join(' + ');
+    localStorage.setItem('rotex_project_name', state.projectName);
+    localStorage.setItem('rotex_project_modes', JSON.stringify(state.projectModes));
+    localStorage.setItem('rotex_project_mode', state.projectMode);
+    localStorage.setItem('rotex_project_setup_done', '1');
+    renderProjectModeSelect();
+    updateCostPreview();
+    updateBreadcrumb(state.activeTab);
+  }
+
+  function renderProjectModeSelect() {
+    if (!projectModeSelect) return;
+    const modes = state.projectModes?.length ? state.projectModes : [state.projectMode || 'Unity'];
+    const options = modes.length > 1 ? [modes.join(' + '), ...modes] : modes;
+    projectModeSelect.innerHTML = options.map((mode) => `<option value="${escapeHtml(mode)}">${escapeHtml(mode)} mode</option>`).join('');
+    if (!options.includes(state.projectMode)) state.projectMode = options[0];
+    projectModeSelect.value = state.projectMode;
+  }
+
   // ─── Project Context (what the AI can "see") ───────────────────────
   function collectTreePaths(items, out, depth) {
     for (const item of items || []) {
@@ -466,6 +563,8 @@
 
   function buildProjectContext() {
     const parts = [];
+    if (state.projectName) parts.push(`Project name: ${state.projectName}`);
+    if (state.projectModes?.length) parts.push(`Project tools: ${state.projectModes.join(', ')}`);
     if (state.currentDirPath) parts.push(`Project root: ${state.currentDirPath}`);
 
     const treePaths = [];
@@ -531,7 +630,12 @@
     }
 
     const apiMessages = state.aiMessages.slice(-12).map((m) => ({ role: m.role, content: m.content }));
-    const projectContext = [`Project mode: ${state.projectMode}`, buildProjectContext()].filter(Boolean).join('\n');
+    const projectContext = [
+      state.projectName ? `Project name: ${state.projectName}` : '',
+      `Project mode: ${state.projectMode}`,
+      state.projectModes?.length ? `Selected tools: ${state.projectModes.join(', ')}` : '',
+      buildProjectContext(),
+    ].filter(Boolean).join('\n');
 
     // Streaming message bubble
     const bubble = document.createElement('div');
@@ -1150,7 +1254,8 @@
     const bar = $('#breadcrumbBar');
     if (!bar) return;
     if (path === 'welcome') {
-      bar.innerHTML = '<span class="bc-active">Welcome</span>';
+      const label = state.projectName ? `${escapeHtml(state.projectName)} / Welcome` : 'Welcome';
+      bar.innerHTML = `<span class="bc-active">${label}</span>`;
       return;
     }
     const parts = path.split('/');
