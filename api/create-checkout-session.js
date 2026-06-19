@@ -1,3 +1,5 @@
+const TOKENS_PER_DOLLAR = 400_000; // $2.50 per 1M tokens
+
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'Method not allowed' });
@@ -5,14 +7,14 @@ module.exports = async function handler(request, response) {
   }
 
   const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
-  const livePriceId = cleanEnv(process.env.STRIPE_PRICE_ID);
+  const livePriceId   = cleanEnv(process.env.STRIPE_PRICE_ID);
   const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
-  const testPriceId = cleanEnv(process.env.STRIPE_TEST_PRICE_ID);
-  const hasTestKeys = Boolean(testSecretKey && testPriceId);
-  const hasLiveKeys = Boolean(liveSecretKey && livePriceId);
-  const testMode = !hasLiveKeys && (process.env.STRIPE_MODE === 'test' || hasTestKeys);
-  const secretKey = testMode ? testSecretKey : liveSecretKey;
-  const priceId = testMode ? testPriceId : livePriceId;
+  const testPriceId   = cleanEnv(process.env.STRIPE_TEST_PRICE_ID);
+  const hasTestKeys   = Boolean(testSecretKey && testPriceId);
+  const hasLiveKeys   = Boolean(liveSecretKey && livePriceId);
+  const testMode      = !hasLiveKeys && (process.env.STRIPE_MODE === 'test' || hasTestKeys);
+  const secretKey     = testMode ? testSecretKey : liveSecretKey;
+  const priceId       = testMode ? testPriceId   : livePriceId;
 
   const { uid = '', email = '', kind = 'pro', dollars = 0 } = request.body || {};
   const isCreditCheckout = kind === 'credits';
@@ -34,22 +36,40 @@ module.exports = async function handler(request, response) {
   }
 
   const origin = request.headers.origin || 'https://www.rrotex.com';
-  const body = isCreditCheckout
-    ? createCreditBody({ uid, dollars, origin })
-    : new URLSearchParams({
-        mode: 'subscription',
-        'line_items[0][price]': priceId,
-        'line_items[0][quantity]': '1',
-        success_url: `${origin}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/account#pro`,
-        client_reference_id: uid,
-        'metadata[uid]': uid,
-        'metadata[kind]': 'pro',
-      });
+  let body;
 
-  if (isCreditCheckout && !body) {
-    response.status(400).json({ error: 'invalid_amount', message: 'Choose a whole dollar amount from $1 to $500.' });
-    return;
+  if (isCreditCheckout) {
+    const amount = Math.floor(Number(dollars));
+    if (!Number.isFinite(amount) || amount < 5 || amount > 500) {
+      response.status(400).json({ error: 'invalid_amount', message: 'Choose an amount between $5 and $500.' });
+      return;
+    }
+    const texTokens = amount * TOKENS_PER_DOLLAR;
+    body = new URLSearchParams({
+      mode: 'payment',
+      'line_items[0][price_data][currency]': 'usd',
+      'line_items[0][price_data][product_data][name]': `${(texTokens / 1_000_000).toFixed(1)}M ROTEX TexTokens`,
+      'line_items[0][price_data][unit_amount]': String(amount * 100),
+      'line_items[0][quantity]': '1',
+      success_url: `${origin}/account?credits=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${origin}/account#credits`,
+      client_reference_id: uid,
+      'metadata[uid]':       uid,
+      'metadata[kind]':      'textokens',
+      'metadata[dollars]':   String(amount),
+      'metadata[textokens]': String(texTokens),
+    });
+  } else {
+    body = new URLSearchParams({
+      mode: 'subscription',
+      'line_items[0][price]': priceId,
+      'line_items[0][quantity]': '1',
+      success_url: `${origin}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${origin}/account#pro`,
+      client_reference_id: uid,
+      'metadata[uid]':  uid,
+      'metadata[kind]': 'pro',
+    });
   }
 
   if (email) body.set('customer_email', email);
@@ -74,25 +94,4 @@ module.exports = async function handler(request, response) {
 
 function cleanEnv(value) {
   return String(value || '').trim().replace(/^['"]|['"]$/g, '').replace(/[^\x20-\x7E]/g, '');
-}
-
-function createCreditBody({ uid, dollars, origin }) {
-  const amount = Math.floor(Number(dollars));
-  if (!Number.isFinite(amount) || amount < 1 || amount > 500) return null;
-
-  const texTokens = amount * 1000000;
-  return new URLSearchParams({
-    mode: 'payment',
-    'line_items[0][price_data][currency]': 'usd',
-    'line_items[0][price_data][product_data][name]': `${texTokens.toLocaleString()} ROTEX TexTokens`,
-    'line_items[0][price_data][unit_amount]': String(amount * 100),
-    'line_items[0][quantity]': '1',
-    success_url: `${origin}/account?credits=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/account#credits`,
-    client_reference_id: uid,
-    'metadata[uid]': uid,
-    'metadata[kind]': 'textokens',
-    'metadata[dollars]': String(amount),
-    'metadata[textokens]': String(texTokens),
-  });
 }

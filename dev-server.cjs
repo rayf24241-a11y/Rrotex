@@ -31,6 +31,8 @@ http.createServer(async (request, response) => {
     if (pathname === '/') pathname = '/index.html';
     if (pathname === '/app' || pathname === '/chat') pathname = '/index.html';
     if (pathname === '/account') pathname = '/account.html';
+    if (pathname === '/login')   pathname = '/login.html';
+    if (pathname === '/tokens')  pathname = '/tokens.html';
     if (pathname === '/editor') pathname = '/editor.html';
 
     const filePath = path.resolve(root, `.${pathname}`);
@@ -42,7 +44,7 @@ http.createServer(async (request, response) => {
       response.writeHead(404).end('Not found');
       return;
     }
-    response.writeHead(200, { 'Content-Type': mime[path.extname(filePath)] || 'application/octet-stream' });
+    response.writeHead(200, { 'Content-Type': mime[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     fs.createReadStream(filePath).pipe(response);
   } catch (error) {
     response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });

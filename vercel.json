@@ -2,6 +2,8 @@
   "rewrites": [
     { "source": "/editor", "destination": "/index.html" },
     { "source": "/account", "destination": "/account.html" },
+    { "source": "/login",   "destination": "/login.html" },
+    { "source": "/tokens",  "destination": "/tokens.html" },
     { "source": "/app", "destination": "/index.html" },
     { "source": "/chat", "destination": "/index.html" }
   ],

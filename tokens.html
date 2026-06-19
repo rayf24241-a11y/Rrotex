@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Buy TexTokens — ROTEX</title>
+    <meta name="description" content="Buy TexTokens to keep using ROTEX AI models." />
+    <meta name="theme-color" content="#0D0F17" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --yellow: #FFD60A;
+        --yellow-dim: #B89800;
+        --blue: #2563EB;
+        --bg: #0D0F17;
+        --surface: #141720;
+        --surface2: #1A1F2E;
+        --border: #252D40;
+        --text: #E8EAED;
+        --muted: #8A93AA;
+        --radius: 10px;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        min-height: 100vh;
+      }
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 28px;
+        border-bottom: 1px solid var(--border);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--text);
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .brand-mark {
+        width: 30px;
+        height: 30px;
+        background: var(--yellow);
+        color: #000;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 14px;
+      }
+      .nav-link {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 14px;
+      }
+      .nav-link:hover { color: var(--text); }
+
+      .page {
+        max-width: 740px;
+        margin: 0 auto;
+        padding: 56px 24px 80px;
+      }
+      .eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--yellow);
+        margin-bottom: 10px;
+      }
+      h1 {
+        font-size: 36px;
+        font-weight: 800;
+        line-height: 1.15;
+        margin-bottom: 12px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 15px;
+        margin-bottom: 48px;
+      }
+      .rate-note {
+        display: inline-block;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 40px;
+      }
+      .rate-note strong { color: var(--text); }
+
+      /* Custom amount */
+      .custom-section {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 28px;
+        margin-bottom: 32px;
+      }
+      .custom-section h2 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .custom-section p {
+        color: var(--muted);
+        font-size: 14px;
+        margin-bottom: 20px;
+      }
+      .amount-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .dollar-wrap {
+        position: relative;
+        flex: 0 0 140px;
+      }
+      .dollar-wrap::before {
+        content: '$';
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--muted);
+        font-size: 15px;
+        pointer-events: none;
+      }
+      .dollar-wrap input {
+        width: 100%;
+        padding: 12px 14px 12px 28px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 600;
+        outline: none;
+      }
+      .dollar-wrap input:focus { border-color: var(--yellow); }
+      .token-preview {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--yellow);
+        min-width: 120px;
+      }
+      .token-preview .sub {
+        display: block;
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .buy-btn {
+        display: block;
+        width: 100%;
+        margin-top: 20px;
+        padding: 14px;
+        background: var(--yellow);
+        color: #000;
+        font-weight: 700;
+        font-size: 15px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: opacity .15s;
+      }
+      .buy-btn:hover { opacity: .88; }
+      .buy-btn:disabled { opacity: .5; cursor: default; }
+
+      .msg {
+        margin-top: 12px;
+        font-size: 13px;
+        color: var(--muted);
+        min-height: 18px;
+      }
+      .msg.error { color: #F87171; }
+      .msg.ok { color: #4ADE80; }
+
+      /* Auth guard */
+      .auth-guard {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 36px;
+        text-align: center;
+      }
+      .auth-guard h2 { font-size: 20px; margin-bottom: 10px; }
+      .auth-guard p { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+      .auth-guard a {
+        display: inline-block;
+        padding: 12px 28px;
+        background: var(--yellow);
+        color: #000;
+        font-weight: 700;
+        border-radius: 8px;
+        text-decoration: none;
+      }
+
+      .success-banner {
+        background: #052e16;
+        border: 1px solid #166534;
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 32px;
+        display: none;
+      }
+      .success-banner.show { display: block; }
+      .success-banner strong { color: #4ADE80; font-size: 16px; }
+      .success-banner p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a class="brand" href="/">
+        <span class="brand-mark">R</span>
+        <span>ROTEX</span>
+      </a>
+      <a class="nav-link" href="/account">← Account</a>
+    </nav>
+
+    <div class="page">
+      <p class="eyebrow">TexTokens</p>
+      <h1>Buy more tokens.</h1>
+      <p class="subtitle">TexTokens power every AI message you send in ROTEX.</p>
+      <span class="rate-note"><strong>$2.50 = 1M TexTokens</strong> — any whole dollar amount, minimum $5</span>
+
+      <div id="successBanner" class="success-banner">
+        <strong id="successMsg">TexTokens added!</strong>
+        <p id="successSub">Your balance has been updated.</p>
+      </div>
+
+      <div id="mainContent">
+        <!-- shown while loading -->
+        <div id="loadingState" class="auth-guard">
+          <h2>Loading...</h2>
+          <p>Checking your account.</p>
+        </div>
+
+        <!-- shown if not signed in -->
+        <div id="anonState" class="auth-guard" hidden>
+          <h2>Sign in to buy TexTokens</h2>
+          <p>You need a ROTEX account to purchase and use TexTokens.</p>
+          <a href="/login">Sign in →</a>
+        </div>
+
+        <!-- shown when signed in -->
+        <div id="signedInState" hidden>
+          <div class="custom-section">
+            <h2>Choose your amount</h2>
+            <p>Every $2.50 adds 1M TexTokens. Minimum $5, maximum $500.</p>
+            <div class="amount-row">
+              <div class="dollar-wrap">
+                <input id="dollarInput" type="number" min="5" max="500" step="1" value="10" />
+              </div>
+              <div class="token-preview">
+                <span id="tokenPreview">4M</span> TexTokens
+                <span class="sub" id="tokenSub">≈ 4,000,000</span>
+              </div>
+            </div>
+            <button class="buy-btn" id="buyBtn" type="button">Buy TexTokens — $10</button>
+            <p class="msg" id="buyMsg"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+      import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+      import { getFirestore, doc, getDoc, setDoc, increment, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
+      const TOKENS_PER_DOLLAR = 400_000; // $2.50 = 1M
+
+      let auth, db, currentUser;
+
+      const dollarInput   = document.getElementById('dollarInput');
+      const tokenPreview  = document.getElementById('tokenPreview');
+      const tokenSub      = document.getElementById('tokenSub');
+      const buyBtn        = document.getElementById('buyBtn');
+      const buyMsg        = document.getElementById('buyMsg');
+      const loadingState  = document.getElementById('loadingState');
+      const anonState     = document.getElementById('anonState');
+      const signedInState = document.getElementById('signedInState');
+      const successBanner = document.getElementById('successBanner');
+      const successMsg    = document.getElementById('successMsg');
+      const successSub    = document.getElementById('successSub');
+
+      async function boot() {
+        const res = await fetch('/api/firebase-config');
+        const cfg = await res.json();
+        if (!cfg.configured) { showAnon(); return; }
+        const app = initializeApp(cfg.firebaseConfig);
+        auth = getAuth(app);
+        db   = getFirestore(app);
+        onAuthStateChanged(auth, async (user) => {
+          currentUser = user;
+          if (user) {
+            showSignedIn();
+            await handleReturn(user);
+          } else {
+            showAnon();
+          }
+        });
+      }
+
+      function showAnon() {
+        loadingState.hidden = true;
+        anonState.hidden    = false;
+        signedInState.hidden = true;
+      }
+
+      function showSignedIn() {
+        loadingState.hidden  = true;
+        anonState.hidden     = true;
+        signedInState.hidden = false;
+        updatePreview();
+      }
+
+      function getDollars() {
+        const v = Math.floor(Number(dollarInput.value));
+        return Number.isFinite(v) && v >= 5 && v <= 500 ? v : 0;
+      }
+
+      function updatePreview() {
+        const d = getDollars();
+        const tokens = d ? d * TOKENS_PER_DOLLAR : 0;
+        const millions = tokens / 1_000_000;
+        tokenPreview.textContent = d ? (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M' : '—';
+        tokenSub.textContent     = d ? `≈ ${tokens.toLocaleString()}` : '';
+        buyBtn.textContent       = d ? `Buy TexTokens — $${d}` : 'Choose an amount';
+        buyBtn.disabled          = !d;
+      }
+
+      dollarInput.addEventListener('input', updatePreview);
+
+      buyBtn.addEventListener('click', async () => {
+        if (!currentUser) return;
+        const dollars = getDollars();
+        if (!dollars) { setMsg('Choose a whole dollar amount between $5 and $500.', 'error'); return; }
+        buyBtn.disabled = true;
+        setMsg('Opening Stripe...');
+        try {
+          const res  = await fetch('/api/create-checkout-session', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', kind: 'credits', dollars }),
+          });
+          const data = await res.json();
+          if (data.url) { window.location.href = data.url; return; }
+          setMsg(data.message || 'Stripe checkout could not start.', 'error');
+        } catch {
+          setMsg('Could not reach Stripe. Try again.', 'error');
+        } finally {
+          buyBtn.disabled = false;
+        }
+      });
+
+      async function handleReturn(user) {
+        const params    = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session_id');
+        if (params.get('credits') !== 'success' || !sessionId) return;
+
+        const key = `rotex_credit_session_${sessionId}`;
+        if (localStorage.getItem(key)) {
+          showSuccess('TexTokens already applied', 'Your balance is up to date.');
+          history.replaceState('', document.title, '/tokens');
+          return;
+        }
+
+        setMsg('Verifying purchase...');
+        try {
+          const res  = await fetch('/api/verify-checkout-session', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ sessionId, uid: user.uid }),
+          });
+          const data = await res.json();
+          if (!data.verified) { setMsg(data.message || 'Could not verify purchase.', 'error'); return; }
+
+          const bal = data.texTokens;
+          // update localStorage
+          const prev = Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
+          localStorage.setItem('rotex_textokens_balance', String(prev + bal));
+          localStorage.setItem(key, '1');
+
+          // update Firestore
+          if (db) {
+            try {
+              await setDoc(doc(db, 'users', user.uid, 'billing', 'textokens'), {
+                balance:           increment(bal),
+                updatedAt:         serverTimestamp(),
+                lastStripeSession: sessionId,
+              }, { merge: true });
+            } catch { /* Firestore update failed; localStorage is fallback */ }
+          }
+
+          const millions = bal / 1_000_000;
+          const label    = (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M';
+          showSuccess(`${label} TexTokens added!`, 'Your balance has been updated.');
+          history.replaceState('', document.title, '/tokens');
+        } catch {
+          setMsg('Could not verify purchase. Refresh and try again.', 'error');
+        }
+      }
+
+      function showSuccess(title, sub) {
+        successMsg.textContent = title;
+        successSub.textContent = sub;
+        successBanner.classList.add('show');
+        setMsg('');
+      }
+
+      function setMsg(text, type = '') {
+        buyMsg.textContent = text;
+        buyMsg.className   = 'msg' + (type ? ' ' + type : '');
+      }
+
+      boot();
+    </script>
+  </body>
+</html>

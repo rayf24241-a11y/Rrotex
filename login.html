@@ -266,6 +266,74 @@
     } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 
     let auth = null;
+    const isDesktopLogin = new URLSearchParams(window.location.search).has('desktop');
+
+    /* ══════════════════════════════════════════════════════════════════
+       DESKTOP APP PATH — skip Firebase entirely, open browser to sign in
+       ══════════════════════════════════════════════════════════════════ */
+    if (window.rotexDesktop?.isDesktop) {
+      // Check if already signed in via localStorage
+      try {
+        const s = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
+        if (s?.uid && Number(s.exp) > Date.now()) {
+          window.rotexDesktop.navigate('projects');
+        }
+      } catch {}
+
+      // Replace card with desktop sign-in UI
+      document.querySelector('.card').innerHTML = `
+        <div style="text-align:center;padding:8px 0;">
+          <div style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--text)">Sign in to ROTEX</div>
+          <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:24px;">
+            Your browser will open rrotex.com so you can sign in securely.
+            The app will connect automatically when done.
+          </p>
+          <button class="btn-primary" id="openBrowserBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Open rrotex.com to sign in
+          </button>
+          <div id="waitingState" style="display:none;margin-top:20px;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:13px;">
+              <div class="spin" style="border-top-color:var(--yellow);border-color:var(--border);"></div>
+              Waiting for sign-in on rrotex.com…
+            </div>
+            <button style="margin-top:14px;background:none;border:none;color:var(--quiet);font-size:12px;cursor:pointer;text-decoration:underline;" onclick="resetDesktopLogin()">
+              Try again
+            </button>
+          </div>
+          <div class="error" id="errBox" style="margin-top:14px;"></div>
+        </div>
+      `;
+
+      document.getElementById('openBrowserBtn').onclick = () => {
+        window.rotexDesktop.openExternal('https://www.rrotex.com/login?desktop=1');
+        document.getElementById('openBrowserBtn').style.display = 'none';
+        document.getElementById('waitingState').style.display = 'block';
+      };
+
+      window.resetDesktopLogin = () => {
+        document.getElementById('openBrowserBtn').style.display = 'flex';
+        document.getElementById('waitingState').style.display = 'none';
+      };
+
+      // Listen for deep link auth-callback from main.js
+      window.rotexDesktop.onAuthCallback(data => {
+        if (!data?.uid) return;
+        const authData = {
+          uid:   data.uid,
+          email: data.email  || '',
+          name:  data.name   || '',
+          exp:   data.exp    || String(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          token: data.token  || '',
+        };
+        localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
+        window.rotexDesktop.navigate('projects');
+      });
+
+    } else {
+    /* ══════════════════════════════════════════════════════════════════
+       WEB / NORMAL PATH — Firebase auth as usual
+       ══════════════════════════════════════════════════════════════════ */
 
     /* ── Bootstrap Firebase ─────────────────────────────────────────── */
     async function boot() {
@@ -291,19 +359,41 @@
     /* ── Navigation ─────────────────────────────────────────────────── */
     function navigate(page = 'projects') {
       if (window.rotexDesktop) window.rotexDesktop.navigate(page);
-      else window.location.href = `/${page}.html`;
+      else window.location.href = `/${page}`;
     }
 
     async function go(user) {
       const token    = await user.getIdToken().catch(() => '');
       const authData = {
         uid:   user.uid,
-        email: user.email,
-        name:  user.displayName,
+        email: user.email        || '',
+        name:  user.displayName  || '',
         exp:   String(Date.now() + 7 * 24 * 60 * 60 * 1000),
         token
       };
       localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
+
+      // If this is a desktop-initiated login, fire the deep link back to the app
+      if (isDesktopLogin) {
+        const params = new URLSearchParams({
+          uid:   authData.uid,
+          email: authData.email,
+          name:  authData.name,
+          token: authData.token,
+          exp:   authData.exp,
+        });
+        document.querySelector('.card').innerHTML = `
+          <div style="text-align:center;padding:16px 0;">
+            <div style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--text)">Signed in!</div>
+            <p style="color:var(--muted);font-size:13px;line-height:1.6;">
+              You can close this tab and return to ROTEX Desktop.
+            </p>
+          </div>
+        `;
+        window.location.href = `rotex://auth?${params}`;
+        return;
+      }
+
       navigate('projects');
     }
 
@@ -395,6 +485,7 @@
     });
 
     boot();
+    } // end else (web path)
   </script>
 </body>
 </html>

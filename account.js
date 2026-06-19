@@ -145,7 +145,7 @@ creditCheckoutButton.addEventListener('click', async () => {
   }
   const dollars = normalizedCreditDollars();
   if (!dollars) {
-    setCreditMessage('Choose a whole dollar amount from $1 to $500.', true);
+    setCreditMessage('Choose a whole dollar amount from $5 to $500.', true);
     return;
   }
   creditCheckoutButton.disabled = true;
@@ -241,7 +241,7 @@ async function handleCreditCheckoutReturn(user) {
     await addCredits(user, data.texTokens, sessionId);
     localStorage.setItem(appliedKey, '1');
     setCreditMessage(`Added ${formatTokens(data.texTokens)} TexTokens.`);
-    history.replaceState('', document.title, '/account#credits');
+    history.replaceState('', document.title, '/account');
   } catch {
     setCreditMessage('Could not verify credit checkout. Refresh and try again.', true);
   }
@@ -285,13 +285,14 @@ async function addCredits(user, amount, sessionId) {
 
 function normalizedCreditDollars() {
   const dollars = Math.floor(Number(creditAmount.value));
-  if (!Number.isFinite(dollars) || dollars < 1 || dollars > 500) return 0;
+  if (!Number.isFinite(dollars) || dollars < 5 || dollars > 500) return 0;
   return dollars;
 }
 
 function renderCreditPreview() {
   const dollars = normalizedCreditDollars();
-  creditPreview.textContent = dollars ? `${dollars}M TexTokens` : 'Choose $1-$500';
+  const tokens = dollars ? Math.floor((dollars / 2.5) * 1_000_000) : 0;
+  creditPreview.textContent = dollars ? `${formatTokens(tokens)} TexTokens` : 'Choose $5–$500';
 }
 
 function renderCredits() {
