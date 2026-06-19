@@ -85,9 +85,9 @@ function insufficientCreditsError(error) {
   return /insufficient|credit|quota|billing|payment|required balance|low balance|out of credits/.test(text);
 }
 
-async function onInsufficientCredits({ provider, model, userId, estimate }) {
+async function onInsufficientCredits({ provider, model, userId, estimate, reason = 'insufficient credits' }) {
   const balance = providerBalanceUsd();
-  await sendLowCreditEmail({ balance, provider, model, userId, estimatedCost: estimate?.providerCostUsd || 0 });
+  await sendLowCreditEmail({ balance, provider, model, userId, estimatedCost: estimate?.providerCostUsd || 0, reason });
 }
 
 function logUsage(entry) {
@@ -116,8 +116,8 @@ function adminUsageSummary() {
   };
 }
 
-async function sendLowCreditEmail({ balance, provider, model, userId, estimatedCost }) {
-  const key = `${provider || 'provider'}:${balance < 5 ? 'under5' : 'under10'}`;
+async function sendLowCreditEmail({ balance, provider, model, userId, estimatedCost, reason = 'low or empty credits' }) {
+  const key = `${provider || 'provider'}:${balance < 5 ? 'under5' : 'under10'}:${reason}`;
   const now = Date.now();
   if (now - Number(lowCreditEmailTimes.get(key) || 0) < LOW_EMAIL_COOLDOWN_MS) return;
   lowCreditEmailTimes.set(key, now);
@@ -132,6 +132,7 @@ async function sendLowCreditEmail({ balance, provider, model, userId, estimatedC
     `Model: ${model || 'unknown'}`,
     `User ID: ${userId || 'unknown'}`,
     `Task estimate: ${estimatedCost || 0}`,
+    `Reason: ${reason}`,
     `Time: ${new Date().toISOString()}`,
     '',
     'Please add more credits so users can keep using ROTEX.',

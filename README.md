@@ -16,8 +16,8 @@ Model catalog:
 - `api/_lib/catalog.js` is the single source of truth for chat routing, public model names, tiers, and per-message credit costs.
 - `/api/models` returns the public catalog for clients.
 - Only four cloud models are enabled: Fast, Balanced, Smart, and Pro Smart.
-- Fast, Balanced, and Smart route through Groq first, with OpenRouter fallback when configured.
-- Pro Smart routes through Anthropic first, with OpenRouter fallback when configured.
+- Fast, Balanced, and Smart use Groq only. If Groq is busy, users see `This AI is being used too much. Please use a different AI and go to this one later.`
+- Pro Smart uses Anthropic first. If Anthropic runs out of credits, ROTEX emails you and switches that request to OpenRouter.
 - Pro unlocks Claude Haiku 4.5 through the Pro Smart model.
 
 Model access:
@@ -53,6 +53,7 @@ Add these to Vercel Project Settings -> Environment Variables:
 OPENROUTER_API_KEY
 GROQ_API_KEY
 ANTHROPIC_API_KEY   (or CLAUDE_API_KEY)
+OPENROUTER_API_KEY  (fallback for Anthropic only)
 PRO_PASS_SECRET     (random 32+ char secret; signs the Pro pass)
 PROVIDER_CREDIT_BALANCE
 ```

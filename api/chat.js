@@ -14,6 +14,7 @@ const {
 const FREE_DAILY_IP_LIMIT = 120;
 const ipCounters = new Map();
 const proCounters = new Map();
+const GROQ_BUSY_TEXT = 'This AI is being used too much. Please use a different AI and go to this one later.';
 
 function bumpCounter(map, key) {
   const today = new Date().toISOString().slice(0, 10);
@@ -216,10 +217,12 @@ module.exports = async function handler(request, response) {
       message: error?.message || String(error),
     });
     const lowCredit = insufficientCreditsError(error);
+    const publicText = error?.publicText || (lowCredit ? 'Too many requests right now. Please retry later or upgrade/add TexTokens.' : 'servers are down');
+    const publicError = error?.publicError || (lowCredit ? 'provider_credits_empty' : 'backend_unavailable');
     if (stream && response.headersSent) {
       sseWrite(response, {
-        error: lowCredit ? 'provider_credits_empty' : 'backend_unavailable',
-        text: lowCredit ? 'Too many requests right now. Please retry later or upgrade/add TexTokens.' : 'servers are down',
+        error: publicError,
+        text: publicText,
       });
       sseWrite(response, { done: true });
       response.end();
@@ -237,9 +240,9 @@ module.exports = async function handler(request, response) {
       textokens_charged: 0,
       status: lowCredit ? 'provider_insufficient_credits' : 'failed',
     });
-    response.status(lowCredit ? 503 : 500).json({
-      error: lowCredit ? 'provider_credits_empty' : 'backend_unavailable',
-      text: lowCredit ? 'Too many requests right now. Please retry later or upgrade/add TexTokens.' : 'servers are down',
+    response.status(error?.publicStatus || (lowCredit ? 503 : 500)).json({
+      error: publicError,
+      text: publicText,
     });
   }
 };
@@ -274,7 +277,7 @@ function resolveProviderCall(selected) {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const attempts = [];
 
-  if (selected.route === 'groq-first' && groqKey) {
+  if (selected.route === 'groq-only' && groqKey) {
     attempts.push({
       provider: 'groq',
       providerModel: selected.groqModel,
@@ -340,6 +343,20 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
       logProviderUsage(result, selected, context, 'completed');
       return result;
     } catch (error) {
+      if (attempt.provider === 'anthropic' && insufficientCreditsError(error)) {
+        await onInsufficientCredits({
+          provider: attempt.provider,
+          model: selected.name,
+          userId: context.userId,
+          estimate: context.estimate,
+          reason: 'Anthropic ran out; switching to OpenRouter',
+        });
+        errors.push(`${attempt.provider}: ${error?.message || error}`);
+        continue;
+      }
+      if (attempt.provider === 'groq' && (insufficientCreditsError(error) || groqBusyError(error))) {
+        throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
+      }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({
           provider: attempt.provider,
@@ -391,6 +408,20 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
       response.end();
       return;
     } catch (error) {
+      if (attempt.provider === 'anthropic' && insufficientCreditsError(error)) {
+        await onInsufficientCredits({
+          provider: attempt.provider,
+          model: selected.name,
+          userId: context.userId,
+          estimate: context.estimate,
+          reason: 'Anthropic ran out; switching to OpenRouter',
+        });
+        errors.push(`${attempt.provider}: ${error?.message || error}`);
+        continue;
+      }
+      if (attempt.provider === 'groq' && (insufficientCreditsError(error) || groqBusyError(error))) {
+        throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
+      }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({
           provider: attempt.provider,
@@ -409,6 +440,19 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
 
 function modelTemperature(selected) {
   return selected.temperature ?? 0.45;
+}
+
+function groqBusyError(error) {
+  const text = String(error?.message || error || '').toLowerCase();
+  return /rate.?limit|too many|overloaded|capacity|temporarily unavailable|try again|429|503|requests per minute|tokens per minute/.test(text);
+}
+
+function publicProviderError(code, text, status = 503) {
+  const error = new Error(text);
+  error.publicError = code;
+  error.publicText = text;
+  error.publicStatus = status;
+  return error;
 }
 
 function ipFromRequest(request) {
