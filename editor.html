@@ -93,7 +93,7 @@
             <div class="welcome-view">
               <div class="welcome-inner">
                 <h1><span class="brand-mark">R</span> ROTEX Editor</h1>
-                <p class="welcome-sub">AI-powered code editor with 8 built-in models</p>
+                <p class="welcome-sub">AI-powered code editor with 7 built-in models</p>
                 <div class="welcome-actions">
                   <button class="welcome-btn" id="welcomeOpenFolder">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
@@ -169,13 +169,28 @@
         </form>
         <div class="ai-model-bar">
           <button class="ai-model-select" id="aiModelButton" type="button">
-            <span id="aiSelectedModel">Adapt</span>
-            <small id="aiSelectedRole">Auto</small>
+            <span id="aiSelectedModel">GBT</span>
+            <small id="aiSelectedRole">GPT</small>
           </button>
+          <select class="ai-mode-select" id="projectModeSelect" title="Project mode">
+            <option value="Unity">Unity mode</option>
+            <option value="Roblox">Roblox mode</option>
+            <option value="Blender">Blender mode</option>
+          </select>
           <button class="agent-toggle" id="agentToggle" type="button" title="Agent mode: the AI can change multiple files in one reply (Plus)">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
             Agent
           </button>
+          <button class="agent-toggle" id="superAgentToggle" type="button" title="Super Agent mode uses 4x task cost">
+            Super Agent
+          </button>
+          <button class="agent-toggle" id="teamupToggle" type="button" title="Teamup adds both model costs together plus 20%">
+            Teamup
+          </button>
+          <button class="agent-toggle danger" id="stopAiButton" type="button" title="Stop the current AI task">
+            Stop
+          </button>
+          <span class="ai-cost-preview" id="aiCostPreview">Cost preview: 50k-100k TexTokens</span>
           <div class="ai-model-menu" id="aiModelMenu" hidden></div>
         </div>
       </aside>

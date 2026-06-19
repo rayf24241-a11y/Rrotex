@@ -1,93 +1,6 @@
 const AdmZip = require('adm-zip');
 const { verifyProPass } = require('./_lib/propass.js');
-
-// maxTokens = free tier output cap, proMaxTokens = Plus output cap.
-// pro: true models require a valid signed Pro pass (enforced server-side).
-const MODELS = {
-  'rod-1': {
-    name: 'Rod _ 1',
-    provider: 'groq',
-    providerModel: 'llama-3.1-8b-instant',
-    purpose: 'everyday tasks',
-    temperature: 0.65,
-    maxTokens: 1024,
-    proMaxTokens: 2048,
-    pro: false,
-  },
-  'rod-thinking': {
-    name: 'Rod thinking',
-    provider: 'groq',
-    providerModel: 'llama-3.3-70b-versatile',
-    purpose: 'harder tasks',
-    temperature: 0.55,
-    maxTokens: 2048,
-    proMaxTokens: 4096,
-    pro: false,
-  },
-  'rod-brain': {
-    name: 'Rod brain',
-    provider: 'anthropic',
-    providerModel: process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-haiku-4-5-20251001',
-    purpose: 'smart everyday help',
-    temperature: 0.45,
-    maxTokens: 2048,
-    proMaxTokens: 4096,
-    pro: false,
-  },
-  'tex-0': {
-    name: 'Tex 0',
-    provider: 'deepseek',
-    providerModel: 'deepseek-chat',
-    purpose: 'code',
-    temperature: 0.35,
-    maxTokens: 2048,
-    proMaxTokens: 8192,
-    pro: false,
-  },
-  'tex-1-5': {
-    name: 'Tex 1.5',
-    provider: 'deepseek',
-    providerModel: 'deepseek-reasoner',
-    purpose: 'complex code',
-    temperature: 0.25,
-    maxTokens: 8192,
-    proMaxTokens: 8192,
-    pro: true,
-  },
-  'tex-2': {
-    name: 'Tex 2',
-    provider: 'openrouter',
-    providerModel: process.env.OPENROUTER_CODER_MODEL || 'qwen/qwen3-coder',
-    fallbackProvider: 'deepseek',
-    fallbackProviderModel: 'deepseek-chat',
-    purpose: 'large coding tasks, big context',
-    temperature: 0.3,
-    maxTokens: 8192,
-    proMaxTokens: 8192,
-    pro: true,
-  },
-  'tex-2-5': {
-    name: 'Tex 2.5',
-    provider: 'anthropic',
-    providerModel: process.env.CLAUDE_OPUS_MODEL || process.env.ANTHROPIC_OPUS_MODEL || 'claude-opus-4-8',
-    purpose: 'pro complex code',
-    temperature: 0.25,
-    maxTokens: 8192,
-    proMaxTokens: 8192,
-    pro: true,
-    dailyCap: 100,
-  },
-  'treesearch-q': {
-    name: 'Treesearch _ q',
-    provider: 'groq',
-    providerModel: 'llama-3.3-70b-versatile',
-    purpose: 'research only',
-    temperature: 0.4,
-    maxTokens: 1536,
-    proMaxTokens: 3072,
-    pro: false,
-  },
-};
+const { MODELS, resolveModelId } = require('./_lib/catalog.js');
 
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
@@ -122,7 +35,7 @@ module.exports = async function handler(request, response) {
 
   const {
     authToken = '',
-    model = 'rod-1',
+    model = 'gbt',
     messages = [],
     computerMode = false,
     computerConnections = [],
@@ -141,10 +54,19 @@ module.exports = async function handler(request, response) {
   const proPayload = verifyProPass(proPass);
   const isPro = Boolean(proPayload);
 
-  const selected = MODELS[model] || MODELS['rod-1'];
+  if (model === 'ollama') {
+    response.status(400).json({
+      error: 'local_only',
+      text: 'Ollama runs locally on your PC and is not available through the cloud chat API.',
+    });
+    return;
+  }
+
+  const modelId = resolveModelId(model);
+  const selected = MODELS[modelId];
 
   // Server-side Plus enforcement — locked models reject without a valid pass.
-  if (selected.pro && !isPro) {
+  if (selected.tier === 'pro' && !isPro) {
     response.status(402).json({
       error: 'pro_required',
       text: `${selected.name} is a Plus model. Upgrade to Plus on rrotex.com to unlock it.`,
@@ -164,11 +86,11 @@ module.exports = async function handler(request, response) {
     }
   }
   if (isPro && selected.dailyCap) {
-    const used = bumpCounter(proCounters, `${proPayload.uid}:${model}`);
+    const used = bumpCounter(proCounters, `${proPayload.uid}:${modelId}`);
     if (used > selected.dailyCap) {
       response.status(429).json({
         error: 'rate_limited',
-        text: `${selected.name} daily cap reached. Switch to another Tex model for the rest of today.`,
+        text: `${selected.name} daily cap reached. Switch to another premium model for the rest of today.`,
       });
       return;
     }
@@ -197,7 +119,7 @@ module.exports = async function handler(request, response) {
       .pop() || '';
     lastUser.content = original.slice(0, lastMessageCap);
     if (cleanAttachments.length) {
-      lastUser.content = `${lastUser.content}\n\n${attachmentPrompt(cleanAttachments, selected.provider === 'anthropic')}`.slice(0, lastMessageCap + 16000);
+      lastUser.content = `${lastUser.content}\n\n${attachmentPrompt(cleanAttachments, selected.route === 'anthropic-first')}`.slice(0, lastMessageCap + 16000);
     }
   }
 
@@ -215,7 +137,7 @@ module.exports = async function handler(request, response) {
         'Do not use bold headings like "Main capabilities" or "Current setup" unless the user specifically asks for a formatted list.',
         `ROTEX model lineup: ${modelGuide}`,
         `Current selected model: ${selected.name}. If the user asks which model is best, compare these ROTEX model names only, not provider names.`,
-        hasImages && selected.provider !== 'anthropic' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
+        hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
         'You can create multiple downloadable files and folders. For a folder, use file blocks with paths like ```file:project/src/app.js. For binary/image files, use ```file:name.ext;base64 and put only base64 content inside. If the user asks for a zip, create multiple file blocks and the app can zip them together.',
@@ -236,10 +158,10 @@ module.exports = async function handler(request, response) {
     });
   }
 
-  if (model === 'treesearch-q') {
+  if (modelId === 'rreas-2-1') {
     cleanMessages.unshift({
       role: 'system',
-      content: 'You are Treesearch _ q. Focus on research, comparison, and explanation. Do not create, edit, delete, or rename files.',
+      content: 'You are Rreas 2.1, a research model. Focus on research, comparison, and clear explanation. Do not create, edit, delete, or rename files.',
     });
   }
 
@@ -247,7 +169,7 @@ module.exports = async function handler(request, response) {
   if (!providerCall) {
     response.status(500).json({
       error: 'backend_unavailable',
-      text: `${selected.name} is not configured on the server right now. Try another ROTEX model.`,
+      text: 'servers are down',
     });
     return;
   }
@@ -266,14 +188,14 @@ module.exports = async function handler(request, response) {
       message: error?.message || String(error),
     });
     if (stream && response.headersSent) {
-      sseWrite(response, { error: 'backend_unavailable', text: `${selected.name} could not answer right now. Try again, or switch models.` });
+      sseWrite(response, { error: 'backend_unavailable', text: 'servers are down' });
       sseWrite(response, { done: true });
       response.end();
       return;
     }
     response.status(500).json({
       error: 'backend_unavailable',
-      text: `${selected.name} could not answer right now. Try again in a moment, or switch to another ROTEX model for this message.`,
+      text: 'servers are down',
     });
   }
 };
@@ -302,64 +224,66 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro) {
   return parts.join('\n');
 }
 
-function resolveProviderCall(selected, hasImages) {
-  const keys = {
-    groq: process.env.GROQ_API_KEY,
-    deepseek: process.env.DEEPSEEK_API_KEY,
-    anthropic: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
-    openrouter: process.env.OPENROUTER_API_KEY,
-  };
-  const baseUrls = {
-    groq: 'https://api.groq.com/openai/v1/chat/completions',
-    deepseek: 'https://api.deepseek.com/chat/completions',
-    openrouter: 'https://openrouter.ai/api/v1/chat/completions',
-  };
+function resolveProviderCall(selected) {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const attempts = [];
 
-  let provider = selected.provider;
-  let providerModel = selected.providerModel;
-
-  // Images are handled by Anthropic vision regardless of selected model
-  if (hasImages && provider !== 'anthropic') {
-    if (!keys.anthropic) return null;
-    return { provider: 'anthropic', providerModel: supportedVisionModel(), apiKey: keys.anthropic };
+  if (selected.route === 'anthropic-first' && anthropicKey) {
+    attempts.push({
+      provider: 'anthropic',
+      providerModel: resolveAnthropicModel(selected),
+      apiKey: anthropicKey,
+    });
   }
 
-  if (!keys[provider] && selected.fallbackProvider && keys[selected.fallbackProvider]) {
-    provider = selected.fallbackProvider;
-    providerModel = selected.fallbackProviderModel;
+  if (openRouterKey && selected.orModel) {
+    attempts.push({
+      provider: 'openrouter',
+      providerModel: selected.orModel,
+      apiKey: openRouterKey,
+      baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    });
   }
-  if (!keys[provider]) return null;
 
-  return { provider, providerModel, apiKey: keys[provider], baseUrl: baseUrls[provider] };
+  return attempts.length ? { provider: selected.route, attempts } : null;
 }
 
 async function completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages) {
-  if (providerCall.provider === 'anthropic') {
-    const anthropicRequest = {
-      apiKey: providerCall.apiKey,
-      model: providerCall.providerModel,
-      messages: cleanMessages,
-      attachments: cleanAttachments,
-      temperature: selected.temperature,
-      maxTokens,
-    };
+  const errors = [];
+  for (const attempt of providerCall.attempts) {
     try {
-      return await callAnthropic(anthropicRequest);
-    } catch (imageError) {
-      if (!hasImages || !/process image|image/i.test(imageError?.message || '')) {
-        throw imageError;
+      if (attempt.provider === 'anthropic') {
+        const anthropicRequest = {
+          apiKey: attempt.apiKey,
+          model: attempt.providerModel,
+          messages: cleanMessages,
+          attachments: cleanAttachments,
+          temperature: modelTemperature(selected),
+          maxTokens,
+        };
+        try {
+          return await callAnthropic(anthropicRequest);
+        } catch (imageError) {
+          if (!hasImages || !/process image|image/i.test(imageError?.message || '')) {
+            throw imageError;
+          }
+          return await callAnthropic({ ...anthropicRequest, attachments: [] });
+        }
       }
-      return await callAnthropic({ ...anthropicRequest, attachments: [] });
+      return await callOpenAiCompatible({
+        apiKey: attempt.apiKey,
+        baseUrl: attempt.baseUrl,
+        model: attempt.providerModel,
+        messages: cleanMessages,
+        temperature: modelTemperature(selected),
+        maxTokens,
+      });
+    } catch (error) {
+      errors.push(`${attempt.provider}: ${error?.message || error}`);
     }
   }
-  return callOpenAiCompatible({
-    apiKey: providerCall.apiKey,
-    baseUrl: providerCall.baseUrl,
-    model: providerCall.providerModel,
-    messages: cleanMessages,
-    temperature: selected.temperature,
-    maxTokens,
-  });
+  throw new Error(errors.join('\n') || 'All providers failed');
 }
 
 // ─── Streaming ────────────────────────────────────────────────────────
@@ -377,14 +301,31 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
   });
   sseWrite(response, { model: selected.name });
 
-  if (providerCall.provider === 'anthropic') {
-    await streamAnthropic(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens);
-  } else {
-    await streamOpenAiCompatible(response, providerCall, cleanMessages, selected, maxTokens);
+  const errors = [];
+  for (const attempt of providerCall.attempts) {
+    try {
+      if (attempt.provider === 'anthropic') {
+        await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, maxTokens);
+      } else {
+        await streamOpenAiCompatible(response, attempt, cleanMessages, selected, maxTokens);
+      }
+      sseWrite(response, { done: true });
+      response.end();
+      return;
+    } catch (error) {
+      errors.push(`${attempt.provider}: ${error?.message || error}`);
+    }
   }
 
-  sseWrite(response, { done: true });
-  response.end();
+  throw new Error(errors.join('\n') || 'All providers failed');
+}
+
+function modelTemperature(selected) {
+  return selected.temperature ?? 0.45;
+}
+
+function resolveAnthropicModel(selected) {
+  return process.env.CLAUDE_SONNET_MODEL || process.env.ANTHROPIC_SONNET_MODEL || selected.anthropicModel;
 }
 
 async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens) {
@@ -393,11 +334,12 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
     headers: {
       Authorization: `Bearer ${providerCall.apiKey}`,
       'Content-Type': 'application/json',
+      ...(providerCall.provider === 'openrouter' ? openRouterHeaders() : {}),
     },
     body: JSON.stringify({
       model: providerCall.providerModel,
       messages,
-      temperature: selected.temperature,
+      temperature: modelTemperature(selected),
       max_tokens: maxTokens,
       stream: true,
     }),
@@ -417,7 +359,7 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
 }
 
 async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens) {
-  const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, selected.temperature, maxTokens);
+  const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, modelTemperature(selected), maxTokens);
   body.stream = true;
 
   const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -470,12 +412,8 @@ async function* readSseEvents(bodyStream) {
 
 function buildModelGuide() {
   return Object.values(MODELS)
-    .map((item) => `${item.name}: ${item.purpose}`)
+    .map((item) => `${item.name}: ${item.blurb}`)
     .join('; ');
-}
-
-function supportedVisionModel() {
-  return process.env.CLAUDE_HAIKU_MODEL || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-haiku-4-5-20251001';
 }
 
 function normalizeAttachments(value) {
@@ -589,6 +527,7 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      ...(baseUrl && baseUrl.includes('openrouter.ai') ? openRouterHeaders() : {}),
     },
     body: JSON.stringify({
       model,
@@ -605,6 +544,13 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
 
   const data = await providerResponse.json();
   return data.choices?.[0]?.message?.content || 'No response text returned.';
+}
+
+function openRouterHeaders() {
+  return {
+    'HTTP-Referer': process.env.PUBLIC_SITE_URL || 'https://www.rrotex.com',
+    'X-Title': 'ROTEX',
+  };
 }
 
 function buildAnthropicBody(model, messages, attachments, temperature, maxTokens) {
@@ -641,7 +587,8 @@ function buildAnthropicBody(model, messages, attachments, temperature, maxTokens
     messages: chatMessages.length ? chatMessages : [{ role: 'user', content: 'Hello' }],
     max_tokens: maxTokens,
   };
-  if (!/opus-4-8|opus-4-7|opus-4-6|sonnet-4-6/.test(model)) {
+  // These models reject sampling params (temperature/top_p/top_k) with a 400.
+  if (!/fable-5|opus-4-8|opus-4-7|opus-4-6|sonnet-4-6/.test(model)) {
     body.temperature = temperature;
   }
   return body;

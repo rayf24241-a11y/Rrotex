@@ -24,70 +24,130 @@ import {
 
 const models = [
   {
-    id: 'rod-1',
-    name: 'Rod _ 1',
-    short: 'Everyday',
-    api: 'ROTEX',
-    cost: 0.001,
-    computerCost: null,
-    description: 'Quick answers, everyday tasks, and simple work.',
-  },
-  {
-    id: 'rod-thinking',
-    name: 'Rod thinking',
-    short: 'Hard tasks',
-    api: 'ROTEX',
-    cost: 0.004,
-    computerCost: 0.01,
-    description: 'Careful reasoning, planning, and harder questions.',
-  },
-  {
-    id: 'rod-brain',
-    name: 'Rod brain',
-    short: 'Smart help',
+    id: 'gbt',
+    name: 'GBT',
+    short: 'OpenRouter GPT',
     api: 'ROTEX',
     cost: 0.004,
     computerCost: 0.012,
-    description: 'Smarter everyday help for decisions and detailed answers.',
+    logo: 'G',
+    maker: 'gbt',
+    description: 'Fast GPT model through OpenRouter.',
   },
   {
-    id: 'tex-0',
-    name: 'Tex 0',
-    short: 'Code',
-    api: 'ROTEX',
-    cost: 0.007,
-    computerCost: 0.04,
-    description: 'Coding help, debugging, and practical implementation.',
-  },
-  {
-    id: 'tex-1-5',
-    name: 'Tex 1.5',
-    short: 'Complex code',
-    api: 'ROTEX',
-    cost: 0.015,
-    computerCost: 0.07,
-    description: 'Larger builds, deeper architecture, and tougher fixes.',
-  },
-  {
-    id: 'tex-2-5',
-    name: 'Tex 2.5',
-    short: 'Plus code',
-    api: 'ROTEX',
-    cost: 0.035,
-    computerCost: 0.12,
-    proOnly: true,
-    description: 'The hardest coding, architecture, and deep debugging work.',
-  },
-  {
-    id: 'treesearch-q',
-    name: 'Treesearch _ q',
-    short: 'Research',
+    id: 'groq',
+    name: 'Groq',
+    short: 'Fast',
     api: 'ROTEX',
     cost: 0.002,
-    computerCost: null,
-    description: 'Research, comparisons, and clear explanations. No file creation.',
+    computerCost: 0.01,
+    logo: 'Q',
+    maker: 'groq',
+    description: 'Fast model routed through OpenRouter.',
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini',
+    short: 'Google',
+    api: 'ROTEX',
+    cost: 0.003,
+    computerCost: 0.01,
+    logo: 'Ge',
+    maker: 'gemini',
+    description: 'Google model through OpenRouter.',
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    short: 'Code',
+    api: 'ROTEX',
+    cost: 0.004,
+    computerCost: 0.012,
+    logo: 'D',
+    maker: 'deepseek',
+    description: 'Coding and general work through OpenRouter.',
+  },
+  {
+    id: 'claude',
+    name: 'Claude',
+    short: 'Careful',
+    api: 'ROTEX',
+    cost: 0.06,
+    computerCost: 0.14,
+    logo: 'C',
+    maker: 'claude',
+    proOnly: true,
+    description: 'Uses your Claude key first, then OpenRouter backup.',
+  },
+  {
+    id: 'grok',
+    name: 'Grok',
+    short: 'Reasoning',
+    api: 'ROTEX',
+    cost: 0.015,
+    computerCost: 0.04,
+    logo: 'X',
+    maker: 'grok',
+    proOnly: true,
+    description: 'Reasoning and broad context through OpenRouter.',
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    short: 'Local',
+    api: 'Local',
+    cost: 0,
+    computerCost: 0,
+    logo: 'O',
+    maker: 'ollama',
+    localOnly: true,
+    description: 'Runs on your own PC with Ollama. Free and private.',
   },
 ];
+
+const modelAliases = {
+  'llama-3-3-70b': 'groq',
+  'deepseek-v3': 'deepseek',
+  'deepseek-r1': 'deepseek',
+  'gemini-flash-lite': 'gemini',
+  'gemini-flash': 'gemini',
+  'gemini-pro': 'gemini',
+  'gpt-4o-mini': 'gbt',
+  'gpt-4o': 'gbt',
+  'gpt-5-1': 'gbt',
+  'gpt-5-1-codex': 'gbt',
+  'gpt-5-2': 'gbt',
+  'o3': 'gbt',
+  'o4-mini': 'gbt',
+  'claude-haiku': 'claude',
+  'claude-sonnet': 'claude',
+  'claude-opus': 'claude',
+  'claude-fable': 'claude',
+  'qwen-flash': 'gbt',
+  'qwen-max': 'gbt',
+  codestral: 'gbt',
+  'mistral-large': 'gbt',
+  'rod-1': 'groq',
+  'rod-thinking': 'deepseek',
+  'rod-brain': 'claude',
+  'tex-0': 'deepseek',
+  'tex-1-5': 'claude',
+  'tex-2': 'gbt',
+  'tex-2-5': 'claude',
+  'treesearch-q': 'deepseek',
+  'ron-1-lite': 'groq',
+  'ron-1-hard': 'deepseek',
+  'rreas-2-1': 'deepseek',
+  'rtrox-cheap': 'claude',
+  'rtrox-1-8': 'claude',
+  'rtrox-3': 'claude',
+  'rtrox-hard': 'claude',
+};
+
+function resolveClientModelId(id) {
+  const resolved = modelAliases[id] || id;
+  return models.some((model) => model.id === resolved) ? resolved : models[0].id;
+}
 
 const chatList = document.querySelector('#chatList');
 const appShell = document.querySelector('#appShell');
@@ -211,7 +271,7 @@ let accountView = 'account';
 let pendingAttachments = [];
 let suppressProfileClick = false;
 let suppressAccountMenuClick = false;
-const plusOverrideEmails = new Set(['rayf24241@gmail.com']);
+const ProOverrideEmails = new Set(['rayf24241@gmail.com']);
 const maxAttachments = 30;
 const readableExtensions = new Set(['txt', 'md', 'json', 'js', 'ts', 'tsx', 'jsx', 'html', 'css', 'py', 'csv', 'xml', 'yml', 'yaml', 'bat', 'ps1', 'java', 'c', 'cpp', 'cs', 'go', 'rs', 'php', 'rb', 'sql', 'env', 'gitignore']);
 
@@ -290,7 +350,7 @@ function normalizeState(value) {
   const plan = pro ? creditPlans.pro : activeFreePlan(accountState);
 
   return {
-    activeModel: value.activeModel || 'rod-1',
+    activeModel: resolveClientModelId(value.activeModel || 'gbt'),
     computerMode: Boolean(value.computerMode),
     pro,
     phoneVerified,
@@ -311,9 +371,9 @@ function normalizeState(value) {
 }
 
 function normalizeTeamupRoom(value) {
-  const botA = models.some((model) => model.id === value?.botA) ? value.botA : 'rod-thinking';
-  const botB = models.some((model) => model.id === value?.botB) ? value.botB : 'tex-0';
-  if (botA === botB) return { id: value?.id || crypto.randomUUID(), botA, botB: botA === 'tex-0' ? 'rod-thinking' : 'tex-0' };
+  const botA = resolveClientModelId(value?.botA || 'deepseek');
+  const botB = resolveClientModelId(value?.botB || 'gbt');
+  if (botA === botB) return { id: value?.id || crypto.randomUUID(), botA, botB: botA === 'gbt' ? 'deepseek' : 'gbt' };
   return { id: value?.id || crypto.randomUUID(), botA, botB };
 }
 
@@ -461,7 +521,7 @@ async function loadCloudState() {
 
 function applyAccountOverrides() {
   const email = currentUser?.email?.toLowerCase?.() || '';
-  if (!plusOverrideEmails.has(email) || state.pro) return false;
+  if (!ProOverrideEmails.has(email) || state.pro) return false;
   state.pro = true;
   state.creditUsage = normalizeCreditUsage(state.creditUsage, true, state.credits, state);
   state.credits = remainingMonthlyCredits(true, state.creditUsage);
@@ -928,11 +988,11 @@ function computerMessagesLeft() {
 function ensureComputerModel() {
   const model = activeModel();
   if (isModelLocked(model)) {
-    state.activeModel = 'rod-brain';
+    state.activeModel = 'gbt';
     return;
   }
   if (!state.computerMode || model.computerCost !== null) return;
-  state.activeModel = 'rod-thinking';
+  state.activeModel = 'deepseek';
 }
 
 function setCloudStatus(text) {
@@ -961,10 +1021,10 @@ function renderModelMenu() {
   modelMenu.innerHTML = '';
 
   const basicModels = models.filter((item) => !item.proOnly);
-  const plusModels = models.filter((item) => item.proOnly);
+  const ProModels = models.filter((item) => item.proOnly);
 
   renderModelGroup('Basic', basicModels);
-  renderModelGroup('Plus', plusModels);
+  renderModelGroup('Pro', ProModels);
 }
 
 function renderModelGroup(label, groupModels) {
@@ -979,8 +1039,14 @@ function renderModelGroup(label, groupModels) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `model-option${item.id === state.activeModel ? ' active' : ''}${disabled ? ' disabled' : ''}`;
-    const status = proLocked ? 'Plus only' : disabled ? 'Not in computer mode' : `Best for: ${item.short.toLowerCase()}`;
-    button.innerHTML = `<strong>${item.name}${item.proOnly ? '<em>Plus only</em>' : ''}</strong><span>${item.description}</span><span>${status}</span>`;
+    const status = proLocked ? 'Pro only' : disabled ? 'Not in computer mode' : `Best for: ${item.short.toLowerCase()}`;
+    button.innerHTML = `
+      <span class="model-logo model-logo-${item.maker || item.id}" aria-hidden="true">${item.logo || item.name[0]}</span>
+      <span class="model-option-copy">
+        <strong>${item.name}${item.proOnly ? '<em>Pro only</em>' : ''}</strong>
+        <span>${item.description}</span>
+        <span>${status}</span>
+      </span>`;
     button.addEventListener('click', () => {
       if (proLocked) {
         closeModelMenu();
@@ -1054,7 +1120,7 @@ function renderMessages() {
             ? 'Connect Google Drive or GitHub, then ask ROTEX to help with your project.'
             : 'Choose a ROTEX model, attach your work, and turn ideas into useful answers or downloadable files.'}</p>
           <div class="empty-proof" aria-label="ROTEX features">
-            <span>7 focused models</span>
+            <span>${models.length} real models</span>
             <span>Files, folders, and images</span>
             <span>Saved chats</span>
           </div>
@@ -1074,7 +1140,7 @@ function renderMessages() {
           </div>
           <div class="empty-footer">
             <span><strong>${model.name}</strong> is selected for ${model.short.toLowerCase()}.</span>
-            <button type="button" data-open-plus>Explore Plus</button>
+            <button type="button" data-open-Pro>Explore Pro</button>
           </div>
         </div>
       `;
@@ -1130,10 +1196,10 @@ function renderAccount() {
   renderModeShell();
   if (currentUser) {
     googleButtonText.textContent = state.profile?.nickname || state.profile?.name || currentUser.displayName || currentUser.email || 'Google account';
-    planStatus.textContent = state.pro ? 'Plus' : 'Normal';
+    planStatus.textContent = state.pro ? 'Pro' : 'Normal';
     planStatus.hidden = false;
     if (state.pro) {
-      saveStatus.textContent = `Plus active. Chats sync with Firebase for ${currentUser.email || 'this account'}.`;
+      saveStatus.textContent = `Pro active. Chats sync with Firebase for ${currentUser.email || 'this account'}.`;
     } else {
       saveStatus.textContent = state.phoneVerified
         ? `Phone verified. Chats sync with Firebase for ${currentUser.email || 'this account'}.`
@@ -1160,13 +1226,13 @@ function renderAccount() {
   const nickname = state.profile?.nickname || displayName;
   acctAvatar.textContent = currentUser ? nickname.trim().charAt(0).toUpperCase() || 'R' : '?';
   acctName.textContent = currentUser ? displayName : 'Not signed in';
-  acctEmail.textContent = currentUser?.email || 'Log in to save chats and Plus.';
-  acctPlanBadge.textContent = state.pro ? 'Plus' : 'Normal';
+  acctEmail.textContent = currentUser?.email || 'Log in to save chats and Pro.';
+  acctPlanBadge.textContent = state.pro ? 'Pro' : 'Normal';
   acctPlanBadge.classList.toggle('pro', state.pro);
   acctAccountBlock.hidden = accountView !== 'account';
   acctUpgradeBlock.hidden = accountView !== 'upgrade';
   checkoutButton.disabled = Boolean(state.pro);
-  checkoutButton.textContent = state.pro ? 'Already have Plus' : 'Buy Plus - $15 / month';
+  checkoutButton.textContent = state.pro ? 'Already have Pro' : 'Go Pro - $20 / month';
   accountSignOutBtn.hidden = !currentUser;
   if (phoneVerifyBadge) {
     phoneVerifyBadge.textContent = state.phoneVerified ? 'Verified' : 'Not verified';
@@ -1214,14 +1280,14 @@ function render() {
 function populateTeamupSelectors() {
   if (!teamupBotA || !teamupBotB) return;
   if (!teamupBotA.options.length) {
-    models.forEach((model) => {
+    models.filter((model) => !model.localOnly).forEach((model) => {
       const optionA = new Option(model.name, model.id);
       const optionB = new Option(model.name, model.id);
       teamupBotA.add(optionA);
       teamupBotB.add(optionB);
     });
-    teamupBotA.value = 'rod-thinking';
-    teamupBotB.value = 'tex-0';
+    teamupBotA.value = 'deepseek';
+    teamupBotB.value = 'gbt';
   }
   updateTeamupSelectors();
 }
@@ -1283,7 +1349,7 @@ function createTeamupRoom() {
     return;
   }
   if (state.teamupRooms.length >= 1) {
-    teamupStatus.textContent = 'Plus includes 1 mini private teamup room. Opening your room.';
+    teamupStatus.textContent = 'Pro includes 1 mini private teamup room. Opening your room.';
     const room = state.teamupRooms[0];
     const existing = state.chats.find((chat) => chat.teamup?.id === room.id);
     if (existing) {
@@ -1331,21 +1397,20 @@ async function sendMessage(text) {
     return;
   }
 
-  if (shouldAskPhone()) {
-    openPhoneDialog();
-    return;
-  }
-
   applyCreditRefill();
   applyComputerUsageReset();
   ensureComputerModel();
   const model = activeModel();
   const cost = activeCost();
+  if (!model.localOnly && shouldAskPhone()) {
+    openPhoneDialog();
+    return;
+  }
   if (isModelLocked(model)) {
     chat.messages.push({
       role: 'assistant',
-      model: 'ROTEX Plus',
-      text: `${model.name} is Plus only. Upgrade?`,
+      model: 'ROTEX Pro',
+      text: `${model.name} is Pro only. Upgrade?`,
       action: 'upgrade',
     });
     persistState();
@@ -1355,7 +1420,7 @@ async function sendMessage(text) {
   if (state.computerMode && !state.pro && computerMessagesLeft() <= 0) {
     chat.messages.push({
       role: 'assistant',
-      model: 'ROTEX Plus',
+      model: 'ROTEX Pro',
       text: 'Free computer mode limit reached for today. Upgrade?',
       action: 'upgrade',
     });
@@ -1376,7 +1441,7 @@ async function sendMessage(text) {
   }
 
   spendCredits(cost);
-  if (state.computerMode && !state.pro) {
+  if (state.computerMode && !state.pro && !model.localOnly) {
     state.computerUsage.count += 1;
   }
   const userText = clean || `Attached ${attachments.length} file${attachments.length === 1 ? '' : 's'}.`;
@@ -1403,6 +1468,13 @@ async function sendMessage(text) {
   render();
 
   try {
+    if (model.localOnly) {
+      pending.text = await callLocalOllama(buildApiMessages(chat));
+      persistState();
+      render();
+      return;
+    }
+
     const authToken = currentUser ? await currentUser.getIdToken() : '';
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -1417,12 +1489,51 @@ async function sendMessage(text) {
         personality: personalities[chat.personality || 'normal'],
         attachments,
         messages: buildApiMessages(chat),
+        stream: true,
       }),
     });
-    const data = await response.json();
-    pending.text = data.text || 'ROTEX backend is online, but no response came back.';
+
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && response.body && contentType.includes('text/event-stream')) {
+      // Stream SSE chunks into the pending assistant message as they arrive.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let streamed = '';
+      let streamError = '';
+      let scheduled = false;
+      const flushRender = () => {
+        scheduled = false;
+        pending.text = streamed || 'Thinking...';
+        renderMessages();
+      };
+      const scheduleRender = () => {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(flushRender);
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const events = buf.split('\n\n');
+        buf = events.pop() || '';
+        for (const event of events) {
+          const dataLine = event.split('\n').find((l) => l.startsWith('data:'));
+          if (!dataLine) continue;
+          let payload;
+          try { payload = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+          if (payload.d) { streamed += payload.d; scheduleRender(); }
+          if (payload.error) streamError = payload.text || 'The model had trouble answering.';
+        }
+      }
+      pending.text = streamed || streamError || 'ROTEX backend is online, but no response came back.';
+    } else {
+      const data = await response.json();
+      pending.text = data.text || 'ROTEX backend is online, but no response came back.';
+    }
   } catch (error) {
-    pending.text = `${model.name} had trouble reaching ROTEX. Try again in a moment, or switch models for this message.`;
+    pending.text = 'servers are down';
   }
 
   persistState();
@@ -1447,6 +1558,39 @@ function localConnectionAnswer(text) {
   return connected
     ? `${service} is connected successfully.`
     : `${service} is not connected yet.`;
+}
+
+async function callLocalOllama(messages) {
+  const model = localStorage.getItem('rotex_ollama_model') || 'llama3.1';
+  try {
+    const response = await fetch('http://127.0.0.1:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: messages
+          .filter((message) => ['user', 'assistant', 'system'].includes(message.role))
+          .slice(-18)
+          .map((message) => ({
+            role: message.role,
+            content: String(message.text || '').slice(0, 8000),
+          })),
+        stream: false,
+      }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    return data.message?.content?.trim() || 'Ollama responded with no text.';
+  } catch {
+    return [
+      'Ollama is local, so ROTEX needs permission to reach it on your PC.',
+      '',
+      'Install Ollama, run `ollama pull llama3.1`, then allow browser access:',
+      '`setx OLLAMA_ORIGINS "*"`',
+      '',
+      'Restart Ollama after that, then try the Ollama model again.',
+    ].join('\n');
+  }
 }
 
 function buildApiMessages(chat) {
@@ -1480,7 +1624,7 @@ function compactConversation(messages) {
 
 async function sendTeamupMessage(chat, clean) {
   if (!hasProAccess()) {
-    chat.messages.push({ role: 'assistant', model: 'ROTEX Plus', text: 'Teamup rooms are Plus only. Upgrade?', action: 'upgrade' });
+    chat.messages.push({ role: 'assistant', model: 'ROTEX Pro', text: 'Teamup rooms are Pro only. Upgrade?', action: 'upgrade' });
     persistState();
     render();
     return;
@@ -1619,7 +1763,7 @@ async function continueCheckout() {
   }
 }
 
-// ─── Plus pass (shared with the editor via localStorage) ───────────────
+// ─── Pro pass (shared with the editor via localStorage) ───────────────
 const PRO_PASS_KEY = 'rotex_pro_pass';
 
 function getProPass() {
@@ -1672,7 +1816,7 @@ async function handleCheckoutReturn() {
   const sessionId = params.get('session_id');
   if (params.get('checkout') !== 'success' || !sessionId || !currentUser) return;
 
-  setCloudStatus('Verifying Plus');
+  setCloudStatus('Verifying Pro');
   try {
     const response = await fetch('/api/verify-checkout-session', {
       method: 'POST',
@@ -1690,7 +1834,7 @@ async function handleCheckoutReturn() {
     state.creditUsage = normalizeCreditUsage({}, true, creditPlans.pro.monthly);
     state.credits = remainingMonthlyCredits(true, state.creditUsage);
     persistState();
-    setCloudStatus('Plus active');
+    setCloudStatus('Pro active');
     history.replaceState('', document.title, window.location.pathname);
     closeAccountPage();
     render();
@@ -2031,8 +2175,11 @@ function attachmentLabel(file) {
 
 function normalizeAssistantText(text, modelName = 'ROTEX') {
   const value = String(text || '');
+  if (/servers are down/i.test(value)) {
+    return 'servers are down';
+  }
   if (/backend key is missing|server environment keys|Check Vercel env keys/i.test(value)) {
-    return `${modelName || 'ROTEX'} could not answer right now. Try again in a moment, or switch to another ROTEX model for this message.`;
+    return 'servers are down';
   }
   return value;
 }
@@ -2253,7 +2400,7 @@ teamupEntry.addEventListener('click', () => {
   }
   closeComputerMode();
   populateTeamupSelectors();
-  teamupStatus.textContent = `Plus teamup ready. ${remainingTeamupTokens().toLocaleString()} weekly tokens left.`;
+  teamupStatus.textContent = `Pro teamup ready. ${remainingTeamupTokens().toLocaleString()} weekly tokens left.`;
   teamupDialog.showModal();
 });
 
@@ -2324,7 +2471,7 @@ document.addEventListener('click', (event) => {
     messageInput.focus();
     return;
   }
-  if (event.target.closest?.('[data-open-plus]')) {
+  if (event.target.closest?.('[data-open-Pro]')) {
     openAccountPage(true);
     return;
   }

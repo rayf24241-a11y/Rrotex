@@ -1319,6 +1319,28 @@ a:hover { text-decoration: underline; }
   color: var(--accent);
 }
 
+.ai-model-logo {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  background: #3a3a3a;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.ai-model-logo-claude { background: #d97757; }
+.ai-model-logo-gbt { background: #10a37f; }
+.ai-model-logo-grok { background: #111; }
+.ai-model-logo-groq { background: #f55036; }
+.ai-model-logo-gemini { background: #4285f4; }
+.ai-model-logo-deepseek { background: #2563eb; }
+.ai-model-logo-ollama { background: #2f2f2f; }
+
 .ai-model-option .model-name {
   font-size: 13px;
   font-weight: 500;
@@ -1759,6 +1781,28 @@ a:hover { text-decoration: underline; }
   color: var(--text);
   transition: all var(--t-fast);
   flex-shrink: 0;
+}
+
+.ai-mode-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 8px;
+}
+
+.agent-toggle.danger {
+  border-color: rgba(255, 91, 91, 0.45);
+  color: #ff8b8b;
+}
+
+.ai-cost-preview {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.3;
+  max-width: 160px;
 }
 .agent-toggle:hover { border-color: var(--accent); color: var(--text-bright); }
 .agent-toggle.on {

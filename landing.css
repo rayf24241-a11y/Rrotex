@@ -326,6 +326,7 @@ button { font: inherit; cursor: pointer; }
 .model-tag.rod { background: rgba(124, 157, 255, 0.15); color: var(--accent); }
 .model-tag.tex { background: rgba(110, 231, 183, 0.15); color: var(--green); }
 .model-tag.tree { background: rgba(251, 191, 36, 0.15); color: var(--amber); }
+.model-tag.local { background: rgba(255, 255, 255, 0.12); color: var(--text); }
 .model-card h3 {
   font-size: 16px;
   margin: 0 0 4px;

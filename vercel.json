@@ -1,8 +1,8 @@
 {
   "rewrites": [
-    { "source": "/editor", "destination": "/editor.html" },
-    { "source": "/app", "destination": "/chat.html" },
-    { "source": "/chat", "destination": "/chat.html" }
+    { "source": "/editor", "destination": "/index.html" },
+    { "source": "/app", "destination": "/index.html" },
+    { "source": "/chat", "destination": "/index.html" }
   ],
   "redirects": [
     { "source": "/download", "destination": "/#download", "permanent": false }

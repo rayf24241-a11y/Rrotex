@@ -42,7 +42,7 @@
   <body>
     <section class="seo-summary" aria-label="About ROTEX">
       <h2>ROTEX AI workspace</h2>
-      <p>ROTEX is an AI chat, coding, and research workspace with downloadable files, image and zip reading, saved chats, Plus models, teamup rooms, and connected computer work.</p>
+      <p>ROTEX is an AI chat, coding, and research workspace with downloadable files, image and zip reading, saved chats, Pro models, teamup rooms, and connected computer work.</p>
     </section>
     <main class="app-shell" id="appShell">
       <aside class="sidebar" id="sidebar" aria-label="Saved chats">
@@ -54,7 +54,7 @@
         <button class="new-chat" id="newChatButton" type="button">New chat</button>
         <button class="teamup-entry" id="teamupEntry" type="button" hidden>
           <span>Teamup rooms</span>
-          <small id="teamupCreditStatus">10,000 weekly tokens</small>
+          <small id="teamupCreditStatus">TexToken usage</small>
         </button>
         <button class="computer-entry" id="computerEntry" type="button" aria-pressed="false">
           <span>Computer mode</span>
@@ -98,7 +98,7 @@
           </div>
         <div class="top-actions">
             <a class="download-app-button" id="downloadPcAppTop" href="./downloads/ROTEX-PC-App.exe" download>Download PC App</a>
-            <button class="upgrade-button" id="upgradeButton" type="button">Get Plus</button>
+            <button class="upgrade-button" id="upgradeButton" type="button">Get Pro</button>
             <div class="credit-pill" id="creditStatus">100% credits</div>
             <div class="status-pill" id="syncStatus">Local mode</div>
           </div>
@@ -135,8 +135,8 @@
         <form class="composer" id="composer">
           <div class="model-select-wrap">
             <button class="model-select" id="modelButton" type="button" aria-expanded="false">
-              <span id="selectedModelName">Rod _ 1</span>
-              <small id="selectedModelShort">Everyday</small>
+              <span id="selectedModelName">GBT</span>
+              <small id="selectedModelShort">OpenRouter GPT</small>
             </button>
             <div class="model-menu" id="modelMenu" aria-hidden="true"></div>
           </div>
@@ -194,23 +194,23 @@
         </div>
 
         <div class="acct-upgrade-block" id="acctUpgradeBlock">
-          <p class="eyebrow">ROTEX Plus</p>
+          <p class="eyebrow">ROTEX Pro</p>
           <div class="upgrade-price">$15 <span>/ monthly</span></div>
           <ul class="upgrade-list">
             <li>More room for chats and computer mode</li>
-            <li>Tex 2.5 for the toughest coding work</li>
+            <li>Claude, GBT, Grok, Groq, Ollama, Gemini, and DeepSeek</li>
             <li>One private Teamup room with two ROTEX models</li>
-            <li>10,000 Teamup tokens refreshed every week</li>
+            <li>Teamup uses both model costs plus 20%</li>
             <li>Chats saved to your ROTEX account</li>
           </ul>
-          <div class="plus-proof-card">
-            <div class="plus-proof-grid">
-              <span><strong>Hard builds</strong>Tex 2.5 for deeper project work</span>
+          <div class="Pro-proof-card">
+            <div class="Pro-proof-grid">
+              <span><strong>Hard builds</strong>Claude and Grok for deeper project work</span>
               <span><strong>Private Teamup</strong>Two models, one stronger answer</span>
             </div>
             <p>Built for people who use ROTEX often and want more room for serious projects.</p>
           </div>
-          <button id="checkoutButton" type="button" class="acct-buy-btn">Buy Plus - $15 / month</button>
+          <button id="checkoutButton" type="button" class="acct-buy-btn">Go Pro - $20 / month</button>
         </div>
 
         <div class="acct-footer">
@@ -224,7 +224,7 @@
         <button class="auth-back" id="authBackButton" type="button" hidden>← Back</button>
         <p class="eyebrow">ROTEX account</p>
         <h2 id="authTitle">Log in first</h2>
-        <p class="upgrade-copy" id="authStatus">Choose Google or email so ROTEX can save credits, chats, and Plus.</p>
+        <p class="upgrade-copy" id="authStatus">Choose Google or email so ROTEX can save credits, chats, and Pro.</p>
 
         <div class="auth-step" id="authMethodStep">
           <button class="auth-google" id="authGoogleButton" type="button">

@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ROTEX - AI-Powered Code Editor</title>
-    <meta name="description" content="ROTEX is an AI-powered code editor with 10 AI models, agent mode, inline Ctrl+K edits, and free local models via Ollama. Write, debug, and ship code faster." />
+    <title>ROTEX - AI Agent for Unity, Roblox, Blender, and Game Dev</title>
+    <meta name="description" content="ROTEX is a desktop AI agent for Unity, Roblox, Blender, and game dev projects. Use rrotex.com for your dashboard, account, TexTokens, Pro, billing, and desktop download." />
     <meta name="theme-color" content="#0d0d0d" />
     <link rel="canonical" href="https://www.rrotex.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ROTEX" />
-    <meta property="og:title" content="ROTEX - AI-Powered Code Editor" />
-    <meta property="og:description" content="Code faster with 10 AI models built right into your editor. Agent mode, inline AI edits, and free local models. Like VS Code, but with AI that actually helps." />
+    <meta property="og:title" content="ROTEX - AI Agent for Unity, Roblox, Blender, and Game Dev" />
+    <meta property="og:description" content="Download the desktop app to connect your projects, edit files, fix bugs, make scripts, and use agent mode." />
     <meta property="og:url" content="https://www.rrotex.com/" />
     <meta property="og:image" content="https://www.rrotex.com/og-image.svg" />
     <link rel="manifest" href="./site.webmanifest" />
@@ -24,22 +24,22 @@
           <span>ROTEX</span>
         </a>
         <div class="nav-links">
-          <a href="#features">Features</a>
-          <a href="#models">Models</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#features">Desktop App</a>
           <a href="#pricing">Pricing</a>
-          <a href="./editor.html" class="nav-cta">Open Editor</a>
+          <a href="#download" class="nav-cta">Download Desktop App</a>
         </div>
       </div>
     </nav>
 
     <section class="hero">
       <div class="hero-inner">
-        <div class="hero-badge">AI-Powered Code Editor</div>
-        <h1>Code with AI<br />that actually helps.</h1>
-        <p class="hero-sub">ROTEX is a code editor with 10 built-in AI models — streaming answers, agent mode that edits multiple files, and free local models on your own PC.</p>
+        <div class="hero-badge">Desktop AI agent for game dev</div>
+        <h1>ROTEX — AI Agent for Unity, Roblox, Blender, and Game Dev</h1>
+        <p class="hero-sub">Download the desktop app to connect your projects, edit files, fix bugs, make scripts, and use agent mode.</p>
         <div class="hero-actions">
-          <a class="btn btn-primary" href="./editor.html">Open in Browser</a>
-          <a class="btn btn-secondary" href="#download">Download for Desktop</a>
+          <a class="btn btn-primary" href="#download">Download Desktop App</a>
+          <a class="btn btn-secondary" href="#pricing">Go Pro</a>
         </div>
         <div class="hero-preview">
           <div class="preview-window">
@@ -47,7 +47,7 @@
               <div class="preview-dots">
                 <span></span><span></span><span></span>
               </div>
-              <span class="preview-title">ROTEX Editor</span>
+              <span class="preview-title">ROTEX Desktop</span>
             </div>
             <div class="preview-body">
               <div class="preview-sidebar">
@@ -67,8 +67,8 @@
                 <div class="pe-line pe-ai"><span class="pe-kw">app</span>.<span class="pe-fn">use</span>(<span class="pe-fn">errorHandler</span>())</div>
               </div>
               <div class="preview-chat">
-                <div class="pc-msg pc-ai">Added error handling middleware. Want me to also add request logging?</div>
-                <div class="pc-input">Ask ROTEX...</div>
+                <div class="pc-msg pc-ai">Unity mode found the player controller error. Estimated: 84k TexTokens.</div>
+                <div class="pc-input">Desktop app chat lives here</div>
               </div>
             </div>
           </div>
@@ -76,55 +76,70 @@
       </div>
     </section>
 
+    <section class="features" id="dashboard">
+      <div class="section-inner">
+        <p class="section-eyebrow">Dashboard</p>
+        <h2>Your rrotex.com account hub</h2>
+        <div class="feature-grid">
+          <div class="feature-card"><div class="feature-icon">TT</div><h3>TexTokens left</h3><p>See the remaining TexTokens on your daily, monthly, and extra-pack balances.</p></div>
+          <div class="feature-card"><div class="feature-icon">D</div><h3>Daily usage</h3><p>Track today's TexToken spend before you start another desktop app task.</p></div>
+          <div class="feature-card"><div class="feature-icon">M</div><h3>Monthly usage</h3><p>Watch your monthly plan usage and reset timing from the dashboard.</p></div>
+          <div class="feature-card"><div class="feature-icon">P</div><h3>Current plan</h3><p>Free and Pro plan status stay visible with your account.</p></div>
+          <div class="feature-card"><div class="feature-icon">PRO</div><h3>Pro status</h3><p>Check your Pro badge, priority access, and smart-model availability.</p></div>
+          <div class="feature-card"><div class="feature-icon">$</div><h3>Download and billing</h3><p>Download the desktop app, manage Pro, and buy extra TexToken packs.</p></div>
+        </div>
+      </div>
+    </section>
+
     <section class="features" id="features">
       <div class="section-inner">
         <p class="section-eyebrow">Features</p>
-        <h2>Everything you need to code</h2>
+        <h2>Desktop app features</h2>
         <div class="feature-grid">
           <div class="feature-card">
             <div class="feature-icon">AI</div>
-            <h3>10 AI Models</h3>
-            <p>From quick questions to deep architecture work. Adapt picks the best one automatically — answers stream in live.</p>
+            <h3>Normal AI chat</h3>
+            <p>Talk to ROTEX inside the desktop app after logging in with the same rrotex.com account.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">&#9881;</div>
             <h3>Agent Mode</h3>
-            <p>Ask once, change many files. The AI proposes edits across your project with diffs you approve in one click.</p>
+            <p>Plan, edit files, run approved checks, and retry fixes inside connected projects.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">&#8984;K</div>
-            <h3>Inline AI Edits</h3>
-            <p>Select code, press Ctrl+K, describe the change. The edit lands right in your editor — undo with Ctrl+Z.</p>
+            <h3>Unity, Roblox, Blender</h3>
+            <p>Switch modes so scripts, logs, bugs, and project advice match the tool you are using.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">&#128187;</div>
-            <h3>Local Models</h3>
-            <p>Run models on your own PC with Ollama. Free forever, fully private, no daily limits.</p>
+            <h3>Cost preview</h3>
+            <p>Preview TexToken cost before big tasks. Anything over 250k TexTokens asks for confirmation.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">{}</div>
-            <h3>Full Code Editor</h3>
-            <p>Monaco-powered editor with syntax highlighting, autocomplete, and multi-file support.</p>
+            <h3>File reader/editor</h3>
+            <p>Connect a project folder, read files, edit safely, and keep project memory.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">&gt;_</div>
-            <h3>Integrated Terminal</h3>
-            <p>Run commands, install packages, and test your code without leaving the editor.</p>
+            <h3>Safe command runner</h3>
+            <p>Commands and file deletion always ask for approval before running.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">&#9731;</div>
-            <h3>File Explorer</h3>
-            <p>Open folders, create files, and navigate your project with a familiar tree view.</p>
+            <h3>Error fixer</h3>
+            <p>Paste console logs and let ROTEX trace likely fixes across your connected files.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">&#128279;</div>
-            <h3>GitHub & Drive</h3>
-            <p>Connect your repos and cloud storage. Push, pull, and sync from the editor.</p>
+            <h3>Teamup mode</h3>
+            <p>Two models work together, with both model costs added together plus 20%.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">&#9889;</div>
-            <h3>Fast & Lightweight</h3>
-            <p>Starts instantly in your browser or as a lightweight desktop app.</p>
+            <h3>Stop button</h3>
+            <p>Stop long chats, checks, and agent runs whenever you need control back.</p>
           </div>
         </div>
       </div>
@@ -133,65 +148,47 @@
     <section class="models" id="models">
       <div class="section-inner">
         <p class="section-eyebrow">Models</p>
-        <h2>10 AI models, each with a purpose</h2>
+        <h2>Real models, each with a purpose</h2>
         <div class="model-grid">
           <div class="model-card">
-            <div class="model-tag adapt">ADAPT</div>
-            <h3>Adapt</h3>
-            <p class="model-role">Auto</p>
-            <p>Picks the best model(s) for your task automatically.</p>
+            <div class="model-tag rod">GBT</div>
+            <h3>GBT</h3>
+            <p class="model-role">GPT</p>
+            <p>Fast GPT model through OpenRouter.</p>
           </div>
           <div class="model-card">
-            <div class="model-tag rod">ROD</div>
-            <h3>Rod _ 1</h3>
-            <p class="model-role">Everyday</p>
-            <p>Quick answers, simple tasks, fast help.</p>
+            <div class="model-tag rod">GROQ</div>
+            <h3>Groq</h3>
+            <p class="model-role">Fast</p>
+            <p>Fast model routed through OpenRouter.</p>
           </div>
           <div class="model-card">
-            <div class="model-tag rod">ROD</div>
-            <h3>Rod thinking</h3>
-            <p class="model-role">Hard tasks</p>
-            <p>Careful reasoning, planning, tough questions.</p>
+            <div class="model-tag rod">DEEPSEEK</div>
+            <h3>DeepSeek</h3>
+            <p class="model-role">Code value</p>
+            <p>Coding and general work through OpenRouter.</p>
           </div>
           <div class="model-card">
-            <div class="model-tag rod">ROD</div>
-            <h3>Rod brain</h3>
-            <p class="model-role">Smart help</p>
-            <p>Smarter decisions and detailed answers.</p>
+            <div class="model-tag rod">GEMINI</div>
+            <h3>Gemini</h3>
+            <p class="model-role">Google</p>
+            <p>Google model through OpenRouter.</p>
           </div>
           <div class="model-card">
-            <div class="model-tag tex">TEX</div>
-            <h3>Tex 0</h3>
-            <p class="model-role">Code</p>
-            <p>Coding help, debugging, implementation.</p>
+            <div class="model-tag tex">CLAUDE</div>
+            <h3>Claude</h3>
+            <p class="model-role">Careful</p>
+            <p>Uses your Claude key first, then OpenRouter backup. Plus only.</p>
           </div>
           <div class="model-card">
-            <div class="model-tag tex">TEX</div>
-            <h3>Tex 1.5</h3>
-            <p class="model-role">Complex code</p>
-            <p>Larger builds, architecture, tough fixes.</p>
+            <div class="model-tag tex">GROK</div>
+            <h3>Grok</h3>
+            <p class="model-role">Reasoning</p>
+            <p>Reasoning and broad context through OpenRouter. Plus only.</p>
           </div>
           <div class="model-card">
-            <div class="model-tag tex">TEX</div>
-            <h3>Tex 2</h3>
-            <p class="model-role">Big context</p>
-            <p>Large coding tasks with a big context window. Plus only.</p>
-          </div>
-          <div class="model-card">
-            <div class="model-tag tex">TEX</div>
-            <h3>Tex 2.5</h3>
-            <p class="model-role">Plus code</p>
-            <p>Hardest coding, deep debugging. Plus only.</p>
-          </div>
-          <div class="model-card">
-            <div class="model-tag tree">TREE</div>
-            <h3>Treesearch _ q</h3>
-            <p class="model-role">Research</p>
-            <p>Research, comparisons, clear explanations.</p>
-          </div>
-          <div class="model-card">
-            <div class="model-tag adapt">LOCAL</div>
-            <h3>Local _ Ollama</h3>
+            <div class="model-tag local">LOCAL</div>
+            <h3>Ollama</h3>
             <p class="model-role">On your PC</p>
             <p>Runs free on your own machine with Ollama. Private, unlimited.</p>
           </div>
@@ -202,34 +199,61 @@
     <section class="pricing" id="pricing">
       <div class="section-inner">
         <p class="section-eyebrow">Pricing</p>
-        <h2>Start free, upgrade when ready</h2>
+        <h2>Free to start. Pro for heavier desktop agent work.</h2>
         <div class="pricing-grid">
           <div class="price-card">
             <h3>Free</h3>
             <div class="price">$0</div>
             <ul>
-              <li>7 AI models including Tex 0 + Adapt</li>
-              <li>Local Ollama models — free, no limits</li>
-              <li>25 AI messages per day</li>
-              <li>Ctrl+K inline AI edits</li>
-              <li>Full editor, explorer & terminal</li>
-              <li>GitHub & Drive connections</li>
+              <li>150k TexTokens per day</li>
+              <li>3M TexTokens per month max</li>
+              <li>Groq/Llama fast models</li>
+              <li>DeepSeek limited</li>
+              <li>No Claude/GPT smart models</li>
+              <li>1 small Agent task per day</li>
+              <li>1 connected project</li>
+              <li>Basic memory and basic file editing</li>
             </ul>
-            <a class="btn btn-secondary" href="./editor.html">Start Free</a>
+            <a class="btn btn-secondary" href="#download">Download Desktop App</a>
           </div>
           <div class="price-card price-card-plus">
-            <div class="plus-badge">PLUS</div>
-            <h3>Plus</h3>
-            <div class="price">$15<span>/mo</span></div>
+            <div class="plus-badge">PRO</div>
+            <h3>Pro</h3>
+            <div class="price">$20<span>/month</span></div>
             <ul>
-              <li>All 10 models — unlocks Tex 1.5, Tex 2 & Tex 2.5</li>
-              <li>Agent mode — AI edits multiple files in one ask</li>
-              <li>Unlimited AI messages (fair use on Tex 2.5)</li>
-              <li>Up to 8x longer AI answers</li>
-              <li>AI sees your whole project, not just one file</li>
-              <li>Private Teamup rooms + cloud chat sync</li>
+              <li>40M TexTokens per month</li>
+              <li>1M TexTokens per day soft limit</li>
+              <li>DeepSeek unlimited within token limit</li>
+              <li>GPT Mini access</li>
+              <li>Claude/Super Smart access but expensive</li>
+              <li>Agent mode, Super Agent mode, and Teamup mode</li>
+              <li>5 connected projects, better memory, and priority speed</li>
+              <li>Early access models like Tex 2.5</li>
+              <li>More computer mode, more file edits, and Pro badge</li>
             </ul>
-            <a class="btn btn-primary" href="/app">Get Plus</a>
+            <a class="btn btn-primary" href="#pricing">Go Pro</a>
+          </div>
+        </div>
+        <div class="model-grid">
+          <div class="model-card">
+            <div class="model-tag rod">PACKS</div>
+            <h3>Extra token packs</h3>
+            <p>$5 = 5M TexTokens<br />$10 = 10M TexTokens<br />$20 = 25M TexTokens</p>
+          </div>
+          <div class="model-card">
+            <div class="model-tag rod">COST</div>
+            <h3>Model TexToken costs</h3>
+            <p>Llama/Groq Fast 0.5x, Llama 70B 0.75x, DeepSeek Chat 1x, DeepSeek Coder/Smart 1.5x, GPT Mini 3x, Claude Sonnet 20x, GPT-5.5/frontier smart model 35x.</p>
+          </div>
+          <div class="model-card">
+            <div class="model-tag tex">TASKS</div>
+            <h3>Task prices</h3>
+            <p>Tiny fix 10k-50k, easy 50k-100k, medium 100k-250k, hard 250k-500k, supreme 500k-2M, agent task 1M-3M TexTokens.</p>
+          </div>
+          <div class="model-card">
+            <div class="model-tag tex">MODES</div>
+            <h3>Agent multipliers</h3>
+            <p>Teamup mode adds both model costs together + 20%. Agent mode is 2x task cost. Super Agent mode is 4x task cost.</p>
           </div>
         </div>
       </div>
@@ -238,13 +262,13 @@
     <section class="download" id="download">
       <div class="section-inner download-inner">
         <h2>Download ROTEX</h2>
-        <p>Use ROTEX in your browser or download the desktop app for the full experience.</p>
+        <p>Download the desktop app to actually talk to the AI, connect Unity, Roblox, Blender, or project files, and use agent mode.</p>
         <div class="download-buttons">
           <a class="btn btn-primary btn-lg" href="./downloads/ROTEX-PC-App.exe" download>
             Download for Windows
           </a>
-          <a class="btn btn-secondary btn-lg" href="./editor.html">
-            Open in Browser
+          <a class="btn btn-secondary btn-lg" href="#pricing">
+            Go Pro
           </a>
         </div>
         <p class="download-note">macOS and Linux coming soon.</p>
@@ -257,7 +281,7 @@
           <span class="brand-mark">R</span>
           <span>ROTEX</span>
         </div>
-        <p class="footer-copy">AI-powered code editor. Built for developers who ship.</p>
+        <p class="footer-copy">Dashboard, TexTokens, Pro, billing, and desktop app downloads for ROTEX.</p>
       </div>
     </footer>
   </body>

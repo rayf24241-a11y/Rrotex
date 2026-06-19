@@ -13,23 +13,21 @@ Current web features:
 - Normal user credits: `$0.300` daily, `$0.900` weekly, `$1.500` monthly
 - Plus user credits: `$2.500` daily, `$5.000` monthly
 
-Model costs:
+Model catalog:
 
-| Model | Backend | Cost |
-| --- | --- | ---: |
-| Rod _ 1 | Groq `llama-3.1-8b-instant` | `$0.001/message` |
-| Rod thinking | Groq `llama-3.3-70b-versatile` | `$0.004/message` |
-| Tex 0 | DeepSeek `deepseek-chat` | `$0.007/message` |
-| Tex 1.5 | DeepSeek `deepseek-chat` | `$0.015/message` |
-| Treesearch _ q | Groq `llama-3.3-70b-versatile` | `$0.002/message` |
+- `api/_lib/catalog.js` is the single source of truth for chat routing, public model names, tiers, and per-message credit costs.
+- `/api/models` returns the public catalog for clients.
+- Claude routes through your Anthropic/Claude key first, then OpenRouter as backup.
+- GBT, Grok, Groq, Gemini, and DeepSeek route through OpenRouter.
+- The public model lineup is Claude, GBT, Grok, Groq, Ollama, Gemini, and DeepSeek.
+- Ollama is local-only and talks to the user's PC at `http://127.0.0.1:11434`.
 
 Computer mode is available to everyone, but it has separate pricing:
 
 | Computer mode model | Cost |
 | --- | ---: |
-| Rod thinking (ICM) | `$0.010/message` |
-| Tex 0 (ICM) | `$0.040/message` |
-| Tex 1.5 (ICM) | `$0.070/message` |
+| Regular chat | Uses each catalog model's `cost` |
+| Computer mode | Uses each catalog model's `computerCost` |
 
 Computer mode asks the user to connect Google Drive or GitHub before external-work actions. Direct PC file access requires the separate PC helper app; the website computer-mode picker does not offer PC pairing.
 
@@ -61,14 +59,12 @@ Add the values from `firebase-env.example` to Vercel Project Settings -> Environ
 Add these to Vercel Project Settings -> Environment Variables:
 
 ```text
-GROQ_API_KEY
-DEEPSEEK_API_KEY
+OPENROUTER_API_KEY
 ANTHROPIC_API_KEY   (or CLAUDE_API_KEY)
-OPENROUTER_API_KEY  (powers Tex 2; falls back to DeepSeek when missing)
 PRO_PASS_SECRET     (random 32+ char secret; signs the Plus pass)
 ```
 
-Optional model overrides: `CLAUDE_OPUS_MODEL`, `CLAUDE_HAIKU_MODEL`, `OPENROUTER_CODER_MODEL`.
+Optional: `CLAUDE_SONNET_MODEL`, `PUBLIC_SITE_URL`.
 
 ## Plus enforcement (no database needed)
 
@@ -82,7 +78,7 @@ Optional model overrides: `CLAUDE_OPUS_MODEL`, `CLAUDE_HAIKU_MODEL`, `OPENROUTER
 - `/api/chat` streams responses (`stream: true`, SSE) and accepts `mode: 'editor'`, `agent: true`, and `projectContext`.
 - Agent mode (Plus) lets the AI propose multi-file changes as ```file:path blocks with per-file Diff/Apply and Apply All.
 - Ctrl+K = inline AI edit on the selection in Monaco.
-- `Local _ Ollama` model talks to `http://127.0.0.1:11434` directly from the editor (free/local; browser use needs `OLLAMA_ORIGINS` set).
+- `Ollama` talks to `http://127.0.0.1:11434` directly from the browser/editor (free/local; browser use needs `OLLAMA_ORIGINS` set).
 
 ## Computer mode connectors
 

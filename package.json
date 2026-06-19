@@ -4,6 +4,6 @@
   "private": true,
   "dependencies": {
     "adm-zip": "^0.5.17",
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^8.0.11"
   }
 }

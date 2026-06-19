@@ -9,7 +9,7 @@
     directoryHandle: null,
     fileTree: [],
     aiMessages: [],
-    aiModel: 'adapt',
+    aiModel: 'gbt',
     terminalHistory: [],
     terminalHistoryIdx: -1,
     sidePanel: 'explorer',
@@ -17,20 +17,20 @@
     aiPanelOpen: false,
     currentDirPath: '',
     agentMode: false,
+    superAgentMode: false,
+    teamupMode: false,
+    projectMode: localStorage.getItem('rotex_project_mode') || 'Unity',
   };
 
   // ─── AI Models (IDs match /api/chat.js) ────────────────────────────
   const MODELS = [
-    { id: 'adapt', name: 'Adapt', role: 'Auto', desc: 'Picks the best model(s) for your task', family: 'adapt', pro: false },
-    { id: 'rod-1', name: 'Rod _ 1', role: 'Everyday', desc: 'Quick answers, simple tasks', family: 'rod', pro: false },
-    { id: 'rod-thinking', name: 'Rod thinking', role: 'Hard tasks', desc: 'Careful reasoning, planning', family: 'rod', pro: false },
-    { id: 'rod-brain', name: 'Rod brain', role: 'Smart help', desc: 'Smarter decisions, details', family: 'rod', pro: false },
-    { id: 'tex-0', name: 'Tex 0', role: 'Code', desc: 'Coding, debugging, implementation', family: 'tex', pro: false },
-    { id: 'tex-1-5', name: 'Tex 1.5', role: 'Complex code', desc: 'Architecture, larger builds', family: 'tex', pro: true },
-    { id: 'tex-2', name: 'Tex 2', role: 'Big context', desc: 'Large coding tasks, big context window', family: 'tex', pro: true },
-    { id: 'tex-2-5', name: 'Tex 2.5', role: 'Plus code', desc: 'Hardest coding, deep debugging', family: 'tex', pro: true },
-    { id: 'treesearch-q', name: 'Treesearch _ q', role: 'Research', desc: 'Research, comparisons', family: 'tree', pro: false },
-    { id: 'ollama', name: 'Local _ Ollama', role: 'Local', desc: 'Runs on your own PC with Ollama — free and private', family: 'local', pro: false },
+    { id: 'gbt', name: 'GBT', role: 'GPT', desc: 'Fast GPT model through OpenRouter', family: 'cloud', logo: 'G', pro: false },
+    { id: 'groq', name: 'Groq', role: 'Fast', desc: 'Fast model through OpenRouter', family: 'cloud', logo: 'Q', pro: false },
+    { id: 'gemini', name: 'Gemini', role: 'Google', desc: 'Google model through OpenRouter', family: 'cloud', logo: 'Ge', pro: false },
+    { id: 'deepseek', name: 'DeepSeek', role: 'Code', desc: 'Coding and general work through OpenRouter', family: 'cloud', logo: 'D', pro: false },
+    { id: 'claude', name: 'Claude', role: 'Careful', desc: 'Claude key first, OpenRouter backup', family: 'cloud', logo: 'C', pro: true },
+    { id: 'grok', name: 'Grok', role: 'Reasoning', desc: 'Reasoning and broad context through OpenRouter', family: 'cloud', logo: 'X', pro: true },
+    { id: 'ollama', name: 'Ollama', role: 'Local', desc: 'Runs on your own PC with Ollama - free and private', family: 'local', logo: 'O', pro: false },
   ];
 
   const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
@@ -138,26 +138,6 @@
     return { today: todayData, weekTotal, weekModels };
   }
 
-  // ─── Adapt logic: pick model based on message content ──────────────
-  function adaptPickModel(text) {
-    const lower = text.toLowerCase();
-    const codeSignals = ['function', 'const ', 'let ', 'var ', 'import ', 'class ', 'def ', 'return', '```', 'error', 'bug', 'fix', 'refactor', 'build', 'compile', 'deploy', 'typescript', 'javascript', 'python', 'react', 'api', 'database', 'sql'];
-    const hardCodeSignals = ['architecture', 'design pattern', 'optimize', 'performance', 'complex', 'entire', 'full app', 'rewrite', 'large', 'system'];
-    const researchSignals = ['compare', 'difference between', 'explain', 'what is', 'how does', 'research', 'pros and cons', 'vs', 'versus'];
-    const hardSignals = ['think through', 'step by step', 'plan', 'strategy', 'analyze', 'reason', 'why does'];
-
-    const codeScore = codeSignals.filter(s => lower.includes(s)).length;
-    const hardCodeScore = hardCodeSignals.filter(s => lower.includes(s)).length;
-    const researchScore = researchSignals.filter(s => lower.includes(s)).length;
-    const hardScore = hardSignals.filter(s => lower.includes(s)).length;
-
-    if (hardCodeScore >= 2 || (codeScore >= 3 && lower.length > 200)) return userIsPro ? 'tex-1-5' : 'tex-0';
-    if (codeScore >= 2) return 'tex-0';
-    if (researchScore >= 2) return 'treesearch-q';
-    if (hardScore >= 2 || lower.length > 300) return 'rod-thinking';
-    return 'rod-1';
-  }
-
   // ─── Monaco Setup ──────────────────────────────────────────────────
   let monacoReady = false;
   const editorInstances = new Map();
@@ -235,6 +215,11 @@
   const aiMessages = $('#aiMessages');
   const aiModelMenu = $('#aiModelMenu');
   const aiModelButton = $('#aiModelButton');
+  const projectModeSelect = $('#projectModeSelect');
+  const superAgentToggle = $('#superAgentToggle');
+  const teamupToggle = $('#teamupToggle');
+  const stopAiButton = $('#stopAiButton');
+  const aiCostPreview = $('#aiCostPreview');
   const aiComposer = $('#aiComposer');
   const aiInput = $('#aiInput');
   const terminalOutput = $('#terminalOutput');
@@ -289,8 +274,8 @@
 
   // ─── AI Model Selector (scrollable, at bottom) ─────────────────────
   function buildModelMenu() {
-    const familyOrder = ['adapt', 'rod', 'tex', 'tree', 'local'];
-    const familyLabels = { adapt: '', rod: 'ROD FAMILY', tex: 'TEX FAMILY', tree: 'RESEARCH', local: 'ON YOUR PC' };
+    const familyOrder = ['cloud', 'local'];
+    const familyLabels = { cloud: 'OPENROUTER', local: 'ON YOUR PC' };
     let html = '<div class="ai-model-scroll">';
     let lastFamily = '';
 
@@ -305,11 +290,10 @@
       const locked = m.pro && !userIsPro;
       const activeClass = m.id === state.aiModel ? ' active' : '';
       const lockedClass = locked ? ' locked' : '';
-      const badge = m.id === 'adapt'
-        ? '<span class="adapt-badge">AUTO</span>'
-        : m.pro ? '<span class="pro-badge">PRO</span>' : '';
+      const badge = m.pro ? '<span class="pro-badge">PRO</span>' : '';
 
       html += `<button class="ai-model-option${activeClass}${lockedClass}" data-model="${m.id}" ${locked ? 'title="Upgrade to Plus to use this model"' : ''}>
+        <span class="ai-model-logo ai-model-logo-${m.id}" aria-hidden="true">${m.logo || m.name[0]}</span>
         <div class="model-option-left">
           <span class="model-name">${m.name}</span>
           <span class="model-desc">${m.desc}</span>
@@ -353,12 +337,44 @@
     $('#aiSelectedModel').textContent = model.name;
     $('#aiSelectedRole').textContent = model.role;
     aiModelMenu.hidden = true;
+    updateCostPreview();
   });
   document.addEventListener('click', (e) => {
     if (!aiModelButton.contains(e.target) && !aiModelMenu.contains(e.target)) {
       aiModelMenu.hidden = true;
     }
   });
+
+  function modelTexTokenMultiplier(modelId) {
+    if (modelId === 'groq') return 0.5;
+    if (modelId === 'deepseek') return 1.5;
+    if (modelId === 'claude') return 20;
+    if (modelId === 'gbt') return 3;
+    if (modelId === 'grok') return 35;
+    return 1;
+  }
+
+  function estimateTaskCost() {
+    const base = state.superAgentMode ? 500000 : state.agentMode ? 250000 : 75000;
+    let multiplier = modelTexTokenMultiplier(state.aiModel);
+    if (state.teamupMode) multiplier = (multiplier + 1.5) * 1.2;
+    if (state.agentMode) multiplier *= 2;
+    if (state.superAgentMode) multiplier *= 4;
+    return Math.round(base * multiplier);
+  }
+
+  function updateCostPreview() {
+    if (!aiCostPreview) return;
+    const estimate = estimateTaskCost();
+    const mode = state.superAgentMode ? 'Super Agent' : state.agentMode ? 'Agent' : state.teamupMode ? 'Teamup' : 'Chat';
+    aiCostPreview.textContent = `${state.projectMode} · ${mode} · est. ${estimate.toLocaleString()} TexTokens`;
+  }
+
+  function confirmLargeTaskIfNeeded() {
+    const estimate = estimateTaskCost();
+    if (estimate <= 250000) return true;
+    return confirm(`This task is estimated to cost ${estimate.toLocaleString()} TexTokens. Tasks over 250k require confirmation. Run it?`);
+  }
 
   // ─── Agent Mode Toggle (Plus: multi-file edits in one reply) ───────
   const agentToggle = $('#agentToggle');
@@ -373,6 +389,42 @@
       agentToggle.title = state.agentMode
         ? 'Agent mode on: the AI can change multiple files in one reply'
         : 'Agent mode off';
+      updateCostPreview();
+    });
+  }
+
+  if (projectModeSelect) {
+    projectModeSelect.value = state.projectMode;
+    projectModeSelect.addEventListener('change', () => {
+      state.projectMode = projectModeSelect.value;
+      localStorage.setItem('rotex_project_mode', state.projectMode);
+      updateCostPreview();
+    });
+  }
+
+  if (superAgentToggle) {
+    superAgentToggle.addEventListener('click', () => {
+      if (!userIsPro) {
+        showToast('Super Agent mode is a Pro feature — upgrade at rrotex.com/#pricing');
+        return;
+      }
+      state.superAgentMode = !state.superAgentMode;
+      if (state.superAgentMode) state.agentMode = true;
+      superAgentToggle.classList.toggle('on', state.superAgentMode);
+      agentToggle?.classList.toggle('on', state.agentMode);
+      updateCostPreview();
+    });
+  }
+
+  if (teamupToggle) {
+    teamupToggle.addEventListener('click', () => {
+      if (!userIsPro) {
+        showToast('Teamup mode is a Pro feature — upgrade at rrotex.com/#pricing');
+        return;
+      }
+      state.teamupMode = !state.teamupMode;
+      teamupToggle.classList.toggle('on', state.teamupMode);
+      updateCostPreview();
     });
   }
 
@@ -445,7 +497,7 @@
   }
 
   const OLLAMA_HELP = [
-    'Local _ Ollama could not reach Ollama on your PC.',
+    'Ollama could not reach Ollama on your PC.',
     '',
     '**Setup:**',
     '1. Install Ollama from `ollama.com`',
@@ -498,11 +550,19 @@
 
   // ─── AI Chat (streaming) ───────────────────────────────────────────
   let aiBusy = false;
+  let aiAbortController = null;
+
+  stopAiButton?.addEventListener('click', () => {
+    if (aiAbortController) aiAbortController.abort();
+    aiBusy = false;
+    showToast('Stopped current ROTEX task.');
+  });
 
   aiComposer.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = aiInput.value.trim();
     if (!text || aiBusy) return;
+    if (!confirmLargeTaskIfNeeded()) return;
 
     addAIMessage('user', text);
     aiInput.value = '';
@@ -510,7 +570,6 @@
 
     // Determine which model to use
     let modelId = state.aiModel;
-    if (modelId === 'adapt') modelId = adaptPickModel(text);
     const picked = MODELS.find((m) => m.id === modelId);
     let usedModelName = picked ? picked.name : modelId;
     const isLocal = modelId === 'ollama';
@@ -518,7 +577,7 @@
     // Check free tier limit (local Ollama is always free and uncounted)
     if (!userIsPro && !isLocal) {
       if (freeMessagesUsed >= FREE_DAILY_LIMIT) {
-        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Upgrade to Plus for unlimited messages and the locked Tex models — or switch to Local _ Ollama, which is free forever.`);
+        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Upgrade to Plus for Claude and Grok, or switch to Ollama, which is free forever.`);
         return;
       }
       freeMessagesUsed++;
@@ -526,7 +585,7 @@
     }
 
     const apiMessages = state.aiMessages.slice(-12).map((m) => ({ role: m.role, content: m.content }));
-    const projectContext = buildProjectContext();
+    const projectContext = [`Project mode: ${state.projectMode}`, buildProjectContext()].filter(Boolean).join('\n');
 
     // Streaming message bubble
     const bubble = document.createElement('div');
@@ -546,6 +605,7 @@
     };
 
     aiBusy = true;
+    aiAbortController = new AbortController();
     try {
       if (isLocal) {
         usedModelName = await streamOllama(apiMessages, projectContext, state.agentMode, onDelta);
@@ -553,11 +613,15 @@
         const resp = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: aiAbortController.signal,
           body: JSON.stringify({
             model: modelId,
             messages: apiMessages,
             mode: 'editor',
             agent: Boolean(state.agentMode),
+            superAgent: Boolean(state.superAgentMode),
+            teamup: Boolean(state.teamupMode),
+            projectMode: state.projectMode,
             projectContext,
             proPass: getProPass(),
             stream: true,
@@ -568,7 +632,7 @@
         if (!resp.ok || !contentType.includes('text/event-stream')) {
           const errData = await resp.json().catch(() => ({}));
           bubble.remove();
-          addAIMessage('assistant', errData.text || 'Something went wrong. Try again.');
+          addAIMessage('assistant', errData.text || 'servers are down');
           return;
         }
 
@@ -589,7 +653,7 @@
             try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
             if (payload.model) usedModelName = payload.model;
             if (payload.d) onDelta(payload.d);
-            if (payload.error) streamError = payload.text || 'The model had trouble answering.';
+            if (payload.error) streamError = payload.text || 'servers are down';
           }
         }
         if (streamError && !fullText) {
@@ -601,19 +665,24 @@
 
       bubble.remove();
       if (!fullText) {
-        addAIMessage('assistant', 'No response received. Try again or switch models.');
+        addAIMessage('assistant', 'servers are down');
         return;
       }
       addAIMessage('assistant', fullText, usedModelName);
     } catch (err) {
       bubble.remove();
+      if (err?.name === 'AbortError') {
+        addAIMessage('assistant', 'Stopped.');
+        return;
+      }
       if (isLocal) {
         addAIMessage('assistant', OLLAMA_HELP);
       } else {
-        addAIMessage('assistant', 'Could not connect to the AI backend. Check your internet connection and try again.');
+        addAIMessage('assistant', 'servers are down');
       }
     } finally {
       aiBusy = false;
+      aiAbortController = null;
     }
   });
 
@@ -1317,6 +1386,11 @@
   function runTerminalCommand(cmd) {
     // Desktop app has real terminal via IPC
     if (window.rotexDesktop) {
+      const approved = confirm(`ROTEX wants to run this command in your project:\n\n${cmd}\n\nApprove command?`);
+      if (!approved) {
+        appendTerminal('Command cancelled by user.', 'error');
+        return;
+      }
       window.rotexDesktop.execCommand(cmd, state.currentDirPath).then((result) => {
         if (result.stdout) appendTerminal(result.stdout);
         if (result.stderr) appendTerminal(result.stderr, 'error');
@@ -1420,7 +1494,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: userIsPro ? 'tex-1-5' : 'tex-0',
+            model: userIsPro ? 'claude' : 'deepseek',
             messages: [{ role: 'user', content: prompt }],
             mode: 'editor',
             proPass: getProPass(),
@@ -1558,4 +1632,6 @@
 
   // ─── Init ──────────────────────────────────────────────────────────
   appendTerminal('ROTEX Terminal — type "help" for commands', 'cmd');
+  updateCostPreview();
 })();
+
