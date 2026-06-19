@@ -29,7 +29,8 @@ http.createServer(async (request, response) => {
 
     let pathname = decodeURIComponent(new URL(request.url, `http://localhost:${port}`).pathname);
     if (pathname === '/') pathname = '/index.html';
-    if (pathname === '/app' || pathname === '/chat') pathname = '/chat.html';
+    if (pathname === '/app' || pathname === '/chat') pathname = '/index.html';
+    if (pathname === '/account') pathname = '/account.html';
     if (pathname === '/editor') pathname = '/editor.html';
 
     const filePath = path.resolve(root, `.${pathname}`);

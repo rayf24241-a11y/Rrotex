@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ROTEX Editor</title>
+    <title>ROTEX Desktop Agent</title>
     <meta name="description" content="ROTEX AI-powered code editor — streaming AI chat, agent mode, inline Ctrl+K edits, and local Ollama models." />
-    <meta name="theme-color" content="#1e1e1e" />
+    <meta name="theme-color" content="#101611" />
     <link rel="manifest" href="./site.webmanifest" />
     <link rel="stylesheet" href="./editor.css" />
   </head>
@@ -92,12 +92,12 @@
           <div class="editor-tab-content active" data-content="welcome">
             <div class="welcome-view">
               <div class="welcome-inner">
-                <h1><span class="brand-mark">R</span> ROTEX Editor</h1>
-                <p class="welcome-sub">AI-powered code editor with 7 built-in models</p>
+                <h1><span class="brand-mark">R</span> ROTEX Desktop Agent</h1>
+                <p class="welcome-sub">Connect Unity, Roblox, Blender, or a project folder and let ROTEX plan, edit, check, and retry.</p>
                 <div class="welcome-actions">
                   <button class="welcome-btn" id="welcomeOpenFolder">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-                    Open Folder
+                    Connect Project Folder
                   </button>
                   <button class="welcome-btn" id="welcomeNewFile">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
@@ -105,14 +105,14 @@
                   </button>
                 </div>
                 <div class="welcome-shortcuts">
-                  <h3>Keyboard Shortcuts</h3>
+                  <h3>Agent Workspace</h3>
                   <div class="shortcut-grid">
-                    <div class="shortcut"><kbd>Ctrl+K</kbd><span>AI Edit Selection</span></div>
-                    <div class="shortcut"><kbd>Ctrl+S</kbd><span>Save File</span></div>
-                    <div class="shortcut"><kbd>Ctrl+N</kbd><span>New File</span></div>
-                    <div class="shortcut"><kbd>Ctrl+`</kbd><span>Toggle Terminal</span></div>
-                    <div class="shortcut"><kbd>Ctrl+Shift+A</kbd><span>Toggle AI Chat</span></div>
-                    <div class="shortcut"><kbd>Ctrl+B</kbd><span>Toggle Sidebar</span></div>
+                    <div class="shortcut"><kbd>Unity</kbd><span>Scripts, compile errors, and gameplay fixes</span></div>
+                    <div class="shortcut"><kbd>Roblox</kbd><span>Luau scripts, services, and Studio logs</span></div>
+                    <div class="shortcut"><kbd>Blender</kbd><span>Python tools, assets, and scene helpers</span></div>
+                    <div class="shortcut"><kbd>Agent</kbd><span>Plan, edit files, run approved checks, retry</span></div>
+                    <div class="shortcut"><kbd>Safe</kbd><span>Commands and deletes ask before running</span></div>
+                    <div class="shortcut"><kbd>Stop</kbd><span>Cancel long work when you need control</span></div>
                   </div>
                 </div>
               </div>

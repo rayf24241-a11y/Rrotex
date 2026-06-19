@@ -1804,6 +1804,104 @@ a:hover { text-decoration: underline; }
   line-height: 1.3;
   max-width: 160px;
 }
+
+/* ROTEX desktop agent refresh */
+:root {
+  --bg: #101611;
+  --editor-bg: #111812;
+  --sidebar-bg: #172119;
+  --activitybar-bg: #d6f56b;
+  --titlebar-bg: #18241b;
+  --panel-bg: #101611;
+  --surface: #202b22;
+  --surface-hover: #26342a;
+  --surface-active: #304434;
+  --border: #344237;
+  --border-subtle: #263229;
+  --border-active: #d6f56b;
+  --text: #dbe7d9;
+  --text-bright: #f4f8ef;
+  --muted: #a9b8a7;
+  --quiet: #738071;
+  --accent: #d6f56b;
+  --accent-hover: #e3ff85;
+  --accent-dim: rgba(214, 245, 107, 0.15);
+  --accent-dim-hover: rgba(214, 245, 107, 0.25);
+  --statusbar-bg: #d6f56b;
+  --statusbar-text: #101611;
+}
+
+.activity-bar .ab-icon {
+  color: rgba(16, 22, 17, 0.62);
+}
+
+.activity-bar .ab-icon:hover,
+.activity-bar .ab-icon.active,
+.ab-brand {
+  color: #101611 !important;
+}
+
+.ab-icon.active::before {
+  background: #101611;
+}
+
+.side-panel,
+.ai-panel,
+.bottom-panel {
+  box-shadow: inset -1px 0 0 rgba(214, 245, 107, 0.06);
+}
+
+.welcome-view {
+  background:
+    linear-gradient(145deg, rgba(214, 245, 107, 0.12), transparent 38%),
+    radial-gradient(circle at 82% 18%, rgba(127, 215, 196, 0.13), transparent 28%),
+    var(--editor-bg);
+}
+
+.welcome-inner {
+  background: rgba(23, 33, 25, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.25);
+  max-width: 860px;
+  padding: 34px;
+}
+
+.welcome-inner h1 {
+  color: var(--text-bright);
+  letter-spacing: 0;
+}
+
+.welcome-sub {
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 620px;
+}
+
+.welcome-btn,
+.tree-open-btn,
+.ai-send {
+  background: var(--accent);
+  color: #101611;
+  font-weight: 850;
+}
+
+.welcome-btn:hover,
+.tree-open-btn:hover,
+.ai-send:hover {
+  background: var(--accent-hover);
+}
+
+.shortcut {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.shortcut kbd {
+  background: #d6f56b;
+  color: #101611;
+}
 .agent-toggle:hover { border-color: var(--accent); color: var(--text-bright); }
 .agent-toggle.on {
   background: var(--accent);

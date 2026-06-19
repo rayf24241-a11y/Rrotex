@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ROTEX Account</title>
+    <meta name="description" content="Log in to ROTEX, manage Pro, and continue to Stripe for the desktop AI agent." />
+    <meta name="theme-color" content="#101411" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="stylesheet" href="./account.css" />
+  </head>
+  <body>
+    <main class="account-page">
+      <nav class="account-nav">
+        <a class="brand" href="/">
+          <span class="brand-mark">R</span>
+          <span>ROTEX</span>
+        </a>
+        <a class="nav-link" href="/">Back to Dashboard</a>
+      </nav>
+
+      <section class="account-hero">
+        <div class="account-copy">
+          <p class="eyebrow">ROTEX account</p>
+          <h1>Log in before Pro checkout.</h1>
+          <p class="lede">Your Pro plan, TexTokens, billing, and desktop app access stay tied to one Firebase account.</p>
+
+          <div class="status-card" id="statusCard">
+            <span id="authState">Checking Firebase...</span>
+            <strong id="accountName">Not signed in</strong>
+            <small id="accountEmail">Use Google or email to continue.</small>
+          </div>
+        </div>
+
+        <div class="account-panel">
+          <section class="auth-card" id="signedOutCard">
+            <p class="eyebrow">Sign in or sign up</p>
+            <h2>Continue with Firebase</h2>
+            <p class="panel-copy">Google sign-in redirects in the same tab, so it will not pop open and instantly close.</p>
+            <button class="primary" id="googleLogin" type="button">Continue with Google</button>
+
+            <div class="divider"><span>Email</span></div>
+            <input id="emailInput" type="email" autocomplete="email" placeholder="Email address" />
+            <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password" />
+            <div class="split-actions">
+              <button class="secondary" id="emailLogin" type="button">Log In</button>
+              <button class="secondary" id="emailSignup" type="button">Sign Up</button>
+            </div>
+            <p class="message" id="authMessage"></p>
+          </section>
+
+          <section class="auth-card" id="signedInCard" hidden>
+            <p class="eyebrow">Pro checkout</p>
+            <h2>ROTEX Pro</h2>
+            <div class="price">$20 <span>/ month</span></div>
+            <ul>
+              <li>1M TexTokens daily</li>
+              <li>10M TexTokens monthly</li>
+              <li>Claude Sonnet, Claude Opus, Grok 3.4, GBT 5.5, and DeepSeek Smartest</li>
+              <li>Agent mode, Super Agent mode, and Teamup mode</li>
+              <li>5 connected projects, better memory, and priority speed</li>
+            </ul>
+            <button class="primary" id="checkoutButton" type="button">Continue to Stripe</button>
+            <button class="secondary" id="signOutButton" type="button">Sign Out</button>
+            <p class="message" id="checkoutMessage"></p>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./account.js"></script>
+  </body>
+</html>
