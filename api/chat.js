@@ -15,6 +15,7 @@ const FREE_DAILY_IP_LIMIT = 120;
 const ipCounters = new Map();
 const proCounters = new Map();
 const GROQ_BUSY_TEXT = 'This AI is being used too much. Please use a different AI and go to this one later.';
+const OPENROUTER_OUT_TEXT = 'ai is being used to much! please purchase pro to bypass this!';
 
 function bumpCounter(map, key) {
   const today = new Date().toISOString().slice(0, 10);
@@ -357,6 +358,9 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
       if (attempt.provider === 'groq' && (insufficientCreditsError(error) || groqBusyError(error))) {
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
       }
+      if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
+        throw publicProviderError('openrouter_credits_empty', OPENROUTER_OUT_TEXT, 503);
+      }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({
           provider: attempt.provider,
@@ -421,6 +425,9 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
       }
       if (attempt.provider === 'groq' && (insufficientCreditsError(error) || groqBusyError(error))) {
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
+      }
+      if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
+        throw publicProviderError('openrouter_credits_empty', OPENROUTER_OUT_TEXT, 503);
       }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({

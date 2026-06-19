@@ -18,6 +18,7 @@ Model catalog:
 - Only four cloud models are enabled: Fast, Balanced, Smart, and Pro Smart.
 - Fast, Balanced, and Smart use Groq only. If Groq is busy, users see `This AI is being used too much. Please use a different AI and go to this one later.`
 - Pro Smart uses Anthropic first. If Anthropic runs out of credits, ROTEX emails you and switches that request to OpenRouter.
+- If OpenRouter also runs out, users see `ai is being used to much! please purchase pro to bypass this!`
 - Pro unlocks Claude Haiku 4.5 through the Pro Smart model.
 
 Model access:
