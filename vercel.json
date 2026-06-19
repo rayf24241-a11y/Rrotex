@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/editor", "destination": "/index.html" },
+    { "source": "/account", "destination": "/chat.html" },
     { "source": "/app", "destination": "/index.html" },
     { "source": "/chat", "destination": "/index.html" }
   ],

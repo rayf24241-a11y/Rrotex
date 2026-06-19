@@ -1453,7 +1453,7 @@ async function sendMessage(text) {
     chat.messages.push({
       role: 'assistant',
       model: 'ROTEX Pro',
-      text: `${model.name} is Pro only. Upgrade?`,
+      text: `${model.name} is Pro only. Log in or sign up to buy Pro.`,
       action: 'upgrade',
     });
     persistState();
@@ -1464,7 +1464,7 @@ async function sendMessage(text) {
     chat.messages.push({
       role: 'assistant',
       model: 'ROTEX Pro',
-      text: 'Free computer mode limit reached for today. Upgrade?',
+      text: 'Free computer mode limit reached for today. Log in or sign up to buy Pro.',
       action: 'upgrade',
     });
     persistState();
@@ -1475,7 +1475,7 @@ async function sendMessage(text) {
     chat.messages.push({
       role: 'assistant',
       model: 'ROTEX credits',
-      text: "You're out of credits. Upgrade?",
+      text: "You're out of TexTokens. Log in or sign up to buy Pro.",
       action: 'upgrade',
     });
     persistState();
@@ -1667,7 +1667,7 @@ function compactConversation(messages) {
 
 async function sendTeamupMessage(chat, clean) {
   if (!hasProAccess()) {
-    chat.messages.push({ role: 'assistant', model: 'ROTEX Pro', text: 'Teamup rooms are Pro only. Upgrade?', action: 'upgrade' });
+    chat.messages.push({ role: 'assistant', model: 'ROTEX Pro', text: 'Teamup rooms are Pro only. Log in or sign up to buy Pro.', action: 'upgrade' });
     persistState();
     render();
     return;
@@ -1749,6 +1749,14 @@ function sleep(ms) {
 }
 
 async function startUpgrade() {
+  if (!currentUser) {
+    openAuthPage('upgrade');
+    return;
+  }
+  if (needsProfile()) {
+    openAuthPage('upgrade', true);
+    return;
+  }
   openAccountPage(true);
 }
 
