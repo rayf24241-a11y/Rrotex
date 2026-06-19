@@ -10,8 +10,12 @@ if (!gotTheLock) {
 }
 
 // Register custom protocol so the OS knows to open this app for rotex:// links.
-// Must be called before app.whenReady().
-app.setAsDefaultProtocolClient('rotex');
+// In dev mode (electron .), pass the script path so Windows routes the link back correctly.
+if (process.defaultApp) {
+  app.setAsDefaultProtocolClient('rotex', process.execPath, [path.resolve(process.argv[1])]);
+} else {
+  app.setAsDefaultProtocolClient('rotex');
+}
 
 // ─── macOS: deep-link arrives before window is ready ──────────────────────────
 let pendingDeepLink = null;
