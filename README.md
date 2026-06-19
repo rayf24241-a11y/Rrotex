@@ -96,6 +96,8 @@ https://www.rrotex.com/api/connect/google-drive-callback
 
 The PC helper source lives in `pc_app/rotex_pc_app.py`. The downloadable Windows build is served from `downloads/ROTEX-PC-App.exe`.
 
+The PC helper now opens directly into a clean ROTEX Desktop workspace. First launch asks what the user is working on, lets them pick up to two of Roblox, Blender, and Unity, asks for a project name, then lets them choose a local project folder and chat with file context.
+
 Desktop app builds:
 
 - Windows, macOS, and Linux Electron builds are configured in `electron/package.json`.
