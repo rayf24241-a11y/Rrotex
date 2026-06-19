@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ROTEX Dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["dev-server.cjs"],
+      "port": 5173,
+      "autoPort": true
+    }
+  ]
+}

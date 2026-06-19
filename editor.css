@@ -1919,109 +1919,79 @@ a:hover { text-decoration: underline; }
   max-width: 160px;
 }
 
-/* ROTEX desktop agent refresh */
+/* ROTEX — Yellow + Blue theme */
 :root {
-  --bg: #101611;
-  --editor-bg: #111812;
-  --sidebar-bg: #172119;
-  --activitybar-bg: #d6f56b;
-  --titlebar-bg: #18241b;
-  --panel-bg: #101611;
-  --surface: #202b22;
-  --surface-hover: #26342a;
-  --surface-active: #304434;
-  --border: #344237;
-  --border-subtle: #263229;
-  --border-active: #d6f56b;
-  --text: #dbe7d9;
-  --text-bright: #f4f8ef;
-  --muted: #a9b8a7;
-  --quiet: #738071;
-  --accent: #d6f56b;
-  --accent-hover: #e3ff85;
-  --accent-dim: rgba(214, 245, 107, 0.15);
-  --accent-dim-hover: rgba(214, 245, 107, 0.25);
-  --statusbar-bg: #d6f56b;
-  --statusbar-text: #101611;
+  --bg:              #0D0F17;
+  --editor-bg:       #0D0F17;
+  --sidebar-bg:      #141720;
+  --activitybar-bg:  #1A1F2E;
+  --titlebar-bg:     #141720;
+  --panel-bg:        #0D0F17;
+  --surface:         #1A1F2E;
+  --surface-hover:   #20273A;
+  --surface-active:  #252D40;
+  --border:          #252D40;
+  --border-subtle:   #1E2535;
+  --border-active:   #FFD60A;
+  --text:            #E8EDF8;
+  --text-bright:     #F4F8FF;
+  --text-white:      #ffffff;
+  --muted:           #8A93AA;
+  --quiet:           #525C78;
+  --accent:          #FFD60A;
+  --accent-hover:    #FFE033;
+  --accent-dim:      rgba(255, 214, 10, 0.13);
+  --accent-dim-hover:rgba(255, 214, 10, 0.22);
+  --green:           #22C55E;
+  --green-bright:    #4ADE80;
+  --red:             #FF4757;
+  --amber:           #F59E0B;
+  --orange:          #FB923C;
+  --purple:          #A78BFA;
+  --purple-dim:      rgba(167, 139, 250, 0.15);
+  --tab-active-bg:   #0D0F17;
+  --tab-inactive-bg: #141720;
+  --tab-hover-bg:    #1A1F2E;
+  --tab-border-top:  #FFD60A;
+  --statusbar-bg:    #141720;
+  --statusbar-text:  #8A93AA;
+  --scrollbar:       rgba(255,255,255,0.1);
+  --scrollbar-hover: rgba(255,255,255,0.18);
+  --indent-guide:    rgba(255,255,255,0.05);
+  --indent-guide-active: rgba(255,255,255,0.14);
+  --shadow-sm:       0 1px 3px rgba(0,0,0,0.5);
+  --shadow-md:       0 4px 16px rgba(0,0,0,0.6);
+  --shadow-lg:       0 8px 32px rgba(0,0,0,0.75);
 }
 
-.activity-bar .ab-icon {
-  color: rgba(16, 22, 17, 0.62);
-}
-
-.activity-bar .ab-icon:hover,
-.activity-bar .ab-icon.active,
-.ab-brand {
-  color: #101611 !important;
-}
-
-.ab-icon.active::before {
-  background: #101611;
-}
+/* Activity bar — dark bg, muted icons */
+.activity-bar { background: var(--activitybar-bg); }
+.activity-bar .ab-icon { color: rgba(255,255,255,0.3); }
+.activity-bar .ab-icon:hover { color: rgba(255,255,255,0.7) !important; background: rgba(255,255,255,0.05); }
+.activity-bar .ab-icon.active { color: var(--accent) !important; }
+.ab-icon.active::before { background: var(--accent); }
+.ab-brand { color: var(--accent) !important; font-size: 13px; }
+.ab-brand:hover { background: rgba(255,214,10,0.08) !important; }
 
 .side-panel,
-.ai-panel,
 .bottom-panel {
-  box-shadow: inset -1px 0 0 rgba(214, 245, 107, 0.06);
+  box-shadow: inset -1px 0 0 rgba(255,214,10,0.04);
 }
 
-.welcome-view {
-  background:
-    linear-gradient(145deg, rgba(214, 245, 107, 0.12), transparent 38%),
-    radial-gradient(circle at 82% 18%, rgba(127, 215, 196, 0.13), transparent 28%),
-    var(--editor-bg);
+/* Setup modal — yellow accent */
+.setup-eyebrow { color: var(--accent); }
+.setup-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
+.setup-option input { accent-color: var(--accent); }
+.setup-primary { background: var(--accent); color: #0D0F17; }
+.setup-primary:hover { background: var(--accent-hover); }
 
-.welcome-inner {
-  background: rgba(23, 33, 25, 0.72);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.25);
-  max-width: 860px;
-  padding: 34px;
-}
-
-.welcome-inner h1 {
-  color: var(--text-bright);
-  letter-spacing: 0;
-}
-
-.welcome-sub {
-  color: var(--muted);
-  font-size: 15px;
-  max-width: 620px;
-}
-
-.welcome-btn,
-.tree-open-btn,
-.ai-send {
-  background: var(--accent);
-  color: #101611;
-  font-weight: 850;
-}
-
-.welcome-btn:hover,
-.tree-open-btn:hover,
-.ai-send:hover {
-  background: var(--accent-hover);
-}
-
-.shortcut {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.shortcut kbd {
-  background: #d6f56b;
-  color: #101611;
-}
+/* Agent toggle — yellow on */
+.agent-toggle { color: var(--text); border-color: var(--border); background: transparent; }
 .agent-toggle:hover { border-color: var(--accent); color: var(--text-bright); }
-.agent-toggle.on {
-  background: var(--accent);
-  border-color: transparent;
-  color: #fff;
-}
+.agent-toggle.on { background: var(--accent); border-color: transparent; color: #0D0F17; font-weight: 700; }
 
 .ai-code-diff {
   padding: 2px 10px;

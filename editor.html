@@ -1,252 +1,1079 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ROTEX Desktop Agent</title>
-    <meta name="description" content="ROTEX AI-powered code editor - streaming AI chat, agent mode, inline Ctrl+K edits, and project tools." />
-    <meta name="theme-color" content="#101611" />
-    <link rel="manifest" href="./site.webmanifest" />
-    <link rel="stylesheet" href="./editor.css" />
-  </head>
-  <body>
-    <div class="editor-app" id="editorApp">
-      <!-- Activity Bar -->
-      <aside class="activity-bar" id="activityBar">
-        <div class="ab-top">
-          <button class="ab-icon ab-brand" title="ROTEX Home">R</button>
-          <button class="ab-icon active" data-panel="explorer" title="Explorer">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-          </button>
-          <button class="ab-icon" data-panel="search" title="Search">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          </button>
-          <button class="ab-icon" data-panel="git" title="Source Control">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M6 9v12"/></svg>
-          </button>
-        </div>
-        <div class="ab-bottom">
-          <button class="ab-icon" data-panel="ai" title="AI Chat">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          </button>
-          <button class="ab-icon" id="settingsButton" title="Settings">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15 1.65 1.65 0 003 14.08V14a2 2 0 014 0v.09c0 .67.4 1.27 1 1.51"/></svg>
-          </button>
-        </div>
-      </aside>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROTEX AI</title>
+  <meta name="theme-color" content="#0D0F17" />
+  <link rel="stylesheet" href="./editor.css" />
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       NEW ROTEX SHELL  —  Yellow + Blue theme, no file tree
+       ═══════════════════════════════════════════════════════ */
+    :root {
+      --rx-bg:        #0D0F17;
+      --rx-surface:   #141720;
+      --rx-panel:     #1A1F2E;
+      --rx-border:    #252D40;
+      --rx-text:      #E8EDF8;
+      --rx-muted:     #8A93AA;
+      --rx-quiet:     #525C78;
+      --rx-yellow:    #FFD60A;
+      --rx-yellow-d:  rgba(255,214,10,0.13);
+      --rx-yellow-g:  rgba(255,214,10,0.26);
+      --rx-blue:      #2563EB;
+      --rx-blue-d:    rgba(37,99,235,0.14);
+      --rx-red:       #FF4757;
+      --rx-green:     #22C55E;
+      --rx-scroll:    rgba(255,255,255,0.08);
+    }
 
-      <!-- Side Panel -->
-      <aside class="side-panel" id="sidePanel">
-        <div class="sp-header">
-          <span class="sp-title" id="spTitle">EXPLORER</span>
-          <div class="sp-actions">
-            <button class="sp-action" id="openFolderBtn" title="Open Folder">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-            </button>
-            <button class="sp-action" id="newFileBtn" title="New File">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            </button>
-            <button class="sp-action" id="newFolderBtn" title="New Folder">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-            </button>
-          </div>
-        </div>
-        <div class="sp-content" id="spContent">
-          <div class="panel-view" id="explorerPanel">
-            <div class="file-tree" id="fileTree">
-              <div class="tree-empty">
-                <p>No folder opened</p>
-                <button class="tree-open-btn" id="treeOpenBtn">Open Folder</button>
-              </div>
-            </div>
-          </div>
-          <div class="panel-view" id="searchPanel" hidden>
-            <div class="search-box">
-              <input type="text" id="searchInput" placeholder="Search files..." />
-            </div>
-            <div class="search-results" id="searchResults"></div>
-          </div>
-          <div class="panel-view" id="gitPanel" hidden>
-            <div class="git-status" id="gitStatus">
-              <p class="git-empty">No repository detected</p>
-            </div>
-          </div>
-        </div>
-      </aside>
+    /* Reset editor.css globals for new layout */
+    html, body { height: 100%; overflow: hidden; background: var(--rx-bg); color: var(--rx-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; font-size: 13px; -webkit-font-smoothing: antialiased; }
 
-      <!-- Main Editor Area -->
-      <main class="editor-main" id="editorMain">
-        <div class="tab-bar" id="tabBar">
-          <div class="tabs" id="tabs">
-            <div class="tab active" data-tab="welcome">
-              <span class="tab-name">Welcome</span>
-              <button class="tab-close">&times;</button>
-            </div>
-          </div>
-        </div>
+    /* ── App shell ──────────────────────────────────────────── */
+    .rx-app {
+      display: grid;
+      grid-template-rows: 40px 1fr 22px;
+      height: 100vh;
+      overflow: hidden;
+    }
 
-        <div class="breadcrumb-bar" id="breadcrumbBar">
-          <span class="bc-active">Welcome</span>
-        </div>
-        <div class="editor-content" id="editorContent">
-          <div class="editor-tab-content active" data-content="welcome">
-            <div class="welcome-view">
-              <div class="welcome-inner">
-                <h1><span class="brand-mark">R</span> ROTEX Desktop Agent</h1>
-                <p class="welcome-sub">Connect Unity, Roblox, Blender, or a project folder and let ROTEX plan, edit, check, and retry.</p>
-                <div class="welcome-actions">
-                  <button class="welcome-btn" id="welcomeOpenFolder">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-                    Connect Project Folder
-                  </button>
-                  <button class="welcome-btn" id="welcomeNewFile">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-                    New File
-                  </button>
-                </div>
-                <div class="welcome-shortcuts">
-                  <h3>Agent Workspace</h3>
-                  <div class="shortcut-grid">
-                    <div class="shortcut"><kbd>Unity</kbd><span>Scripts, compile errors, and gameplay fixes</span></div>
-                    <div class="shortcut"><kbd>Roblox</kbd><span>Luau scripts, services, and Studio logs</span></div>
-                    <div class="shortcut"><kbd>Blender</kbd><span>Python tools, assets, and scene helpers</span></div>
-                    <div class="shortcut"><kbd>Agent</kbd><span>Plan, edit files, run approved checks, retry</span></div>
-                    <div class="shortcut"><kbd>Safe</kbd><span>Commands and deletes ask before running</span></div>
-                    <div class="shortcut"><kbd>Stop</kbd><span>Cancel long work when you need control</span></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+    /* ── Header ─────────────────────────────────────────────── */
+    .rx-header {
+      background: var(--rx-surface);
+      border-bottom: 1px solid var(--rx-border);
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 12px;
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+    .rx-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      -webkit-app-region: no-drag;
+      flex-shrink: 0;
+    }
+    .rx-logo-mark {
+      width: 26px;
+      height: 26px;
+      background: var(--rx-yellow);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 900;
+      color: #0D0F17;
+      letter-spacing: -0.5px;
+      box-shadow: 0 0 14px var(--rx-yellow-d);
+      flex-shrink: 0;
+    }
+    .rx-logo-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--rx-text);
+      letter-spacing: 0.06em;
+    }
+    .rx-header-spacer { flex: 1; }
+    .rx-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+    .rx-hbtn {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: none;
+      border: none;
+      color: var(--rx-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+    }
+    .rx-hbtn:hover { background: rgba(255,255,255,0.07); color: var(--rx-text); }
+    .rx-user-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--rx-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      cursor: pointer;
+      transition: opacity 0.12s;
+      flex-shrink: 0;
+    }
+    .rx-user-avatar:hover { opacity: 0.85; }
 
-        <!-- Bottom Panel (Terminal) -->
-        <div class="bottom-panel" id="bottomPanel" hidden>
-          <div class="bp-header">
-            <div class="bp-tabs">
-              <button class="bp-tab active" data-bptab="terminal">TERMINAL</button>
-              <button class="bp-tab" data-bptab="output">OUTPUT</button>
-              <button class="bp-tab" data-bptab="problems">PROBLEMS</button>
-            </div>
-            <div class="bp-actions">
-              <button class="bp-action" id="newTerminalBtn" title="New Terminal">+</button>
-              <button class="bp-action" id="closeBottomPanel" title="Close">&times;</button>
-            </div>
-          </div>
-          <div class="bp-content" id="bpContent">
-            <div class="terminal-view" id="terminalView">
-              <div class="terminal-output" id="terminalOutput"></div>
-              <div class="terminal-input-line">
-                <span class="terminal-prompt">$</span>
-                <input type="text" class="terminal-input" id="terminalInput" spellcheck="false" autocomplete="off" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
+    /* ── Body ────────────────────────────────────────────────── */
+    .rx-body {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      overflow: hidden;
+    }
 
-      <!-- AI Chat Panel (right side) -->
-      <aside class="ai-panel" id="aiPanel" hidden>
-        <div class="ai-header">
-          <span class="ai-title">ROTEX AI</span>
-          <div class="ai-header-actions">
-            <button class="ai-action" id="aiNewChat" title="New Chat">+</button>
-            <button class="ai-action" id="aiClosePanel" title="Close">&times;</button>
+    /* ── Chat history sidebar ────────────────────────────────── */
+    .rx-sidebar {
+      background: var(--rx-surface);
+      border-right: 1px solid var(--rx-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .rx-sb-top {
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--rx-border);
+      flex-shrink: 0;
+    }
+    .rx-new-btn {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--rx-yellow);
+      color: #0D0F17;
+      border: none;
+      border-radius: 9px;
+      font: 700 12px/1 inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.13s;
+      box-shadow: 0 2px 12px var(--rx-yellow-d);
+    }
+    .rx-new-btn:hover { background: #FFE033; }
+    .rx-new-btn:active { transform: scale(0.98); }
+
+    .rx-search-wrap {
+      padding: 10px 12px 0;
+    }
+    .rx-search {
+      width: 100%;
+      background: var(--rx-panel);
+      border: 1px solid var(--rx-border);
+      border-radius: 7px;
+      color: var(--rx-text);
+      font: inherit;
+      font-size: 12px;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.12s;
+    }
+    .rx-search:focus { border-color: var(--rx-yellow); }
+    .rx-search::placeholder { color: var(--rx-quiet); }
+
+    .rx-chat-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .rx-chat-list::-webkit-scrollbar { width: 4px; }
+    .rx-chat-list::-webkit-scrollbar-thumb { background: var(--rx-border); border-radius: 4px; }
+
+    .rx-chat-section {
+      padding: 6px 12px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--rx-quiet);
+    }
+
+    .rx-chat-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background 0.1s;
+      position: relative;
+      margin: 1px 6px;
+      border-radius: 7px;
+    }
+    .rx-chat-item:hover { background: var(--rx-panel); }
+    .rx-chat-item.active {
+      background: var(--rx-yellow-d);
+      border: 1px solid rgba(255,214,10,0.22);
+    }
+    .rx-chat-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: rgba(255,255,255,0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--rx-muted);
+      flex-shrink: 0;
+    }
+    .rx-chat-item.active .rx-chat-icon {
+      background: var(--rx-yellow-d);
+      color: var(--rx-yellow);
+    }
+    .rx-chat-info { flex: 1; min-width: 0; }
+    .rx-chat-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--rx-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .rx-chat-time {
+      font-size: 10px;
+      color: var(--rx-quiet);
+      margin-top: 2px;
+    }
+    .rx-chat-del {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      background: none;
+      border: none;
+      color: var(--rx-quiet);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: all 0.1s;
+      flex-shrink: 0;
+    }
+    .rx-chat-item:hover .rx-chat-del { opacity: 1; }
+    .rx-chat-del:hover { background: rgba(255,71,87,0.15); color: var(--rx-red); }
+
+    .rx-chat-empty {
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--rx-quiet);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    /* ── Main chat area ──────────────────────────────────────── */
+    .rx-main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--rx-bg);
+    }
+
+    /* Override editor.css ai-panel to always flex here */
+    #aiPanel {
+      display: flex !important;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+      border-left: none;
+      background: var(--rx-bg);
+    }
+
+    /* ── Status bar ──────────────────────────────────────────── */
+    .rx-statusbar {
+      background: var(--rx-surface);
+      border-top: 1px solid var(--rx-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      font-size: 11px;
+      color: var(--rx-muted);
+      flex-shrink: 0;
+    }
+    .rx-sb-left, .rx-sb-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .rx-sb-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 6px;
+      height: 22px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.1s;
+    }
+    .rx-sb-item:hover { background: rgba(255,255,255,0.07); }
+
+    /* ── Tweak existing ai-panel styles ──────────────────────── */
+    .ai-header { display: none; }   /* hide old header, we have rx-header */
+
+    .ai-messages {
+      padding: 20px 24px 10px;
+      gap: 14px;
+    }
+    .ai-welcome-msg {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .ai-composer {
+      padding: 12px 16px 10px;
+      background: var(--rx-surface);
+      border-top: 1px solid var(--rx-border);
+    }
+    .ai-composer textarea {
+      background: var(--rx-panel);
+      border-color: var(--rx-border);
+      border-radius: 10px;
+      color: var(--rx-text);
+      font-size: 14px;
+      padding: 10px 14px;
+    }
+    .ai-composer textarea:focus {
+      border-color: var(--rx-yellow);
+      box-shadow: 0 0 0 2px var(--rx-yellow-d);
+    }
+
+    .ai-model-bar {
+      background: var(--rx-surface);
+      padding: 8px 16px 10px;
+      border-top: 1px solid var(--rx-border);
+    }
+
+    /* ── Loading spinner for chat list ──────────────────────── */
+    .rx-loading {
+      padding: 30px;
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+    }
+    .rx-loading span {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--rx-border);
+      animation: rxld 1.2s ease infinite;
+    }
+    .rx-loading span:nth-child(2) { animation-delay: 0.15s; }
+    .rx-loading span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes rxld {
+      0%,100% { opacity: 0.2; transform: translateY(0); }
+      40%      { opacity: 1;   transform: translateY(-5px); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     HIDDEN STUBS — kept for editor.js compatibility, not visible
+     ══════════════════════════════════════════════════════════════ -->
+<div id="editorApp" style="display:none;position:absolute;pointer-events:none;">
+  <aside id="activityBar">
+    <div class="ab-top">
+      <button class="ab-icon ab-brand">R</button>
+      <button class="ab-icon active" data-panel="explorer"></button>
+      <button class="ab-icon" data-panel="search"></button>
+      <button class="ab-icon" data-panel="git"></button>
+    </div>
+    <div class="ab-bottom">
+      <button class="ab-icon" data-panel="ai"></button>
+      <button class="ab-icon" id="settingsButton"></button>
+    </div>
+  </aside>
+  <aside id="sidePanel">
+    <div class="sp-header">
+      <span id="spTitle">EXPLORER</span>
+      <div class="sp-actions">
+        <button id="openFolderBtn"></button>
+        <button id="newFileBtn"></button>
+        <button id="newFolderBtn"></button>
+      </div>
+    </div>
+    <div id="spContent">
+      <div class="panel-view" id="explorerPanel">
+        <div id="fileTree">
+          <div class="tree-empty">
+            <p>No folder opened</p>
+            <button id="treeOpenBtn">Open Folder</button>
           </div>
         </div>
-        <div class="ai-messages" id="aiMessages">
-          <div class="ai-welcome-msg">
+      </div>
+      <div class="panel-view" id="searchPanel" hidden>
+        <div class="search-box"><input id="searchInput" type="text" /></div>
+        <div id="searchResults"></div>
+      </div>
+      <div class="panel-view" id="gitPanel" hidden>
+        <div id="gitStatus"></div>
+      </div>
+    </div>
+  </aside>
+  <main id="editorMain">
+    <div id="tabBar"><div id="tabs"></div></div>
+    <div id="breadcrumbBar" hidden></div>
+    <div id="editorContent">
+      <div class="editor-tab-content active" data-content="welcome">
+        <div class="welcome-view">
+          <div class="welcome-inner">
+            <h1>ROTEX Desktop Agent</h1>
+            <div class="welcome-actions">
+              <button id="welcomeOpenFolder">Open Folder</button>
+              <button id="welcomeNewFile">New File</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="bottomPanel" hidden>
+      <div class="bp-header">
+        <div class="bp-tabs">
+          <button class="bp-tab active" data-bptab="terminal">TERMINAL</button>
+          <button class="bp-tab" data-bptab="output">OUTPUT</button>
+          <button class="bp-tab" data-bptab="problems">PROBLEMS</button>
+        </div>
+        <div class="bp-actions">
+          <button id="newTerminalBtn">+</button>
+          <button id="closeBottomPanel">&times;</button>
+        </div>
+      </div>
+      <div id="bpContent">
+        <div id="terminalView">
+          <div id="terminalOutput"></div>
+          <div class="terminal-input-line">
+            <span class="terminal-prompt">$</span>
+            <input type="text" id="terminalInput" spellcheck="false" autocomplete="off" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Old AI panel stub (editor.js toggles .hidden on this) -->
+<div id="aiPanel" style="display:none!important;position:absolute;pointer-events:none;">
+  <div class="ai-header">
+    <button id="aiNewChat" style="display:none"></button>
+    <button id="aiClosePanel" style="display:none"></button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     VISIBLE APP
+     ══════════════════════════════════════════════════════════════ -->
+<div class="rx-app">
+
+  <!-- Header -->
+  <header class="rx-header">
+    <div class="rx-brand">
+      <div class="rx-logo-mark">RX</div>
+      <span class="rx-logo-name">ROTEX</span>
+    </div>
+    <div class="rx-header-spacer"></div>
+    <div class="rx-header-right">
+      <button class="rx-hbtn" id="rxSettingsBtn" title="Settings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15 1.65 1.65 0 003 14.08V14a2 2 0 014 0v.09c0 .67.4 1.27 1 1.51"/>
+        </svg>
+      </button>
+      <div class="rx-user-avatar" id="rxUserAvatar" title="Account">?</div>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <div class="rx-body">
+
+    <!-- Chat history sidebar -->
+    <aside class="rx-sidebar">
+      <div class="rx-sb-top">
+        <button class="rx-new-btn" id="rxNewChat">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New Chat
+        </button>
+        <div class="rx-search-wrap">
+          <input class="rx-search" id="rxSearchChats" type="text" placeholder="Search chats…">
+        </div>
+      </div>
+      <div class="rx-chat-list" id="rxChatList">
+        <div class="rx-loading"><span></span><span></span><span></span></div>
+      </div>
+    </aside>
+
+    <!-- Main AI chat -->
+    <div class="rx-main">
+      <!-- Visible AI chat panel (mirrors editor.js's aiPanel content) -->
+      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+
+        <!-- Messages -->
+        <div class="ai-messages" id="rxAiMessages" style="flex:1;overflow-y:auto;padding:20px 24px 10px;display:flex;flex-direction:column;gap:14px;">
+          <div class="ai-welcome-msg" id="rxWelcomeMsg">
             <p><strong>ROTEX AI</strong></p>
-            <p>Ask me anything about your code. I can write, edit, debug, refactor, and explain.</p>
+            <p>What are you working on? I can write code, debug, explain, refactor, and plan.</p>
           </div>
         </div>
-        <!-- Model selector at BOTTOM -->
-        <form class="ai-composer" id="aiComposer">
-          <textarea id="aiInput" rows="1" placeholder="Ask ROTEX..."></textarea>
-          <button class="ai-send" type="submit">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+
+        <!-- Composer -->
+        <form class="ai-composer" id="rxAiComposer" style="display:flex;gap:8px;padding:12px 16px 10px;background:var(--rx-surface);border-top:1px solid var(--rx-border);align-items:flex-end;">
+          <textarea id="rxAiInput" rows="1" placeholder="Ask ROTEX…" style="flex:1;resize:none;background:var(--rx-panel);border:1px solid var(--rx-border);border-radius:10px;color:var(--rx-text);padding:10px 14px;font:inherit;font-size:14px;max-height:140px;min-height:42px;line-height:1.45;outline:none;transition:border-color 0.13s,box-shadow 0.13s;"></textarea>
+          <button class="ai-send" type="submit" style="width:36px;height:36px;border-radius:10px;background:var(--rx-yellow);border:none;color:#0D0F17;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all 0.13s;box-shadow:0 2px 10px var(--rx-yellow-d);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
         </form>
-        <div class="ai-model-bar">
-          <button class="ai-model-select" id="aiModelButton" type="button">
-            <span id="aiSelectedModel">Fast</span>
-            <small id="aiSelectedRole">0.2x</small>
+
+        <!-- Model bar -->
+        <div class="ai-model-bar" style="display:flex;gap:6px;align-items:center;padding:8px 16px 10px;background:var(--rx-surface);border-top:1px solid var(--rx-border);flex-wrap:wrap;">
+          <button class="ai-model-select" id="rxModelButton" type="button" style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:rgba(255,255,255,0.04);border:1px solid var(--rx-border);border-radius:7px;cursor:pointer;min-width:90px;color:var(--rx-text);">
+            <span id="rxSelectedModel" style="font-size:12px;font-weight:600;">Fast</span>
+            <small id="rxSelectedRole" style="font-size:11px;color:var(--rx-muted);margin-left:auto;">0.2x</small>
           </button>
-          <select class="ai-mode-select" id="projectModeSelect" title="Project mode">
-            <option value="Unity">Unity mode</option>
-            <option value="Roblox">Roblox mode</option>
-            <option value="Blender">Blender mode</option>
+          <select class="ai-mode-select" id="rxProjectMode" style="background:var(--rx-panel);border:1px solid var(--rx-border);border-radius:7px;color:var(--rx-text);font:inherit;font-size:12px;min-height:30px;padding:0 8px;cursor:pointer;">
+            <option value="Unity">Unity</option>
+            <option value="Roblox">Roblox</option>
+            <option value="Blender">Blender</option>
+            <option value="General">General</option>
           </select>
-          <button class="agent-toggle" id="projectSetupButton" type="button" title="Edit project setup">
-            Project
-          </button>
-          <button class="agent-toggle" id="agentToggle" type="button" title="Agent mode: the AI can change multiple files in one reply (Pro)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          <button class="agent-toggle" id="rxAgentToggle" type="button">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
             Agent
           </button>
-          <button class="agent-toggle" id="superAgentToggle" type="button" title="Super Agent mode uses 4x task cost">
-            Super Agent
-          </button>
-          <button class="agent-toggle danger" id="stopAiButton" type="button" title="Stop the current AI task">
-            Stop
-          </button>
-          <span class="ai-cost-preview" id="aiCostPreview">Cost preview: 50k-100k TexTokens</span>
-          <div class="ai-model-menu" id="aiModelMenu" hidden></div>
+          <button class="agent-toggle" id="rxSuperAgent" type="button">Super Agent</button>
+          <button class="agent-toggle danger" id="rxStopBtn" type="button">Stop</button>
+          <span class="ai-cost-preview" id="rxCostPreview" style="color:var(--rx-quiet);font-size:11px;"></span>
+          <div class="ai-model-menu" id="rxModelMenu" hidden></div>
         </div>
-      </aside>
-    </div>
 
-    <!-- Status Bar -->
-    <footer class="status-bar" id="statusBar">
-      <div class="sb-left">
-        <span class="sb-item sb-branch">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M6 9v12"/></svg>
-          <span id="sbBranch">main</span>
-        </span>
-        <span class="sb-item" id="sbErrors">0 errors, 0 warnings</span>
       </div>
-      <div class="sb-right">
-        <span class="sb-item" id="sbPosition">Ln 1, Col 1</span>
-        <span class="sb-item" id="sbEncoding">UTF-8</span>
-        <span class="sb-item" id="sbLang">Plain Text</span>
-        <button class="sb-item sb-profile" id="sbProfile" title="Usage & Account">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
-        </button>
-      </div>
-    </footer>
-
-    <div class="setup-modal" id="projectSetupModal" hidden>
-      <form class="setup-card" id="projectSetupForm">
-        <p class="setup-eyebrow">Project setup</p>
-        <h2>What are you working on?</h2>
-        <p class="setup-copy">Pick up to two tools, then name your project.</p>
-        <div class="setup-options">
-          <label class="setup-option">
-            <input type="checkbox" name="projectTool" value="Roblox" />
-            <span><strong>Roblox</strong><small>Luau scripts, Studio logs, services</small></span>
-          </label>
-          <label class="setup-option">
-            <input type="checkbox" name="projectTool" value="Blender" />
-            <span><strong>Blender</strong><small>Python tools, scenes, assets</small></span>
-          </label>
-          <label class="setup-option">
-            <input type="checkbox" name="projectTool" value="Unity" />
-            <span><strong>Unity</strong><small>C# scripts, compile errors, gameplay</small></span>
-          </label>
-        </div>
-        <label class="setup-name">
-          <span>Project name</span>
-          <input id="projectNameInput" type="text" maxlength="60" placeholder="My game project" autocomplete="off" />
-        </label>
-        <p class="setup-error" id="projectSetupError"></p>
-        <div class="setup-actions">
-          <button class="setup-secondary" id="projectSetupLater" type="button">Later</button>
-          <button class="setup-primary" type="submit">Save Project</button>
-        </div>
-      </form>
     </div>
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-    <script src="./editor.js"></script>
-  </body>
+  <!-- Status bar -->
+  <footer class="rx-statusbar">
+    <div class="rx-sb-left">
+      <span class="rx-sb-item" id="rxBranch">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M6 9v12"/></svg>
+        main
+      </span>
+      <span class="rx-sb-item" id="rxErrors">0 errors</span>
+    </div>
+    <div class="rx-sb-right">
+      <span class="rx-sb-item" id="rxProfile" style="cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+        <span id="rxProfileName">Account</span>
+      </span>
+    </div>
+  </footer>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     EDITOR.JS BRIDGE — maps new element IDs to what editor.js expects
+     ══════════════════════════════════════════════════════════════ -->
+
+<!-- editor.js compatibility: it looks for these IDs for the AI chat -->
+<!-- We proxy the real elements so both can work -->
+<div style="display:none">
+  <!-- editor.js will find these and wire up its AI logic -->
+  <div id="aiMessages"></div>
+  <form id="aiComposer"><textarea id="aiInput"></textarea><button type="submit"></button></form>
+  <button id="aiModelButton"><span id="aiSelectedModel"></span><small id="aiSelectedRole"></small></button>
+  <select id="projectModeSelect"></select>
+  <button id="projectSetupButton"></button>
+  <button id="agentToggle"></button>
+  <button id="superAgentToggle"></button>
+  <button id="stopAiButton"></button>
+  <span id="aiCostPreview"></span>
+  <div id="aiModelMenu"></div>
+  <span id="sbBranch"></span>
+  <span id="sbErrors"></span>
+  <span id="sbPosition"></span>
+  <span id="sbEncoding"></span>
+  <span id="sbLang"></span>
+  <button id="sbProfile"></button>
+</div>
+
+<!-- Project Setup Modal (used by editor.js) -->
+<div class="setup-modal" id="projectSetupModal" hidden>
+  <form class="setup-card" id="projectSetupForm">
+    <p class="setup-eyebrow">Project setup</p>
+    <h2>What are you working on?</h2>
+    <p class="setup-copy">Pick a platform, then name your project.</p>
+    <div class="setup-options">
+      <label class="setup-option">
+        <input type="checkbox" name="projectTool" value="Roblox" />
+        <span><strong>Roblox</strong><small>Luau scripts, Studio logs, services</small></span>
+      </label>
+      <label class="setup-option">
+        <input type="checkbox" name="projectTool" value="Blender" />
+        <span><strong>Blender</strong><small>Python tools, scenes, assets</small></span>
+      </label>
+      <label class="setup-option">
+        <input type="checkbox" name="projectTool" value="Unity" />
+        <span><strong>Unity</strong><small>C# scripts, compile errors, gameplay</small></span>
+      </label>
+    </div>
+    <label class="setup-name">
+      <span>Project name</span>
+      <input id="projectNameInput" type="text" maxlength="60" placeholder="My project" autocomplete="off" />
+    </label>
+    <p class="setup-error" id="projectSetupError"></p>
+    <div class="setup-actions">
+      <button class="setup-secondary" id="projectSetupLater" type="button">Later</button>
+      <button class="setup-primary" type="submit">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     FIREBASE + CHAT HISTORY LOGIC
+     ══════════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+  import {
+    getFirestore, collection, query, where, orderBy,
+    getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, Timestamp
+  } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
+  let db = null, auth = null, currentUser = null;
+  let allChats = [];
+  let activeChatId = localStorage.getItem('rotex_active_chat') || null;
+
+  /* ── Bootstrap ──────────────────────────────────────────────── */
+  async function boot() {
+    // Show user info from localStorage immediately
+    try {
+      const s = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
+      if (s?.name || s?.email) {
+        const name = s.name || s.email || 'User';
+        document.getElementById('rxUserAvatar').textContent = name.charAt(0).toUpperCase();
+        document.getElementById('rxProfileName').textContent = name.split(' ')[0] || 'Account';
+      }
+    } catch {}
+
+    try {
+      const res  = await fetch('/api/firebase-config');
+      const data = await res.json();
+      if (data.configured) {
+        const app = initializeApp(data.firebaseConfig);
+        auth = getAuth(app);
+        db   = getFirestore(app);
+        onAuthStateChanged(auth, user => {
+          if (user) {
+            currentUser = user;
+            document.getElementById('rxUserAvatar').textContent = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
+            document.getElementById('rxProfileName').textContent = (user.displayName || user.email || 'Account').split(' ')[0];
+            loadChats(user.uid);
+          } else {
+            loadLocalChats();
+          }
+        });
+        return;
+      }
+    } catch {}
+    loadLocalChats();
+  }
+
+  /* ── Load chats ─────────────────────────────────────────────── */
+  async function loadChats(uid) {
+    if (db) {
+      try {
+        const q    = query(collection(db,'chats'), where('uid','==',uid), orderBy('updatedAt','desc'));
+        const snap = await getDocs(q);
+        allChats   = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderChatList(allChats);
+        return;
+      } catch {}
+    }
+    loadLocalChats();
+  }
+
+  function loadLocalChats() {
+    try { allChats = JSON.parse(localStorage.getItem('rotex_chats') || '[]'); }
+    catch { allChats = []; }
+    renderChatList(allChats);
+  }
+
+  /* ── Render chat list ───────────────────────────────────────── */
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function ago(ts) {
+    const ms = ts instanceof Timestamp ? ts.toMillis() : (ts?.seconds ? ts.seconds*1000 : Number(ts));
+    const d  = Date.now() - ms, m = Math.floor(d/60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m/60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h/24)}d ago`;
+  }
+
+  function renderChatList(chats) {
+    const list = document.getElementById('rxChatList');
+    if (!chats.length) {
+      list.innerHTML = `<div class="rx-chat-empty">No chats yet.<br>Hit <strong>New Chat</strong> to start.</div>`;
+      return;
+    }
+    list.innerHTML = `<div class="rx-chat-section">Recent</div>` +
+      chats.map(c => `
+        <div class="rx-chat-item${c.id === activeChatId ? ' active' : ''}" data-id="${esc(c.id||'')}">
+          <div class="rx-chat-icon">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </div>
+          <div class="rx-chat-info">
+            <div class="rx-chat-name">${esc(c.title||'New Chat')}</div>
+            ${c.updatedAt ? `<div class="rx-chat-time">${ago(c.updatedAt)}</div>` : ''}
+          </div>
+          <button class="rx-chat-del" data-id="${esc(c.id||'')}" title="Delete">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>`).join('');
+
+    list.querySelectorAll('.rx-chat-item').forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target.closest('.rx-chat-del')) return;
+        switchChat(el.dataset.id);
+      });
+    });
+    list.querySelectorAll('.rx-chat-del').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); deleteChat(btn.dataset.id); });
+    });
+  }
+
+  /* ── New chat ───────────────────────────────────────────────── */
+  async function newChat() {
+    const uid = currentUser?.uid || 'local';
+    const now = serverTimestamp ? serverTimestamp() : Date.now();
+    const data = { uid, title: 'New Chat', createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
+    let id = `local_${Date.now()}`;
+
+    if (db && currentUser) {
+      try { const ref = await addDoc(collection(db,'chats'), data); id = ref.id; } catch {}
+    }
+
+    const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]');
+    local.unshift({ ...data, id, updatedAt: Date.now() });
+    localStorage.setItem('rotex_chats', JSON.stringify(local.slice(0,50)));
+
+    activeChatId = id;
+    localStorage.setItem('rotex_active_chat', id);
+    allChats = local;
+    renderChatList(allChats);
+    clearChatView();
+  }
+
+  /* ── Switch chat ────────────────────────────────────────────── */
+  function switchChat(id) {
+    activeChatId = id;
+    localStorage.setItem('rotex_active_chat', id);
+    document.querySelectorAll('.rx-chat-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.id === id);
+    });
+    // Load messages for this chat
+    const chat = allChats.find(c => c.id === id);
+    loadChatMessages(chat);
+  }
+
+  function clearChatView() {
+    const msgs = document.getElementById('rxAiMessages');
+    msgs.innerHTML = `<div class="ai-welcome-msg" id="rxWelcomeMsg">
+      <p><strong>ROTEX AI</strong></p>
+      <p>What are you working on? I can write code, debug, explain, refactor, and plan.</p>
+    </div>`;
+  }
+
+  function loadChatMessages(chat) {
+    const msgs = document.getElementById('rxAiMessages');
+    if (!chat?.messages?.length) {
+      clearChatView();
+      return;
+    }
+    msgs.innerHTML = '';
+    chat.messages.forEach(m => {
+      const div = document.createElement('div');
+      div.className = `ai-msg ${m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant'}`;
+      div.textContent = m.content;
+      msgs.appendChild(div);
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  /* ── Delete chat ────────────────────────────────────────────── */
+  async function deleteChat(id) {
+    if (!id) return;
+    if (db && !id.startsWith('local_')) {
+      try { await deleteDoc(doc(db,'chats',id)); } catch {}
+    }
+    const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]');
+    const next  = local.filter(c => c.id !== id);
+    localStorage.setItem('rotex_chats', JSON.stringify(next));
+    allChats = next;
+    if (activeChatId === id) {
+      activeChatId = next[0]?.id || null;
+      if (activeChatId) localStorage.setItem('rotex_active_chat', activeChatId);
+      else localStorage.removeItem('rotex_active_chat');
+      clearChatView();
+    }
+    renderChatList(allChats);
+  }
+
+  /* ── Chat search ────────────────────────────────────────────── */
+  document.getElementById('rxSearchChats').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase().trim();
+    renderChatList(q ? allChats.filter(c => (c.title||'').toLowerCase().includes(q)) : allChats);
+  });
+
+  /* ── New chat button ────────────────────────────────────────── */
+  document.getElementById('rxNewChat').addEventListener('click', newChat);
+
+  /* ── AI Composer (visible chat) ─────────────────────────────── */
+  const rxComposer = document.getElementById('rxAiComposer');
+  const rxInput    = document.getElementById('rxAiInput');
+
+  // Auto-resize textarea
+  rxInput.addEventListener('input', () => {
+    rxInput.style.height = 'auto';
+    rxInput.style.height = Math.min(rxInput.scrollHeight, 140) + 'px';
+  });
+
+  // Shift+Enter = newline, Enter = send
+  rxInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      rxComposer.dispatchEvent(new Event('submit', { bubbles: true }));
+    }
+  });
+
+  rxComposer.addEventListener('submit', async e => {
+    e.preventDefault();
+    const text = rxInput.value.trim();
+    if (!text) return;
+    rxInput.value = '';
+    rxInput.style.height = 'auto';
+
+    // Show user message in the visible panel
+    const msgs = document.getElementById('rxAiMessages');
+    const welcome = document.getElementById('rxWelcomeMsg');
+    if (welcome) welcome.remove();
+
+    const userEl = document.createElement('div');
+    userEl.className = 'ai-msg ai-msg-user';
+    userEl.textContent = text;
+    msgs.appendChild(userEl);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Show typing indicator
+    const typing = document.createElement('div');
+    typing.className = 'ai-msg-typing';
+    typing.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    msgs.appendChild(typing);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Call API
+    const model  = document.getElementById('rxSelectedModel')?.textContent || 'Fast';
+    const mode   = document.getElementById('rxProjectMode')?.value || 'General';
+    const isAgent = document.getElementById('rxAgentToggle')?.classList.contains('on');
+    const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
+
+    try {
+      const res = await fetch(`${API_BASE}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          model: model.toLowerCase().replace(' ', '-'),
+          projectMode: mode,
+          agentMode: isAgent,
+          proPass: localStorage.getItem('rotex_pro_pass') || '',
+        }),
+      });
+
+      typing.remove();
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const errEl = document.createElement('div');
+        errEl.className = 'ai-msg ai-msg-assistant';
+        errEl.style.color = 'var(--rx-red)';
+        errEl.textContent = err.error || `Error ${res.status}`;
+        msgs.appendChild(errEl);
+        msgs.scrollTop = msgs.scrollHeight;
+        return;
+      }
+
+      const assistantEl = document.createElement('div');
+      assistantEl.className = 'ai-msg ai-msg-assistant ai-msg-streaming';
+      assistantEl.innerHTML = '<div class="ai-msg-stream"></div>';
+      msgs.appendChild(assistantEl);
+      const streamDiv = assistantEl.querySelector('.ai-msg-stream');
+
+      const reader = res.body.getReader();
+      const dec    = new TextDecoder();
+      let full = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = dec.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') break;
+          try {
+            const j = JSON.parse(raw);
+            const delta = j.choices?.[0]?.delta?.content || j.content || '';
+            full += delta;
+            streamDiv.textContent = full;
+            msgs.scrollTop = msgs.scrollHeight;
+          } catch {}
+        }
+      }
+      assistantEl.classList.remove('ai-msg-streaming');
+
+      // Save to chat
+      await saveChatMessage(activeChatId, text, full);
+
+    } catch (err) {
+      typing.remove();
+      const errEl = document.createElement('div');
+      errEl.className = 'ai-msg ai-msg-assistant';
+      errEl.style.color = 'var(--rx-red)';
+      errEl.textContent = 'Network error — please try again.';
+      msgs.appendChild(errEl);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  });
+
+  /* ── Save message to Firestore / localStorage ───────────────── */
+  async function saveChatMessage(chatId, userMsg, assistantMsg) {
+    if (!chatId) return;
+    const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]');
+    const idx   = local.findIndex(c => c.id === chatId);
+    if (idx >= 0) {
+      if (!local[idx].messages) local[idx].messages = [];
+      local[idx].messages.push({ role: 'user', content: userMsg });
+      local[idx].messages.push({ role: 'assistant', content: assistantMsg });
+      local[idx].preview = userMsg.slice(0, 80);
+      local[idx].updatedAt = Date.now();
+      local[idx].messageCount = (local[idx].messageCount || 0) + 2;
+      // Auto-title from first message
+      if (local[idx].title === 'New Chat' && userMsg) {
+        local[idx].title = userMsg.slice(0, 40) + (userMsg.length > 40 ? '…' : '');
+      }
+      localStorage.setItem('rotex_chats', JSON.stringify(local));
+      allChats = local;
+    }
+
+    if (db && chatId && !chatId.startsWith('local_')) {
+      try {
+        const chat = local[idx];
+        await updateDoc(doc(db,'chats',chatId), {
+          messages:     chat?.messages || [],
+          preview:      userMsg.slice(0,80),
+          updatedAt:    serverTimestamp(),
+          messageCount: (chat?.messageCount || 0),
+          ...(chat?.title !== 'New Chat' ? { title: chat.title } : {}),
+        });
+      } catch {}
+    }
+
+    // Refresh sidebar
+    renderChatList(allChats);
+  }
+
+  /* ── Model selector ─────────────────────────────────────────── */
+  const MODELS = [
+    { id: 'fast',      name: 'Fast',         role: '0.2x',  logo: 'F', pro: false },
+    { id: 'balanced',  name: 'Balanced',      role: '0.75x', logo: 'B', pro: false },
+    { id: 'smart',     name: 'Smart',         role: '1x',    logo: 'S', pro: false },
+    { id: 'pro-smart', name: 'Claude Haiku',  role: '6x',    logo: 'H', pro: true  },
+    { id: 'pro-sonnet',name: 'Claude Sonnet', role: '12x',   logo: 'C', pro: true  },
+  ];
+
+  let selectedModel = localStorage.getItem('rotex_model') || 'fast';
+
+  function buildMenu() {
+    const menu = document.getElementById('rxModelMenu');
+    menu.innerHTML = `<div class="ai-model-scroll">` +
+      MODELS.map(m => `
+        <div class="ai-model-option${m.id === selectedModel ? ' selected' : ''}${m.pro ? ' locked' : ''}" data-id="${m.id}">
+          <div class="ai-model-logo ai-model-logo-${m.id === 'fast' || m.id === 'balanced' || m.id === 'smart' ? 'groq' : 'claude'}">${m.logo}</div>
+          <div class="model-name">${m.name}</div>
+          <div class="model-desc">${m.role}</div>
+          ${m.pro ? '<span class="pro-badge">Pro</span>' : ''}
+        </div>`).join('') + `</div>`;
+
+    menu.querySelectorAll('.ai-model-option:not(.locked)').forEach(el => {
+      el.addEventListener('click', () => {
+        selectedModel = el.dataset.id;
+        localStorage.setItem('rotex_model', selectedModel);
+        const m = MODELS.find(x => x.id === selectedModel);
+        document.getElementById('rxSelectedModel').textContent = m.name;
+        document.getElementById('rxSelectedRole').textContent  = m.role;
+        menu.hidden = true;
+        buildMenu();
+      });
+    });
+  }
+
+  document.getElementById('rxModelButton').addEventListener('click', () => {
+    const menu = document.getElementById('rxModelMenu');
+    menu.hidden = !menu.hidden;
+    if (!menu.hidden) buildMenu();
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#rxModelButton') && !e.target.closest('#rxModelMenu')) {
+      document.getElementById('rxModelMenu').hidden = true;
+    }
+  });
+
+  // Init model display
+  const initModel = MODELS.find(m => m.id === selectedModel) || MODELS[0];
+  document.getElementById('rxSelectedModel').textContent = initModel.name;
+  document.getElementById('rxSelectedRole').textContent  = initModel.role;
+
+  /* ── Agent toggles ──────────────────────────────────────────── */
+  document.getElementById('rxAgentToggle').addEventListener('click', function() {
+    this.classList.toggle('on');
+  });
+  document.getElementById('rxSuperAgent').addEventListener('click', function() {
+    this.classList.toggle('on');
+  });
+  document.getElementById('rxStopBtn').addEventListener('click', () => {
+    // No active stream to stop in this simplified version
+  });
+
+  /* ── New chat from header shortcut ──────────────────────────── */
+  document.getElementById('rxSettingsBtn').addEventListener('click', () => {
+    const modal = document.getElementById('projectSetupModal');
+    if (modal) modal.hidden = false;
+  });
+
+  /* ── Profile / account ──────────────────────────────────────── */
+  document.getElementById('rxUserAvatar').addEventListener('click', () => {
+    if (window.rotexDesktop) window.rotexDesktop.navigate('projects');
+    else window.location.href = '/projects.html';
+  });
+
+  /* ── Start ──────────────────────────────────────────────────── */
+  boot().then(() => {
+    // Load active chat if one is set
+    if (activeChatId && allChats.length) {
+      const chat = allChats.find(c => c.id === activeChatId);
+      if (chat) loadChatMessages(chat);
+    }
+  });
+</script>
+
+<!-- editor.js (handles model menu build, pro pass, etc. via hidden stubs) -->
+<script src="./editor.js"></script>
+</body>
 </html>

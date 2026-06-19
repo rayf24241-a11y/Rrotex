@@ -1569,6 +1569,16 @@
     });
   }
 
+  // ─── Auto-open project selected from projects screen ──────────────
+  if (window.rotexDesktop) {
+    const pending = localStorage.getItem('rotex_pending_project');
+    if (pending) {
+      localStorage.removeItem('rotex_pending_project');
+      state.currentDirPath = pending;
+      buildTreeDesktop(pending, '');
+    }
+  }
+
   // ─── Button Wiring ─────────────────────────────────────────────────
   ['#openFolderBtn', '#treeOpenBtn', '#welcomeOpenFolder'].forEach((sel) => {
     $(sel)?.addEventListener('click', openFolder);

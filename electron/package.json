@@ -27,9 +27,18 @@
     "files": [
       "main.js",
       "preload.js",
+      "../login.html",
+      "../projects.html",
       "../editor.html",
       "../editor.css",
       "../editor.js"
+    ],
+    "protocols": [
+      {
+        "name": "ROTEX",
+        "schemes": ["rotex"],
+        "role": "Viewer"
+      }
     ],
     "extraResources": [],
     "win": {

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROTEX — My Chats</title>
+  <style>
+    :root {
+      --bg:        #0D0F17;
+      --surface:   #141720;
+      --panel:     #1A1F2E;
+      --border:    #252D40;
+      --text:      #E8EDF8;
+      --muted:     #8A93AA;
+      --quiet:     #525C78;
+      --yellow:    #FFD60A;
+      --yellow-d:  rgba(255,214,10,0.13);
+      --yellow-g:  rgba(255,214,10,0.25);
+      --blue:      #2563EB;
+      --blue-d:    rgba(37,99,235,0.14);
+      --green:     #22C55E;
+      --green-d:   rgba(34,197,94,0.14);
+      --red:       #FF4757;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none;
+    }
+
+    /* App shell */
+    .app {
+      display: grid;
+      grid-template-rows: 40px 1fr;
+      grid-template-columns: 272px 1fr;
+      height: 100vh;
+    }
+
+    /* ── Titlebar ───────────────────────────────────────────────────── */
+    .titlebar {
+      grid-column: 1 / -1;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 16px;
+      -webkit-app-region: drag; gap: 12px;
+    }
+    .tb-brand {
+      display: flex; align-items: center; gap: 9px;
+      -webkit-app-region: no-drag;
+    }
+    .tb-mark {
+      width: 24px; height: 24px; background: var(--yellow);
+      border-radius: 6px; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 900; color: #0D0F17; letter-spacing: -0.5px;
+    }
+    .tb-name { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: 0.06em; }
+    .tb-spacer { flex: 1; }
+    .tb-user {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 12px; color: var(--muted);
+      -webkit-app-region: no-drag;
+    }
+    .tb-avatar {
+      width: 24px; height: 24px; background: var(--blue);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .tb-email { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tb-btn {
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      font-size: 11px; cursor: pointer; padding: 4px 10px; border-radius: 6px;
+      font: inherit; transition: all 0.12s; -webkit-app-region: no-drag;
+    }
+    .tb-btn:hover { color: var(--text); border-color: #364460; background: var(--panel); }
+
+    /* ── Sidebar ────────────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .sb-top {
+      padding: 18px 16px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sb-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--quiet); margin-bottom: 14px;
+    }
+    .btn-new {
+      width: 100%; padding: 10px 14px;
+      background: var(--yellow); color: #0D0F17;
+      border: none; border-radius: 10px; font: 700 13px/1 inherit; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      transition: all 0.14s; box-shadow: 0 2px 14px var(--yellow-d);
+    }
+    .btn-new:hover { background: #FFE033; box-shadow: 0 2px 20px var(--yellow-g); }
+    .btn-new:active { transform: scale(0.98); }
+
+    .sb-scroll { flex: 1; overflow-y: auto; padding: 12px 0; }
+    .sb-scroll::-webkit-scrollbar { width: 4px; }
+    .sb-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .sb-section-head {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--quiet); padding: 8px 16px 5px;
+    }
+
+    /* Model rows in sidebar */
+    .model-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px; transition: background 0.1s;
+    }
+    .model-row:hover { background: var(--panel); }
+    .model-dot {
+      width: 30px; height: 30px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 800; flex-shrink: 0;
+    }
+    .d-free    { background: var(--green-d); color: var(--green); }
+    .d-limited { background: var(--blue-d);  color: var(--blue);  }
+    .d-pro     { background: var(--yellow-d); color: var(--yellow); }
+    .model-info { flex: 1; min-width: 0; }
+    .model-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .model-sub  { font-size: 11px; color: var(--quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .model-badge {
+      font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+    }
+    .b-free    { background: var(--green-d);  color: var(--green);  border: 1px solid rgba(34,197,94,0.25); }
+    .b-limited { background: var(--blue-d);   color: var(--blue);   border: 1px solid rgba(37,99,235,0.25); }
+    .b-pro     { background: var(--yellow-d); color: var(--yellow); border: 1px solid rgba(255,214,10,0.3); }
+
+    /* ── Main ───────────────────────────────────────────────────────── */
+    .main {
+      background: var(--bg); display: flex; flex-direction: column;
+      padding: 36px 44px 28px; overflow-y: auto; gap: 36px;
+    }
+    .main::-webkit-scrollbar { width: 6px; }
+    .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+    .main-header { display: flex; align-items: flex-start; justify-content: space-between; }
+    .main-title  { font-size: 24px; font-weight: 700; color: var(--text); }
+    .main-sub    { font-size: 14px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--quiet); margin-bottom: 16px;
+    }
+
+    /* Chat cards grid */
+    .chats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+    }
+
+    .chat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px; cursor: pointer;
+      transition: all 0.15s; display: flex; flex-direction: column; gap: 10px;
+      position: relative; overflow: hidden;
+    }
+    .chat-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, var(--yellow-d), transparent 50%);
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .chat-card:hover { border-color: rgba(255,214,10,0.3); transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.35); }
+    .chat-card:hover::before { opacity: 1; }
+
+    .cc-icon {
+      width: 34px; height: 34px; background: var(--yellow-d);
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      color: var(--yellow); position: relative; z-index: 1; flex-shrink: 0;
+    }
+    .cc-name {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      position: relative; z-index: 1;
+    }
+    .cc-preview {
+      font-size: 12px; color: var(--quiet); line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; position: relative; z-index: 1;
+    }
+    .cc-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: auto; position: relative; z-index: 1;
+    }
+    .cc-time { font-size: 11px; color: var(--quiet); }
+    .cc-model {
+      font-size: 10px; color: var(--blue); background: var(--blue-d);
+      padding: 2px 8px; border-radius: 20px; border: 1px solid rgba(37,99,235,0.2);
+    }
+    .cc-del {
+      position: absolute; top: 10px; right: 10px;
+      width: 24px; height: 24px; border-radius: 7px;
+      background: none; border: none; color: var(--quiet); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: all 0.12s; z-index: 2;
+    }
+    .chat-card:hover .cc-del { opacity: 1; }
+    .cc-del:hover { background: rgba(255,71,87,0.15); color: var(--red); }
+
+    /* Empty state */
+    .empty {
+      grid-column: 1 / -1; padding: 60px 24px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px;
+      border: 1.5px dashed var(--border); border-radius: 14px;
+    }
+    .empty-icon { color: var(--quiet); opacity: 0.5; }
+    .empty-title { font-size: 15px; font-weight: 600; color: var(--muted); }
+    .empty-sub   { font-size: 13px; color: var(--quiet); }
+    .empty-btn {
+      margin-top: 4px; padding: 10px 22px;
+      background: var(--yellow); color: #0D0F17;
+      border: none; border-radius: 10px; font: 700 13px/1 inherit; cursor: pointer;
+      transition: all 0.14s; box-shadow: 0 2px 14px var(--yellow-d);
+    }
+    .empty-btn:hover { background: #FFE033; }
+
+    /* Loading */
+    .loading {
+      grid-column: 1 / -1; display: flex; justify-content: center; gap: 6px; padding: 40px;
+    }
+    .loading span {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+      animation: ld 1.2s ease infinite;
+    }
+    .loading span:nth-child(2) { animation-delay: 0.15s; }
+    .loading span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes ld {
+      0%,100% { opacity: 0.25; transform: translateY(0); }
+      40%      { opacity: 1;    transform: translateY(-6px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Titlebar -->
+    <header class="titlebar">
+      <div class="tb-brand">
+        <div class="tb-mark">RX</div>
+        <span class="tb-name">ROTEX</span>
+      </div>
+      <div class="tb-spacer"></div>
+      <div class="tb-user">
+        <div class="tb-avatar" id="tbAvatar">?</div>
+        <span class="tb-email" id="tbEmail">—</span>
+        <button class="tb-btn" id="signOutBtn">Sign out</button>
+      </div>
+    </header>
+
+    <!-- Sidebar: AI Models -->
+    <aside class="sidebar">
+      <div class="sb-top">
+        <div class="sb-label">AI Models</div>
+        <button class="btn-new" id="newChatBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New Chat
+        </button>
+      </div>
+      <div class="sb-scroll">
+        <div class="sb-section-head">Available</div>
+
+        <div class="model-row">
+          <div class="model-dot d-free">F</div>
+          <div class="model-info">
+            <div class="model-name">Fast</div>
+            <div class="model-sub">Groq · Llama 3.1 8B</div>
+          </div>
+          <span class="model-badge b-free">Free</span>
+        </div>
+
+        <div class="model-row">
+          <div class="model-dot d-limited">B</div>
+          <div class="model-info">
+            <div class="model-name">Balanced</div>
+            <div class="model-sub">Groq · Qwen3 32B</div>
+          </div>
+          <span class="model-badge b-limited">Free*</span>
+        </div>
+
+        <div class="model-row">
+          <div class="model-dot d-limited">S</div>
+          <div class="model-info">
+            <div class="model-name">Smart</div>
+            <div class="model-sub">Groq · Llama 3.3 70B</div>
+          </div>
+          <span class="model-badge b-limited">Free*</span>
+        </div>
+
+        <div class="model-row">
+          <div class="model-dot d-pro">H</div>
+          <div class="model-info">
+            <div class="model-name">Claude Haiku</div>
+            <div class="model-sub">Anthropic · Haiku 4.5</div>
+          </div>
+          <span class="model-badge b-pro">Pro</span>
+        </div>
+
+        <div class="model-row">
+          <div class="model-dot d-pro">C</div>
+          <div class="model-info">
+            <div class="model-name">Claude Sonnet</div>
+            <div class="model-sub">Anthropic · Sonnet 4.6</div>
+          </div>
+          <span class="model-badge b-pro">Pro</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main: Chats -->
+    <main class="main">
+      <div class="main-header">
+        <div>
+          <div class="main-title" id="welcomeTitle">My Chats</div>
+          <div class="main-sub">Start a conversation or pick up where you left off</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Recent</div>
+        <div class="chats-grid" id="chatsGrid">
+          <div class="loading"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { initializeApp }  from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+    import {
+      getFirestore, collection, query, where, orderBy,
+      getDocs, addDoc, deleteDoc, doc, serverTimestamp, Timestamp
+    } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
+    let auth = null, db = null, currentUser = null;
+
+    /* ── Bootstrap ──────────────────────────────────────────────────── */
+    async function boot() {
+      try {
+        const res  = await fetch('/api/firebase-config');
+        const data = await res.json();
+        if (!data.configured) { fallbackBoot(); return; }
+
+        const app = initializeApp(data.firebaseConfig);
+        auth = getAuth(app);
+        db   = getFirestore(app);
+
+        onAuthStateChanged(auth, user => {
+          if (user) { currentUser = user; setup(user); }
+          else go('login');
+        });
+      } catch { fallbackBoot(); }
+    }
+
+    function fallbackBoot() {
+      try {
+        const s = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
+        if (s?.uid && Number(s.exp) > Date.now()) {
+          currentUser = { uid: s.uid, email: s.email, displayName: s.name };
+          setup(currentUser);
+        } else go('login');
+      } catch { go('login'); }
+    }
+
+    function go(page) {
+      if (window.rotexDesktop) window.rotexDesktop.navigate(page);
+      else window.location.href = `/${page}.html`;
+    }
+
+    /* ── Setup user ─────────────────────────────────────────────────── */
+    function setup(user) {
+      const name    = user.displayName || user.email || 'User';
+      const initial = name.charAt(0).toUpperCase();
+      document.getElementById('tbAvatar').textContent = initial;
+      document.getElementById('tbEmail').textContent  = user.email || name;
+      document.getElementById('welcomeTitle').textContent =
+        `Welcome back, ${user.displayName ? user.displayName.split(' ')[0] : 'there'}`;
+      loadChats(user.uid);
+    }
+
+    /* ── Load chats ─────────────────────────────────────────────────── */
+    async function loadChats(uid) {
+      if (db) {
+        try {
+          const q    = query(collection(db,'chats'), where('uid','==',uid), orderBy('updatedAt','desc'));
+          const snap = await getDocs(q);
+          render(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          return;
+        } catch {}
+      }
+      // fallback: localStorage
+      try { render(JSON.parse(localStorage.getItem('rotex_chats') || '[]')); }
+      catch { render([]); }
+    }
+
+    /* ── Render ─────────────────────────────────────────────────────── */
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function ago(ts) {
+      const ms   = ts instanceof Timestamp ? ts.toMillis() : (ts?.seconds ? ts.seconds*1000 : Number(ts));
+      const diff = Date.now() - ms, m = Math.floor(diff/60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m/60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h/24)}d ago`;
+    }
+
+    function render(chats) {
+      const g = document.getElementById('chatsGrid');
+      if (!chats.length) {
+        g.innerHTML = `
+          <div class="empty">
+            <svg class="empty-icon" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+            <div class="empty-title">No chats yet</div>
+            <div class="empty-sub">Hit "New Chat" in the sidebar to start</div>
+            <button class="empty-btn" onclick="document.getElementById('newChatBtn').click()">Start your first chat</button>
+          </div>`;
+        return;
+      }
+      g.innerHTML = chats.map(c => `
+        <div class="chat-card" data-id="${esc(c.id||'')}">
+          <div class="cc-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </div>
+          <div class="cc-name">${esc(c.title||'New Chat')}</div>
+          ${c.preview ? `<div class="cc-preview">${esc(c.preview)}</div>` : ''}
+          <div class="cc-footer">
+            <span class="cc-time">${c.updatedAt ? ago(c.updatedAt) : ''}</span>
+            ${c.model ? `<span class="cc-model">${esc(c.model)}</span>` : ''}
+          </div>
+          <button class="cc-del" data-id="${esc(c.id||'')}" title="Delete">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>`).join('');
+
+      g.querySelectorAll('.chat-card').forEach(el => {
+        el.addEventListener('click', e => {
+          if (e.target.closest('.cc-del')) return;
+          openChat(el.dataset.id);
+        });
+      });
+      g.querySelectorAll('.cc-del').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); deleteChat(btn.dataset.id); });
+      });
+    }
+
+    /* ── New chat ───────────────────────────────────────────────────── */
+    async function newChat() {
+      if (!currentUser) return go('login');
+      const uid = currentUser.uid;
+      const now = serverTimestamp ? serverTimestamp() : Date.now();
+
+      const data = { uid, title: 'New Chat', createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
+      let id = `local_${Date.now()}`;
+
+      if (db) {
+        try { const ref = await addDoc(collection(db,'chats'), data); id = ref.id; } catch {}
+      }
+
+      const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]');
+      local.unshift({ ...data, id, updatedAt: Date.now() });
+      localStorage.setItem('rotex_chats', JSON.stringify(local.slice(0,50)));
+      localStorage.setItem('rotex_active_chat', id);
+      go('editor');
+    }
+
+    function openChat(id) {
+      localStorage.setItem('rotex_active_chat', id);
+      go('editor');
+    }
+
+    async function deleteChat(id) {
+      if (!id) return;
+      if (db && !id.startsWith('local_')) {
+        try { await deleteDoc(doc(db,'chats',id)); } catch {}
+      }
+      const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]');
+      localStorage.setItem('rotex_chats', JSON.stringify(local.filter(c => c.id !== id)));
+      loadChats(currentUser?.uid || '');
+    }
+
+    /* ── Events ─────────────────────────────────────────────────────── */
+    document.getElementById('newChatBtn').addEventListener('click', newChat);
+
+    document.getElementById('signOutBtn').addEventListener('click', async () => {
+      if (auth) { try { await signOut(auth); } catch {} }
+      localStorage.removeItem('rotex_desktop_auth');
+      localStorage.removeItem('rotex_pro_pass');
+      go('login');
+    });
+
+    boot();
+  </script>
+</body>
+</html>
