@@ -223,6 +223,51 @@ input {
   margin: 12px 0 14px;
 }
 
+.token-balance {
+  background: #0f1411;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 2rem;
+  font-weight: 950;
+  margin: 14px 0;
+  padding: 16px;
+}
+
+.amount-label {
+  color: var(--muted);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 850;
+  margin-top: 16px;
+  text-transform: uppercase;
+}
+
+.credit-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 120px 1fr;
+}
+
+.credit-row input {
+  margin: 0;
+}
+
+.credit-row strong {
+  background: rgba(201, 242, 93, 0.12);
+  border: 1px solid rgba(201, 242, 93, 0.24);
+  border-radius: 8px;
+  min-height: 46px;
+  padding: 12px 14px;
+}
+
+.section-line {
+  background: var(--line);
+  height: 1px;
+  margin: 28px 0;
+}
+
 .price span {
   color: var(--muted);
   font-size: 1rem;
@@ -257,5 +302,9 @@ li {
   .account-hero {
     grid-template-columns: 1fr;
     margin-top: 7vh;
+  }
+
+  .credit-row {
+    grid-template-columns: 1fr;
   }
 }

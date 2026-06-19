@@ -1,17 +1,15 @@
 # ROTEX website
 
-Standalone website for the ROTEX AI family.
+Dashboard website for ROTEX Desktop.
 
 Current web features:
 
-- Sidebar chat list
-- Local saved chats
-- Firebase Google login and Firestore chat sync when configured
-- ROTEX model drop-up beside the chat bar
-- Single-screen chatbot layout
-- Vercel ROTEX backend at `/api/chat`
-- Normal user credits: `$0.300` daily, `$0.900` weekly, `$1.500` monthly
-- Pro user TexTokens: `1M` daily, `10M` monthly
+- Homepage for the ROTEX desktop app download
+- Firebase login before Pro or TexToken purchases
+- Account dashboard for plan status, Pro checkout, and TexToken credits
+- Extra TexTokens through Stripe Checkout at `$1 = 1M TexTokens`
+- Pro user TexTokens: `1M` daily soft limit, `10M` monthly
+- Desktop app/editor served from `editor.html`
 
 Model catalog:
 
@@ -109,7 +107,11 @@ STRIPE_SECRET_KEY
 STRIPE_PRICE_ID
 ```
 
-The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id and Pro benefits. A Stripe webhook is still needed before purchases can automatically add TexTokens to Firestore.
+The Pro checkout endpoint is `/api/create-checkout-session` and uses subscription mode.
+
+The extra TexToken checkout endpoint is `/api/create-credit-checkout-session` and uses one-time payment mode. The website lets a signed-in user choose any whole dollar amount from `$1` to `$500`; each `$1` buys `1M` TexTokens. After Stripe redirects back, `/api/verify-credit-checkout-session` verifies the paid session before the dashboard adds the credits.
+
+For production-grade cloud balances, connect a Stripe webhook to Firebase Admin and store credited session ids server-side so the same Stripe session cannot be applied twice from another device.
 
 ## Local preview
 

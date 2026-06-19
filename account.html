@@ -22,8 +22,8 @@
       <section class="account-hero">
         <div class="account-copy">
           <p class="eyebrow">ROTEX account</p>
-          <h1>Log in before Pro checkout.</h1>
-          <p class="lede">Your Pro plan, TexTokens, billing, and desktop app access stay tied to one Firebase account.</p>
+          <h1>Dashboard, Pro, and TexTokens.</h1>
+          <p class="lede">Log in to buy Pro or add TexTokens. Credit packs are simple: $1 = 1M TexTokens, $5 = 5M TexTokens.</p>
 
           <div class="status-card" id="statusCard">
             <span id="authState">Checking Firebase...</span>
@@ -50,6 +50,19 @@
           </section>
 
           <section class="auth-card" id="signedInCard" hidden>
+            <p class="eyebrow">Dashboard</p>
+            <h2>TexTokens</h2>
+            <div class="token-balance" id="tokenBalance">0 TexTokens</div>
+            <p class="panel-copy">Choose any whole dollar amount. ROTEX adds 1M TexTokens per $1 after Stripe verifies the payment.</p>
+            <label class="amount-label" for="creditAmount">Credit amount</label>
+            <div class="credit-row">
+              <input id="creditAmount" type="number" min="1" max="500" step="1" value="5" />
+              <strong id="creditPreview">5M TexTokens</strong>
+            </div>
+            <button class="primary" id="creditCheckoutButton" type="button">Buy TexTokens</button>
+            <p class="message" id="creditMessage"></p>
+
+            <div class="section-line"></div>
             <p class="eyebrow">Pro checkout</p>
             <h2>ROTEX Pro</h2>
             <div class="price">$20 <span>/ month</span></div>

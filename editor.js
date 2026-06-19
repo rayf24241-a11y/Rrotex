@@ -1,4 +1,4 @@
-/* ROTEX Editor - AI-Powered Code Editor */
+/* ROTEX Desktop - AI agent for game dev */
 (function () {
   'use strict';
 

@@ -1,5 +1,13 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import {
+  doc,
+  getDoc,
+  getFirestore,
+  increment,
+  serverTimestamp,
+  setDoc,
+} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import {
   createUserWithEmailAndPassword,
   getAuth,
   getRedirectResult,
@@ -21,12 +29,19 @@ const emailInput = document.querySelector('#emailInput');
 const passwordInput = document.querySelector('#passwordInput');
 const authMessage = document.querySelector('#authMessage');
 const checkoutMessage = document.querySelector('#checkoutMessage');
+const creditAmount = document.querySelector('#creditAmount');
+const creditPreview = document.querySelector('#creditPreview');
+const creditCheckoutButton = document.querySelector('#creditCheckoutButton');
+const creditMessage = document.querySelector('#creditMessage');
+const tokenBalance = document.querySelector('#tokenBalance');
 const authState = document.querySelector('#authState');
 const accountName = document.querySelector('#accountName');
 const accountEmail = document.querySelector('#accountEmail');
 
 let auth = null;
+let db = null;
 let currentUser = null;
+let creditBalance = 0;
 
 init();
 
@@ -42,6 +57,7 @@ async function init() {
 
     const app = initializeApp(config.firebaseConfig);
     auth = getAuth(app);
+    db = getFirestore(app);
     await getRedirectResult(auth).catch((error) => {
       setAuthMessage(firebaseMessage(error, 'Google login could not finish.'), true);
     });
@@ -49,7 +65,14 @@ async function init() {
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
       renderUser(user);
-      if (user) await handleCheckoutReturn(user);
+      if (user) {
+        await loadCreditBalance(user);
+        await handleCheckoutReturn(user);
+        await handleCreditCheckoutReturn(user);
+      } else {
+        creditBalance = readLocalCredits();
+        renderCredits();
+      }
     });
   } catch (error) {
     setAuthMessage('Could not start Firebase login. Refresh and try again.', true);
@@ -111,6 +134,39 @@ checkoutButton.addEventListener('click', async () => {
   }
 });
 
+creditAmount.addEventListener('input', renderCreditPreview);
+
+creditCheckoutButton.addEventListener('click', async () => {
+  if (!currentUser) {
+    setCreditMessage('Log in or sign up before buying TexTokens.', true);
+    return;
+  }
+  const dollars = normalizedCreditDollars();
+  if (!dollars) {
+    setCreditMessage('Choose a whole dollar amount from $1 to $500.', true);
+    return;
+  }
+  creditCheckoutButton.disabled = true;
+  setCreditMessage('Opening Stripe...');
+  try {
+    const response = await fetch('/api/create-credit-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', dollars }),
+    });
+    const data = await response.json();
+    if (data.url) {
+      window.location.href = data.url;
+      return;
+    }
+    setCreditMessage(data.message || 'Stripe credit checkout could not start.', true);
+  } catch {
+    setCreditMessage('Could not reach Stripe checkout. Try again.', true);
+  } finally {
+    creditCheckoutButton.disabled = false;
+  }
+});
+
 async function emailAuth(mode) {
   if (!auth) return setAuthMessage('Firebase is still loading. Try again in a second.', true);
   const email = emailInput.value.trim();
@@ -156,6 +212,107 @@ async function handleCheckoutReturn(user) {
   }
 }
 
+async function handleCreditCheckoutReturn(user) {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session_id');
+  if (params.get('credits') !== 'success' || !sessionId) return;
+
+  const appliedKey = `rotex_credit_session_${sessionId}`;
+  if (localStorage.getItem(appliedKey)) {
+    setCreditMessage('Those TexTokens were already added.');
+    history.replaceState('', document.title, '/account#credits');
+    return;
+  }
+
+  setCreditMessage('Verifying TexToken purchase...');
+  try {
+    const response = await fetch('/api/verify-credit-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, uid: user.uid }),
+    });
+    const data = await response.json();
+    if (!data.verified) {
+      setCreditMessage(data.message || 'Credit checkout could not be verified yet.', true);
+      return;
+    }
+    await addCredits(user, data.texTokens, sessionId);
+    localStorage.setItem(appliedKey, '1');
+    setCreditMessage(`Added ${formatTokens(data.texTokens)} TexTokens.`);
+    history.replaceState('', document.title, '/account#credits');
+  } catch {
+    setCreditMessage('Could not verify credit checkout. Refresh and try again.', true);
+  }
+}
+
+async function loadCreditBalance(user) {
+  creditBalance = readLocalCredits();
+  renderCredits();
+  if (!db || !user) return;
+  try {
+    const ref = doc(db, 'users', user.uid, 'billing', 'textokens');
+    const snap = await getDoc(ref);
+    const cloudCredits = Number(snap.data()?.balance || 0);
+    if (Number.isFinite(cloudCredits)) {
+      creditBalance = Math.max(creditBalance, cloudCredits);
+      writeLocalCredits(creditBalance);
+      renderCredits();
+    }
+  } catch {
+    setCreditMessage('Signed in. Cloud TexToken sync is not available yet, so this device will remember purchases.', true);
+  }
+}
+
+async function addCredits(user, amount, sessionId) {
+  creditBalance += amount;
+  writeLocalCredits(creditBalance);
+  renderCredits();
+  if (!db || !user) return;
+  try {
+    const ref = doc(db, 'users', user.uid, 'billing', 'textokens');
+    await setDoc(ref, {
+      balance: increment(amount),
+      updatedAt: serverTimestamp(),
+      lastStripeSession: sessionId,
+    }, { merge: true });
+    await loadCreditBalance(user);
+  } catch {
+    setCreditMessage('TexTokens were added on this device. Cloud sync needs Firestore rules/admin setup.', true);
+  }
+}
+
+function normalizedCreditDollars() {
+  const dollars = Math.floor(Number(creditAmount.value));
+  if (!Number.isFinite(dollars) || dollars < 1 || dollars > 500) return 0;
+  return dollars;
+}
+
+function renderCreditPreview() {
+  const dollars = normalizedCreditDollars();
+  creditPreview.textContent = dollars ? `${dollars}M TexTokens` : 'Choose $1-$500';
+}
+
+function renderCredits() {
+  tokenBalance.textContent = `${formatTokens(creditBalance)} TexTokens`;
+}
+
+function readLocalCredits() {
+  return Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
+}
+
+function writeLocalCredits(amount) {
+  localStorage.setItem('rotex_textokens_balance', String(Math.max(0, Math.floor(amount))));
+}
+
+function formatTokens(value) {
+  const amount = Math.max(0, Math.floor(Number(value) || 0));
+  if (amount >= 1000000) {
+    const millions = amount / 1000000;
+    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M`;
+  }
+  return amount.toLocaleString();
+}
+
 function setAuthMessage(text, error = false) {
   authMessage.textContent = text;
   authMessage.classList.toggle('error', error);
@@ -164,6 +321,11 @@ function setAuthMessage(text, error = false) {
 function setCheckoutMessage(text, error = false) {
   checkoutMessage.textContent = text;
   checkoutMessage.classList.toggle('error', error);
+}
+
+function setCreditMessage(text, error = false) {
+  creditMessage.textContent = text;
+  creditMessage.classList.toggle('error', error);
 }
 
 function firebaseMessage(error, fallback) {
