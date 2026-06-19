@@ -13,11 +13,9 @@
       --text:      #E8EDF8;
       --muted:     #8A93AA;
       --quiet:     #525C78;
-      --yellow:    #FFD60A;
-      --yellow-d:  rgba(255,214,10,0.14);
-      --yellow-g:  rgba(255,214,10,0.28);
-      --blue:      #2563EB;
-      --blue-d:    rgba(37,99,235,0.14);
+      --accent:    #4B9DFF;
+      --accent-d:  rgba(75,157,255,0.15);
+      --accent-g:  rgba(75,157,255,0.30);
       --red:       #FF4757;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,8 +34,8 @@
     .bg-glow {
       position: fixed; inset: 0; pointer-events: none;
       background:
-        radial-gradient(ellipse 700px 500px at 15% -100px, rgba(255,214,10,0.07) 0%, transparent 60%),
-        radial-gradient(ellipse 600px 500px at 85% 110%,  rgba(37,99,235,0.09)  0%, transparent 60%);
+        radial-gradient(ellipse 700px 500px at 15% -100px, rgba(75,157,255,0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 600px 500px at 85% 110%,  rgba(75,157,255,0.08)  0%, transparent 60%);
     }
     .bg-grid {
       position: fixed; inset: 0; pointer-events: none;
@@ -66,11 +64,10 @@
     }
     .logo-mark {
       width: 54px; height: 54px;
-      background: var(--yellow);
+      background: #fff;
       border-radius: 15px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 900; color: #0D0F17; letter-spacing: -1px;
-      box-shadow: 0 0 44px var(--yellow-g), 0 8px 24px rgba(0,0,0,0.45);
+      box-shadow: 0 0 44px var(--accent-g), 0 8px 24px rgba(0,0,0,0.45);
     }
     .logo-name {
       font-size: 28px; font-weight: 800; letter-spacing: 0.07em; color: var(--text);
@@ -125,21 +122,21 @@
       font: inherit; font-size: 14px; padding: 11px 14px;
       outline: none; transition: border-color 0.14s, box-shadow 0.14s;
     }
-    .field input:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-d); }
+    .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-d); }
     .field input::placeholder { color: var(--quiet); }
 
     /* Primary button */
     .btn-primary {
       width: 100%; margin-top: 18px;
       padding: 13px;
-      background: var(--yellow); color: #0D0F17;
+      background: var(--accent); color: #fff;
       border: none; border-radius: 11px;
       font: 700 14px/1 inherit; cursor: pointer;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       transition: all 0.14s;
-      box-shadow: 0 4px 18px var(--yellow-d);
+      box-shadow: 0 4px 18px var(--accent-d);
     }
-    .btn-primary:hover { background: #FFE033; box-shadow: 0 4px 28px var(--yellow-g); }
+    .btn-primary:hover { background: #6AACFF; box-shadow: 0 4px 28px var(--accent-g); }
     .btn-primary:active { transform: scale(0.98); }
     .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
@@ -177,8 +174,8 @@
     /* Spinner */
     .spin {
       width: 17px; height: 17px;
-      border: 2px solid rgba(13,15,23,0.25);
-      border-top-color: #0D0F17;
+      border: 2px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
       border-radius: 50%;
       animation: spin 0.65s linear infinite;
     }
@@ -194,7 +191,11 @@
 
   <div class="wrap">
     <div class="logo">
-      <div class="logo-mark">RX</div>
+      <div class="logo-mark">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M7 17 L13 23 L25 10" stroke="#4B9DFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <div>
         <div class="logo-name">ROTEX</div>
         <div class="logo-tag">AI Assistant</div>
