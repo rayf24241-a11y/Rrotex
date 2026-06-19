@@ -581,7 +581,6 @@ function openAuthPage(reason = 'account', forceProfile = false) {
   appShell.hidden = true;
   accountPage.hidden = true;
   authPage.hidden = false;
-  window.location.hash = 'authPage';
   if (currentUser && (forceProfile || needsProfile())) {
     showAuthStep('profile');
     return;
@@ -664,20 +663,10 @@ async function signInWithGoogleFromAuth() {
     return;
   }
   try {
-    authStatus.textContent = 'Opening Google login...';
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    authStatus.textContent = 'Redirecting to Google...';
+    await signInWithRedirect(auth, new GoogleAuthProvider());
   } catch (error) {
-    const code = error?.code || '';
-    if (code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user') {
-      try {
-        authStatus.textContent = 'Redirecting to Google...';
-        await signInWithRedirect(auth, new GoogleAuthProvider());
-      } catch (redirectError) {
-        authStatus.textContent = firebaseAuthMessage(redirectError, 'Google login could not start.');
-      }
-    } else {
-      authStatus.textContent = firebaseAuthMessage(error, 'Google login could not start.');
-    }
+    authStatus.textContent = firebaseAuthMessage(error, 'Google login could not start.');
   }
 }
 
