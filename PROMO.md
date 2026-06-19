@@ -4,12 +4,12 @@
 ROTEX is an AI workspace for chat, coding, files, and phone-to-PC computer mode. It can read images, text files, folders, and zips, create downloadable files, and use ROTEX model rooms where two bots collaborate into one answer.
 
 ## Social Post
-I’m building ROTEX: an AI chat workspace with models, downloadable files, image/zip reading, teamup rooms, and a phone app that can connect to a Windows PC backend for real computer-mode work.
+I’m building ROTEX: a desktop AI agent for game dev projects, file edits, safe commands, model selection, and connected project work.
 
 Try it: https://www.rrotex.com/
 
 ## Developer Post
-ROTEX runs AI chat on the web and connects to a local Windows backend for PC actions. The phone app sends chat requests over WiFi to a backend with tool access, while API keys stay on the PC. The website supports files, folders, zips, image reading, model selection, and Plus teamup rooms.
+ROTEX uses the website for accounts, TexTokens, Pro, billing, and desktop downloads. The desktop app connects to local projects and gives the AI controlled access to files, logs, and approved commands.
 
 Website: https://www.rrotex.com/
 

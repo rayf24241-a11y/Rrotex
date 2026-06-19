@@ -18,7 +18,6 @@
     currentDirPath: '',
     agentMode: false,
     superAgentMode: false,
-    teamupMode: false,
     projectMode: localStorage.getItem('rotex_project_mode') || 'Unity',
   };
 
@@ -220,7 +219,6 @@
   const aiModelButton = $('#aiModelButton');
   const projectModeSelect = $('#projectModeSelect');
   const superAgentToggle = $('#superAgentToggle');
-  const teamupToggle = $('#teamupToggle');
   const stopAiButton = $('#stopAiButton');
   const aiCostPreview = $('#aiCostPreview');
   const aiComposer = $('#aiComposer');
@@ -363,7 +361,6 @@
   function estimateTaskCost() {
     const base = state.superAgentMode ? 500000 : state.agentMode ? 250000 : 75000;
     let multiplier = modelTexTokenMultiplier(state.aiModel);
-    if (state.teamupMode) multiplier = (multiplier + 1.5) * 1.2;
     if (state.agentMode) multiplier *= 2;
     if (state.superAgentMode) multiplier *= 4;
     return Math.round(base * multiplier);
@@ -372,7 +369,7 @@
   function updateCostPreview() {
     if (!aiCostPreview) return;
     const estimate = estimateTaskCost();
-    const mode = state.superAgentMode ? 'Super Agent' : state.agentMode ? 'Agent' : state.teamupMode ? 'Teamup' : 'Chat';
+    const mode = state.superAgentMode ? 'Super Agent' : state.agentMode ? 'Agent' : 'Chat';
     aiCostPreview.textContent = `${state.projectMode} · ${mode} · est. ${estimate.toLocaleString()} TexTokens`;
   }
 
@@ -422,17 +419,6 @@
     });
   }
 
-  if (teamupToggle) {
-    teamupToggle.addEventListener('click', () => {
-      if (!userIsPro) {
-        showToast('Teamup mode is a Pro feature — upgrade at rrotex.com/#pricing');
-        return;
-      }
-      state.teamupMode = !state.teamupMode;
-      teamupToggle.classList.toggle('on', state.teamupMode);
-      updateCostPreview();
-    });
-  }
 
   function showToast(text) {
     document.querySelector('.rotex-toast')?.remove();
@@ -626,7 +612,6 @@
             mode: 'editor',
             agent: Boolean(state.agentMode),
             superAgent: Boolean(state.superAgentMode),
-            teamup: Boolean(state.teamupMode),
             projectMode: state.projectMode,
             projectContext,
             proPass: getProPass(),

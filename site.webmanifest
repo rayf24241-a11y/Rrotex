@@ -1,7 +1,7 @@
 {
   "name": "ROTEX",
   "short_name": "ROTEX",
-  "description": "AI chat, coding, files, teamup rooms, and phone-to-PC computer mode.",
+  "description": "ROTEX desktop AI agent for game dev projects, files, and safe agent mode.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#212121",
