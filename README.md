@@ -11,15 +11,15 @@ Current web features:
 - Single-screen chatbot layout
 - Vercel ROTEX backend at `/api/chat`
 - Normal user credits: `$0.300` daily, `$0.900` weekly, `$1.500` monthly
-- Plus user credits: `$2.500` daily, `$5.000` monthly
+- Pro user TexTokens: `1M` daily, `10M` monthly
 
 Model catalog:
 
 - `api/_lib/catalog.js` is the single source of truth for chat routing, public model names, tiers, and per-message credit costs.
 - `/api/models` returns the public catalog for clients.
-- Claude routes through your Anthropic/Claude key first, then OpenRouter as backup.
-- GBT, Grok, Groq, Gemini, and DeepSeek route through OpenRouter.
-- The public model lineup is Claude, GBT, Grok, Groq, Ollama, Gemini, and DeepSeek.
+- Claude Sonnet and Claude Opus route through your Anthropic/Claude key first, then OpenRouter as backup.
+- GBT, GBT 5.5, Grok 3.4, Groq, Gemini, DeepSeek, and DeepSeek Smartest route through OpenRouter.
+- Pro unlocks Claude Sonnet, Claude Opus, Grok 3.4, GBT 5.5, and DeepSeek Smartest. These models are intentionally expensive.
 - Ollama is local-only and talks to the user's PC at `http://127.0.0.1:11434`.
 
 Computer mode is available to everyone, but it has separate pricing:
@@ -31,7 +31,7 @@ Computer mode is available to everyone, but it has separate pricing:
 
 Computer mode asks the user to connect Google Drive or GitHub before external-work actions. Direct PC file access requires the separate PC helper app; the website computer-mode picker does not offer PC pairing.
 
-Free users can use computer mode a few times per day. Plus removes that heavier-use cap once payment/webhook activation is connected.
+Free users can use computer mode a few times per day. Pro removes that heavier-use cap once payment/webhook activation is connected.
 
 When a user hits a daily, weekly, or monthly credit limit, the app shows `your out of credits, upgrade?` with an Upgrade button.
 
@@ -61,22 +61,22 @@ Add these to Vercel Project Settings -> Environment Variables:
 ```text
 OPENROUTER_API_KEY
 ANTHROPIC_API_KEY   (or CLAUDE_API_KEY)
-PRO_PASS_SECRET     (random 32+ char secret; signs the Plus pass)
+PRO_PASS_SECRET     (random 32+ char secret; signs the Pro pass)
 ```
 
 Optional: `CLAUDE_SONNET_MODEL`, `PUBLIC_SITE_URL`.
 
-## Plus enforcement (no database needed)
+## Pro enforcement (no database needed)
 
 - `/api/verify-checkout-session` checks Stripe and returns a signed **Pro pass** (HMAC, 35-day expiry).
 - The web app and editor store it in `localStorage` under `rotex_pro_pass` and send it with every `/api/chat` call.
-- `/api/chat` rejects Plus models without a valid pass (HTTP 402) and gives Plus users bigger output limits.
+- `/api/chat` rejects Pro models without a valid pass (HTTP 402) and gives Pro users bigger output limits.
 - `/api/refresh-pro` re-checks the Stripe subscription and reissues the pass; cancelled subs stop refreshing and expire automatically.
 
 ## Editor AI
 
 - `/api/chat` streams responses (`stream: true`, SSE) and accepts `mode: 'editor'`, `agent: true`, and `projectContext`.
-- Agent mode (Plus) lets the AI propose multi-file changes as ```file:path blocks with per-file Diff/Apply and Apply All.
+- Agent mode (Pro) lets the AI propose multi-file changes as ```file:path blocks with per-file Diff/Apply and Apply All.
 - Ctrl+K = inline AI edit on the selection in Monaco.
 - `Ollama` talks to `http://127.0.0.1:11434` directly from the browser/editor (free/local; browser use needs `OLLAMA_ORIGINS` set).
 
@@ -109,7 +109,7 @@ STRIPE_SECRET_KEY
 STRIPE_PRICE_ID
 ```
 
-The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id, `$5` credits, and the Plus benefits. A Stripe webhook is still needed before purchases can automatically add credits to Firestore.
+The checkout endpoint is `/api/create-checkout-session` and uses subscription mode. The purchase metadata includes the user id and Pro benefits. A Stripe webhook is still needed before purchases can automatically add TexTokens to Firestore.
 
 ## Local preview
 
@@ -129,7 +129,7 @@ Do not put Stripe secret keys in this website. The website should call a backend
 POST /api/create-checkout-session
 ```
 
-That backend uses the Stripe secret key to create a Checkout Session for the $15 monthly Plus plan, then returns the checkout URL to the website.
+That backend uses the Stripe secret key to create a Checkout Session for the $20 monthly Pro plan, then returns the checkout URL to the website.
 
 ## ROTEX backend plan
 

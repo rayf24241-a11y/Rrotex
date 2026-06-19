@@ -42,12 +42,12 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  // Signed pass proves Plus status to /api/chat without a database.
+  // Signed pass proves Pro status to /api/chat without a database.
   // 35 days covers the billing month; the app refreshes it via /api/refresh-pro.
   const proPass = signProPass({
     uid,
     sub: session.subscription || '',
-    plan: 'plus',
+    plan: 'pro',
     exp: Date.now() + 35 * 24 * 60 * 60 * 1000,
   });
 

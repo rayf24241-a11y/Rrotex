@@ -28,14 +28,17 @@
     { id: 'groq', name: 'Groq', role: 'Fast', desc: 'Fast model through OpenRouter', family: 'cloud', logo: 'Q', pro: false },
     { id: 'gemini', name: 'Gemini', role: 'Google', desc: 'Google model through OpenRouter', family: 'cloud', logo: 'Ge', pro: false },
     { id: 'deepseek', name: 'DeepSeek', role: 'Code', desc: 'Coding and general work through OpenRouter', family: 'cloud', logo: 'D', pro: false },
-    { id: 'claude', name: 'Claude', role: 'Careful', desc: 'Claude key first, OpenRouter backup', family: 'cloud', logo: 'C', pro: true },
-    { id: 'grok', name: 'Grok', role: 'Reasoning', desc: 'Reasoning and broad context through OpenRouter', family: 'cloud', logo: 'X', pro: true },
+    { id: 'claude-sonnet', name: 'Claude Sonnet', role: 'Expensive', desc: 'Expensive Pro model for careful project work and bigger fixes', family: 'cloud', logo: 'CS', pro: true },
+    { id: 'claude-opus', name: 'Claude Opus', role: 'Most expensive', desc: 'Most expensive Claude option for hard architecture and agent planning', family: 'cloud', logo: 'CO', pro: true },
+    { id: 'grok-3-4', name: 'Grok 3.4', role: 'Expensive', desc: 'Expensive Pro reasoning model for broad context and hard decisions', family: 'cloud', logo: 'X', pro: true },
+    { id: 'gbt-5-5', name: 'GBT 5.5', role: 'Expensive', desc: 'Very expensive Pro smart model for frontier-level tasks', family: 'cloud', logo: 'G5', pro: true },
+    { id: 'deepseek-smart', name: 'DeepSeek Smartest', role: 'Expensive', desc: 'Expensive Pro DeepSeek model for the smartest code and reasoning tasks', family: 'cloud', logo: 'DS', pro: true },
     { id: 'ollama', name: 'Ollama', role: 'Local', desc: 'Runs on your own PC with Ollama - free and private', family: 'local', logo: 'O', pro: false },
   ];
 
   const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
 
-  // ─── Plus pass (shared with rrotex.com chat via localStorage) ──────
+  // Pro pass shared with rrotex.com chat via localStorage.
   const PRO_PASS_KEY = 'rotex_pro_pass';
 
   function getProPass() {
@@ -51,7 +54,7 @@
 
   function computeIsPro() {
     const payload = proPassPayload(getProPass());
-    return Boolean(payload && payload.plan === 'plus' && Number(payload.exp) > Date.now());
+    return Boolean(payload && (payload.plan === 'pro' || payload.plan === 'plus') && Number(payload.exp) > Date.now());
   }
 
   async function ensureFreshProPass() {
@@ -77,7 +80,7 @@
     } catch { /* network issue — retry next launch */ }
   }
 
-  // User plan state (from the signed Plus pass)
+  // User plan state from the signed Pro pass.
   let userIsPro = computeIsPro();
   let freeMessagesUsed = parseInt(localStorage.getItem('rotex_free_msgs') || '0');
   const FREE_DAILY_LIMIT = 25;
@@ -292,7 +295,7 @@
       const lockedClass = locked ? ' locked' : '';
       const badge = m.pro ? '<span class="pro-badge">PRO</span>' : '';
 
-      html += `<button class="ai-model-option${activeClass}${lockedClass}" data-model="${m.id}" ${locked ? 'title="Upgrade to Plus to use this model"' : ''}>
+      html += `<button class="ai-model-option${activeClass}${lockedClass}" data-model="${m.id}" ${locked ? 'title="Go Pro to use this model"' : ''}>
         <span class="ai-model-logo ai-model-logo-${m.id}" aria-hidden="true">${m.logo || m.name[0]}</span>
         <div class="model-option-left">
           <span class="model-name">${m.name}</span>
@@ -326,7 +329,7 @@
       if (!hint) {
         const div = document.createElement('div');
         div.className = 'ai-model-upgrade-hint';
-        div.textContent = 'Upgrade to Plus to unlock this model';
+        div.textContent = 'Go Pro to unlock this model';
         aiModelMenu.querySelector('.ai-model-scroll').appendChild(div);
         setTimeout(() => div.remove(), 2500);
       }
@@ -348,9 +351,12 @@
   function modelTexTokenMultiplier(modelId) {
     if (modelId === 'groq') return 0.5;
     if (modelId === 'deepseek') return 1.5;
-    if (modelId === 'claude') return 20;
+    if (modelId === 'deepseek-smart') return 18;
+    if (modelId === 'claude-sonnet') return 20;
+    if (modelId === 'claude-opus') return 30;
     if (modelId === 'gbt') return 3;
-    if (modelId === 'grok') return 35;
+    if (modelId === 'gbt-5-5') return 35;
+    if (modelId === 'grok-3-4') return 28;
     return 1;
   }
 
@@ -376,12 +382,12 @@
     return confirm(`This task is estimated to cost ${estimate.toLocaleString()} TexTokens. Tasks over 250k require confirmation. Run it?`);
   }
 
-  // ─── Agent Mode Toggle (Plus: multi-file edits in one reply) ───────
+  // Agent mode toggle: Pro multi-file edits in one reply.
   const agentToggle = $('#agentToggle');
   if (agentToggle) {
     agentToggle.addEventListener('click', () => {
       if (!userIsPro) {
-        showToast('Agent mode is a Plus feature — upgrade at rrotex.com/#pricing');
+        showToast('Agent mode is a Pro feature - upgrade at rrotex.com/#pricing');
         return;
       }
       state.agentMode = !state.agentMode;
@@ -465,7 +471,7 @@
       }
     }
 
-    // Plus: include other open files so the AI sees cross-file connections
+    // Pro: include other open files so the AI sees cross-file connections.
     if (userIsPro) {
       let extras = 0;
       for (const [path, file] of state.openFiles) {
@@ -577,7 +583,7 @@
     // Check free tier limit (local Ollama is always free and uncounted)
     if (!userIsPro && !isLocal) {
       if (freeMessagesUsed >= FREE_DAILY_LIMIT) {
-        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Upgrade to Plus for Claude and Grok, or switch to Ollama, which is free forever.`);
+        addAIMessage('assistant', `You've used all ${FREE_DAILY_LIMIT} free messages today. Go Pro for Claude Sonnet, Claude Opus, Grok 3.4, GBT 5.5, and DeepSeek Smartest, or switch to Ollama, which is free forever.`);
         return;
       }
       freeMessagesUsed++;
@@ -1468,7 +1474,7 @@
 
       if (!userIsPro) {
         if (freeMessagesUsed >= FREE_DAILY_LIMIT) {
-          status.textContent = 'Daily limit reached — upgrade to Plus';
+          status.textContent = 'Daily limit reached - Go Pro';
           return;
         }
         freeMessagesUsed++;
@@ -1494,7 +1500,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: userIsPro ? 'claude' : 'deepseek',
+            model: userIsPro ? 'claude-sonnet' : 'deepseek',
             messages: [{ role: 'user', content: prompt }],
             mode: 'editor',
             proPass: getProPass(),
@@ -1560,7 +1566,7 @@
 
     const stats = getUsageStats();
     const remaining = userIsPro ? 'Unlimited' : `${Math.max(0, FREE_DAILY_LIMIT - freeMessagesUsed)} / ${FREE_DAILY_LIMIT}`;
-    const planLabel = userIsPro ? 'Plus' : 'Free';
+    const planLabel = userIsPro ? 'Pro' : 'Free';
 
     // Build model breakdown
     let todayModels = '';
@@ -1605,7 +1611,7 @@
         <div class="usage-models-title">Models used</div>
         ${weekModels}
       </div>
-      ${!userIsPro ? '<div class="usage-upgrade"><button class="usage-upgrade-btn">Upgrade to Plus</button></div>' : ''}
+      ${!userIsPro ? '<div class="usage-upgrade"><button class="usage-upgrade-btn">Go Pro</button></div>' : ''}
     `;
 
     document.body.appendChild(popup);

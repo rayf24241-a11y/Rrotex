@@ -1,6 +1,6 @@
-// Signed "Pro pass" — stateless proof of an active Plus subscription.
+// Signed "Pro pass" - stateless proof of an active Pro subscription.
 // Format: base64url(JSON payload) + "." + base64url(HMAC-SHA256 of the payload)
-// Payload: { uid, sub (Stripe subscription id), plan: 'plus', exp (epoch ms) }
+// Payload: { uid, sub (Stripe subscription id), plan: 'pro', exp (epoch ms) }
 const crypto = require('crypto');
 
 function getSecret() {
@@ -31,7 +31,7 @@ function verifyProPass(pass) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    if (payload.plan !== 'plus') return null;
+    if (payload.plan !== 'pro' && payload.plan !== 'plus') return null;
     if (!payload.exp || Date.now() > Number(payload.exp)) return null;
     return payload;
   } catch {

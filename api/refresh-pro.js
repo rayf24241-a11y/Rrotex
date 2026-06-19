@@ -30,7 +30,7 @@ module.exports = async function handler(request, response) {
   const { proPass = '' } = request.body || {};
   const payload = verifyProPass(proPass);
   if (!payload || !payload.sub) {
-    response.status(401).json({ refreshed: false, message: 'Invalid or expired Plus pass. Upgrade again from the pricing page.' });
+    response.status(401).json({ refreshed: false, message: 'Invalid or expired Pro pass. Go Pro again from the pricing page.' });
     return;
   }
 
@@ -46,14 +46,14 @@ module.exports = async function handler(request, response) {
 
   const active = subscription.status === 'active' || subscription.status === 'trialing' || subscription.status === 'past_due';
   if (!active) {
-    response.status(403).json({ refreshed: false, cancelled: true, message: 'This Plus subscription is no longer active.' });
+    response.status(403).json({ refreshed: false, cancelled: true, message: 'This Pro subscription is no longer active.' });
     return;
   }
 
   const newPass = signProPass({
     uid: payload.uid,
     sub: payload.sub,
-    plan: 'plus',
+    plan: 'pro',
     exp: Date.now() + 35 * 24 * 60 * 60 * 1000,
   });
 

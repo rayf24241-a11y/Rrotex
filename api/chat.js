@@ -65,11 +65,11 @@ module.exports = async function handler(request, response) {
   const modelId = resolveModelId(model);
   const selected = MODELS[modelId];
 
-  // Server-side Plus enforcement — locked models reject without a valid pass.
+  // Server-side Pro enforcement - locked models reject without a valid pass.
   if (selected.tier === 'pro' && !isPro) {
     response.status(402).json({
       error: 'pro_required',
-      text: `${selected.name} is a Plus model. Upgrade to Plus on rrotex.com to unlock it.`,
+      text: `${selected.name} is a Pro model. Go Pro on rrotex.com to unlock it.`,
     });
     return;
   }
@@ -80,7 +80,7 @@ module.exports = async function handler(request, response) {
     if (used > FREE_DAILY_IP_LIMIT) {
       response.status(429).json({
         error: 'rate_limited',
-        text: 'Free daily limit reached for today. Upgrade to Plus for much higher limits, or come back tomorrow.',
+        text: 'Free daily limit reached for today. Go Pro for 1M daily TexTokens and expensive smart models, or come back tomorrow.',
       });
       return;
     }
@@ -325,7 +325,7 @@ function modelTemperature(selected) {
 }
 
 function resolveAnthropicModel(selected) {
-  return process.env.CLAUDE_SONNET_MODEL || process.env.ANTHROPIC_SONNET_MODEL || selected.anthropicModel;
+  return (selected.envModel && process.env[selected.envModel]) || process.env.ANTHROPIC_SONNET_MODEL || selected.anthropicModel;
 }
 
 async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens) {
