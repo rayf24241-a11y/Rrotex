@@ -42,6 +42,23 @@ module.exports = async function handler(request, response) {
     return;
   }
 
+  if (session.metadata?.kind === 'textokens') {
+    const dollars = Math.floor(Number(session.metadata?.dollars || 0));
+    const texTokens = Math.floor(Number(session.metadata?.textokens || dollars * 1000000));
+    if (!dollars || !texTokens) {
+      response.status(400).json({ verified: false, message: 'Credit checkout is missing token metadata.' });
+      return;
+    }
+
+    response.status(200).json({
+      verified: true,
+      dollars,
+      texTokens,
+      sessionId: session.id,
+    });
+    return;
+  }
+
   // Signed pass proves Pro status to /api/chat without a database.
   // 35 days covers the billing month; the app refreshes it via /api/refresh-pro.
   const proPass = signProPass({

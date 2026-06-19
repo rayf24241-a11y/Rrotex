@@ -109,7 +109,7 @@ STRIPE_PRICE_ID
 
 The Pro checkout endpoint is `/api/create-checkout-session` and uses subscription mode.
 
-The extra TexToken checkout endpoint is `/api/create-credit-checkout-session` and uses one-time payment mode. The website lets a signed-in user choose any whole dollar amount from `$1` to `$500`; each `$1` buys `1M` TexTokens. After Stripe redirects back, `/api/verify-credit-checkout-session` verifies the paid session before the dashboard adds the credits.
+The extra TexToken checkout flow uses `/api/create-checkout-session` with `kind: "credits"` and one-time payment mode. The website lets a signed-in user choose any whole dollar amount from `$1` to `$500`; each `$1` buys `1M` TexTokens. After Stripe redirects back, `/api/verify-checkout-session` verifies the paid session before the dashboard adds the credits.
 
 For production-grade cloud balances, connect a Stripe webhook to Firebase Admin and store credited session ids server-side so the same Stripe session cannot be applied twice from another device.
 

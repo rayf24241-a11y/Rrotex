@@ -149,10 +149,10 @@ creditCheckoutButton.addEventListener('click', async () => {
   creditCheckoutButton.disabled = true;
   setCreditMessage('Opening Stripe...');
   try {
-    const response = await fetch('/api/create-credit-checkout-session', {
+    const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', dollars }),
+      body: JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', kind: 'credits', dollars }),
     });
     const data = await response.json();
     if (data.url) {
@@ -226,7 +226,7 @@ async function handleCreditCheckoutReturn(user) {
 
   setCreditMessage('Verifying TexToken purchase...');
   try {
-    const response = await fetch('/api/verify-credit-checkout-session', {
+    const response = await fetch('/api/verify-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, uid: user.uid }),
