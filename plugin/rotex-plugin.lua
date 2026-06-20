@@ -270,6 +270,105 @@ local function findRotex(method, path)
     return lastResponse
 end
 
+local function splitPath(pathText)
+    local parts = {}
+    for part in string.gmatch(pathText or "", "[^/\\]+") do
+        table.insert(parts, part)
+    end
+    return parts
+end
+
+local function studioRoot(name)
+    local ok, service = pcall(function()
+        return game:GetService(name)
+    end)
+    if ok and service then return service end
+    return workspace
+end
+
+local function scriptClassFor(name, source)
+    local lower = string.lower(name or "")
+    if string.find(lower, "localscript") or string.find(lower, "%.client%.lua$") then
+        return "LocalScript"
+    end
+    if string.find(lower, "modulescript") or string.find(lower, "%.module%.lua$") or string.find(source or "", "[\r\n]%s*return%s+[%w_%.]+%s*$") then
+        return "ModuleScript"
+    end
+    return "Script"
+end
+
+local function cleanScriptName(name)
+    return (name or "ROTEXScript"):gsub("%.client%.lua$", ""):gsub("%.server%.lua$", ""):gsub("%.module%.lua$", ""):gsub("%.lua$", "")
+end
+
+local function applyStudioFile(file)
+    local parts = splitPath(file.path)
+    if #parts < 2 then return false, "Bad path: " .. tostring(file.path) end
+
+    local parent = studioRoot(parts[1])
+    for i = 2, #parts - 1 do
+        local folderName = parts[i]
+        local folder = parent:FindFirstChild(folderName)
+        if not folder then
+            folder = Instance.new("Folder")
+            folder.Name = folderName
+            folder.Parent = parent
+        end
+        parent = folder
+    end
+
+    local scriptName = cleanScriptName(parts[#parts])
+    local source = file.content or ""
+    local existing = parent:FindFirstChild(scriptName)
+    if existing and existing:IsA("LuaSourceContainer") then
+        existing.Source = source
+        return true, "Updated " .. file.path
+    end
+
+    local obj = Instance.new(scriptClassFor(parts[#parts], source))
+    obj.Name = scriptName
+    obj.Source = source
+    obj.Parent = parent
+    return true, "Created " .. file.path
+end
+
+local function reportStudioResult(result)
+    local token = currentToken:match("^%s*(.-)%s*$")
+    pcall(function()
+        HttpService:RequestAsync({
+            Url     = BASE_URL .. "/studio/result?token=" .. token,
+            Method  = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body    = HttpService:JSONEncode(result),
+        })
+    end)
+end
+
+local function pollStudioActions()
+    if not connected then return end
+    local res = request("GET", "/studio/actions")
+    if not (res and res.StatusCode == 200) then return end
+    local ok, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
+    if not ok or not data or not data.action then return end
+
+    local action = data.action
+    if action.type == "apply_files" and type(action.files) == "table" then
+        local messages = {}
+        for _, file in ipairs(action.files) do
+            local okFile, okApply, msg = pcall(function()
+                return applyStudioFile(file)
+            end)
+            if okFile and okApply then
+                table.insert(messages, msg)
+            else
+                table.insert(messages, "Failed " .. tostring(file and file.path or "file"))
+            end
+        end
+        appendLog("[Studio] " .. table.concat(messages, "\n[Studio] "))
+        reportStudioResult({ ok = true, messages = messages })
+    end
+end
+
 -- ── Connect handler ──────────────────────────────────────────────────────────
 local function doConnect()
     local token = tokenBox.Text:match("^%s*(.-)%s*$")
@@ -382,6 +481,13 @@ end)
 
 -- ── Auto-reconnect on load (if token saved) ──────────────────────────────────
 setActionButtons(false)
+task.spawn(function()
+    while true do
+        task.wait(1)
+        pcall(pollStudioActions)
+    end
+end)
+
 if #(plugin:GetSetting("rotex_token") or "") >= 4 then
     task.delay(1, doConnect)
 end

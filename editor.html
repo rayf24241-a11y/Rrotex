@@ -1307,6 +1307,30 @@
     msgs.appendChild(div);
   }
 
+  function studioFileBlocks(markdown) {
+    const blocks = [];
+    const re = /```file:([^\n\r]+)[\r\n]+([\s\S]*?)```/g;
+    let match;
+    while ((match = re.exec(markdown || ''))) {
+      const filePath = (match[1] || '').trim();
+      const content = match[2] || '';
+      if (/\.lua$/i.test(filePath) && /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterGui|Workspace|ServerStorage|StarterPack)\//i.test(filePath)) {
+        blocks.push({ path: filePath, content });
+      }
+    }
+    return blocks;
+  }
+
+  async function applyRobloxFileBlocks(markdown) {
+    if (!window.rotexDesktop?.queueStudioActions || !_studioConnected) return;
+    const files = studioFileBlocks(markdown);
+    if (!files.length) return;
+    const result = await window.rotexDesktop.queueStudioActions([{ type: 'apply_files', files }]);
+    if (result?.ok) {
+      appendAssistantNote(`[Studio apply queued: ${files.map(f => f.path).join(', ')}]`);
+    }
+  }
+
   function clearChatView(projectMode, projectName) {
     const msgs = document.getElementById('rxAiMessages');
     const engineLabel = projectMode ? ` · ${projectMode}` : '';
@@ -1514,6 +1538,7 @@
 
       // Save to chat
       await saveChatMessage(activeChatId, text, full);
+      await applyRobloxFileBlocks(full);
 
     } catch (err) {
       typing.remove();

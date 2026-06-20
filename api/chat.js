@@ -328,6 +328,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'Never use placeholder comments like "rest of the code stays the same" inside file blocks — file blocks must contain the complete file.',
     'For small inline snippets that are not meant to replace a file, use normal ```lang code fences instead.',
     'If PROJECT CONTEXT says the Roblox Studio plugin is CONNECTED, treat Studio as connected even if older chat messages suggest otherwise.',
+    'When Roblox Studio is connected and the user asks you to make/create/add/fix something in Roblox, output Roblox Lua in ```file:ServiceName/path/ScriptName.lua blocks using services such as ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. Do not tell the user to paste the code manually; ROTEX will apply supported file blocks to Studio.',
   ].filter(Boolean);
   if (agent) {
     parts.push(

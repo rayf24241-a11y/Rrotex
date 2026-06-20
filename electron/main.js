@@ -13,6 +13,7 @@ let aiContext         = null;
 let currentProjectName = '';
 let userAuthToken     = '';
 let userProjectMode   = '';
+let studioActionQueue = [];
 const PLUGIN_PORTS    = [7878, 7874, 7871, 7870, 7861, 7865, 7822, 7854, 7813, 7816, 7898, 7875];
 
 // ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
@@ -229,6 +230,13 @@ ipcMain.handle('open-external', async (event, url) => {
   shell.openExternal(url);
 });
 
+ipcMain.handle('queue-studio-actions', async (event, actions) => {
+  const safeActions = Array.isArray(actions) ? actions.slice(0, 10) : [];
+  studioActionQueue.push(...safeActions);
+  studioActionQueue = studioActionQueue.slice(-25);
+  return { ok: true, queued: studioActionQueue.length };
+});
+
 // ─── IPC: Local auth callback server ─────────────────────────────────────────
 // ─── IPC: Studio Plugin Server ───────────────────────────────────────────────
 ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass, projectMode) => {
@@ -295,6 +303,25 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
       req.on('end', () => {
         try { aiContext = JSON.parse(body); } catch {}
         if (mainWindow) mainWindow.webContents.send('plugin-context', aiContext);
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+
+    if (url.pathname === '/studio/actions' && req.method === 'GET') {
+      const action = studioActionQueue.shift() || null;
+      res.end(JSON.stringify({ ok: true, action }));
+      return;
+    }
+
+    if (url.pathname === '/studio/result' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const result = JSON.parse(body || '{}');
+          if (mainWindow) mainWindow.webContents.send('plugin-context', { studioResult: result });
+        } catch {}
         res.end(JSON.stringify({ ok: true }));
       });
       return;
