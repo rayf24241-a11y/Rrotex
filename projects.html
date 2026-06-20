@@ -513,20 +513,40 @@
         db   = getFirestore(app);
 
         onAuthStateChanged(auth, user => {
-          if (user) { currentUser = user; setup(user); }
-          else go('login');
+          if (user) {
+            currentUser = user;
+            setup(user);
+            return;
+          }
+          const stored = storedDesktopUser();
+          if (stored) {
+            currentUser = stored;
+            setup(stored);
+          } else {
+            go('login');
+          }
         });
       } catch { fallbackBoot(); }
     }
 
-    function fallbackBoot() {
+    function storedDesktopUser() {
       try {
         const s = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
         if (s?.uid && Number(s.exp) > Date.now()) {
-          currentUser = { uid: s.uid, email: s.email, displayName: s.name };
-          setup(currentUser);
-        } else go('login');
-      } catch { go('login'); }
+          return { uid: s.uid, email: s.email || '', displayName: s.name || s.email || 'User' };
+        }
+      } catch {}
+      return null;
+    }
+
+    function fallbackBoot() {
+      const stored = storedDesktopUser();
+      if (stored) {
+        currentUser = stored;
+        setup(stored);
+      } else {
+        go('login');
+      }
     }
 
     function go(page) {
@@ -685,11 +705,13 @@
 
     /* ── New chat ───────────────────────────────────────────────────── */
     function newChat() {
+      if (!currentUser) currentUser = storedDesktopUser();
       if (!currentUser) return go('login');
       openEnginePicker();
     }
 
     async function createChat(projectMode, projectName) {
+      if (!currentUser) currentUser = storedDesktopUser();
       if (!currentUser) return go('login');
       const uid = currentUser.uid;
       const now = serverTimestamp ? serverTimestamp() : Date.now();
