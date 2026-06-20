@@ -205,6 +205,16 @@ local function appendLog(text)
     end)
 end
 
+local function clearConnectionErrors()
+    local cleaned = {}
+    for line in string.gmatch(outputText.Text, "[^\n]+") do
+        if not string.find(line, "Could not reach ROTEX", 1, true) then
+            table.insert(cleaned, line)
+        end
+    end
+    outputText.Text = table.concat(cleaned, "\n")
+end
+
 local function setPort(port)
     HTTP_PORT = port
     BASE_URL = "http://127.0.0.1:" .. HTTP_PORT
@@ -262,6 +272,7 @@ local function doConnect()
             setActionButtons(true)
             connectBtn.Text = "Reconnect"
             plugin:SetSetting("rotex_token", token)
+            clearConnectionErrors()
             appendLog("[ROTEX] Connected" .. (projectName ~= "" and (" — " .. projectName) or ""))
         else
             setStatus("● Wrong token", C.red)
