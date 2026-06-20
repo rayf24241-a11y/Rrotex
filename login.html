@@ -348,7 +348,11 @@
         const app = initializeApp(data.firebaseConfig);
         auth = getAuth(app);
 
-        onAuthStateChanged(auth, user => { if (user) go(user); });
+        onAuthStateChanged(auth, user => {
+          if (!user) return;
+          if (isDesktopLogin) showDesktopConnect(user);
+          else go(user);
+        });
       } catch { fallback(); }
     }
 
@@ -407,6 +411,25 @@
       }
 
       navigate('projects');
+    }
+
+    function showDesktopConnect(user) {
+      const email = user.email || 'your account';
+      document.querySelector('.card').innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--text)">Connect ROTEX Desktop</div>
+          <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:18px;">
+            You are signed in on rrotex.com as <strong style="color:var(--text)">${email}</strong>.
+            Click below to connect this browser session to the desktop app.
+          </p>
+          <button class="btn-primary" id="connectDesktopBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+            Connect to ROTEX Desktop
+          </button>
+          <div class="error" id="errBox" style="margin-top:14px;"></div>
+        </div>
+      `;
+      document.getElementById('connectDesktopBtn').onclick = () => go(user);
     }
 
     /* ── UI helpers ─────────────────────────────────────────────────── */
