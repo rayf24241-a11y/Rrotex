@@ -926,8 +926,12 @@
         const err = await res.json().catch(() => ({}));
         const errEl = document.createElement('div');
         errEl.className = 'ai-msg ai-msg-assistant';
-        errEl.style.color = 'var(--rx-red)';
-        errEl.textContent = err.error || `Error ${res.status}`;
+        errEl.style.cssText = 'color:var(--rx-red);display:flex;flex-direction:column;gap:8px;';
+        if (err.error === 'no_textokens') {
+          errEl.innerHTML = `<span>You're out of TexTokens.</span><a href="https://www.rrotex.com/tokens" target="_blank" style="display:inline-block;padding:8px 16px;background:#4B9DFF;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;width:fit-content;">Buy TexTokens →</a>`;
+        } else {
+          errEl.textContent = err.text || err.error || `Error ${res.status}`;
+        }
         msgs.appendChild(errEl);
         msgs.scrollTop = msgs.scrollHeight;
         return;
