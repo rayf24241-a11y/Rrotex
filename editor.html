@@ -982,7 +982,7 @@
           if (raw === '[DONE]') break;
           try {
             const j = JSON.parse(raw);
-            const delta = j.choices?.[0]?.delta?.content || j.content || '';
+            const delta = j.d || j.choices?.[0]?.delta?.content || j.content || '';
             full += delta;
             streamDiv.textContent = full;
             msgs.scrollTop = msgs.scrollHeight;
