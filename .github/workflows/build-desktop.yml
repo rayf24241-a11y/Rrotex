@@ -51,6 +51,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: electron
+      - name: Install Linux packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfuse2
       - name: Build Linux
         run: npm run build:linux
         working-directory: electron
