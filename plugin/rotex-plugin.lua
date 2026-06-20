@@ -297,7 +297,12 @@ local function doConnect()
         end
     else
         setStatus("● ROTEX not running — open the app", C.red)
-        appendLog("[Error] Could not reach ROTEX on any fallback port")
+        if not connected then
+            appendLog("[Error] Could not reach ROTEX on any fallback port")
+        else
+            clearConnectionErrors()
+            setStatus("â— Connected â€” " .. (projectName ~= "" and projectName or "ROTEX"), C.green)
+        end
     end
 end
 
