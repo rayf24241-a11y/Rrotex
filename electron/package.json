@@ -26,12 +26,7 @@
     },
     "files": [
       "main.js",
-      "preload.js",
-      "../login.html",
-      "../projects.html",
-      "../editor.html",
-      "../editor.css",
-      "../editor.js"
+      "preload.js"
     ],
     "protocols": [
       {
@@ -40,7 +35,14 @@
         "role": "Viewer"
       }
     ],
-    "extraResources": [],
+    "extraResources": [
+      { "from": "../login.html", "to": "login.html" },
+      { "from": "../projects.html", "to": "projects.html" },
+      { "from": "../editor.html", "to": "editor.html" },
+      { "from": "../editor.css", "to": "editor.css" },
+      { "from": "../editor.js", "to": "editor.js" },
+      { "from": "../plugin/rotex-plugin.lua", "to": "plugin/rotex-plugin.lua" }
+    ],
     "win": {
       "target": "nsis",
       "icon": "icon.png",

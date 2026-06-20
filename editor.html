@@ -46,7 +46,7 @@
       box-shadow: 0 24px 80px rgba(0,0,0,0.6);
     }
     .rx-ep-head { display: flex; flex-direction: column; }
-    .rx-ep-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+    .rx-ep-cards { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
     .rx-ep-card {
       background: var(--rx-panel); border: 2px solid var(--rx-border);
       border-radius: 14px; padding: 16px 12px 12px;
@@ -54,8 +54,22 @@
       display: flex; flex-direction: column; align-items: center; gap: 8px;
       user-select: none;
     }
-    .rx-ep-card:hover { border-color: rgba(255,214,10,0.4); }
+    .rx-ep-card:hover:not(.coming-soon) { border-color: rgba(255,214,10,0.4); }
     .rx-ep-card.selected { border-color: var(--rx-yellow); background: var(--rx-yellow-d); }
+    .rx-browser-note { font-size:10px; color:var(--rx-muted); margin-top:4px; line-height:1.5; }
+    .rx-browser-note code { background:rgba(255,255,255,0.07); border-radius:3px; padding:1px 4px; font-size:9.5px; }
+    .rx-browser-connected { color:#22c55e; font-size:10px; font-weight:700; }
+    .rx-ep-soon-card {
+      background: var(--rx-panel); border: 2px solid var(--rx-border);
+      border-radius: 14px; padding: 16px 12px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      opacity: 0.4; cursor: not-allowed; pointer-events: none; user-select: none;
+    }
+    .rx-ep-soon-badge {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--rx-border);
+      color: var(--rx-muted); padding: 2px 7px; border-radius: 4px;
+    }
     .rx-ep-icon {
       width: 44px; height: 44px; border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
@@ -67,6 +81,18 @@
     }
     .rx-ep-card.selected .rx-ep-blender-opt { display: flex; }
     .rx-ep-blender-opt input { accent-color: var(--rx-yellow); cursor: pointer; }
+    .rx-ep-name-step { display: none; flex-direction: column; gap: 10px; }
+    .rx-ep-name-step.visible { display: flex; }
+    .rx-ep-name-label { font-size: 12px; color: var(--rx-muted); }
+    .rx-ep-name-label strong { color: var(--rx-text); }
+    .rx-ep-name-input {
+      width: 100%; padding: 10px 12px; background: var(--rx-panel);
+      border: 1.5px solid var(--rx-border); border-radius: 10px;
+      color: var(--rx-text); font: inherit; font-size: 13px;
+      outline: none; transition: border-color 0.15s; box-sizing: border-box;
+    }
+    .rx-ep-name-input:focus { border-color: var(--rx-yellow); }
+    .rx-ep-name-input::placeholder { color: var(--rx-quiet); }
     .rx-ep-start {
       width: 100%; padding: 11px; border: none; border-radius: 10px;
       background: var(--rx-yellow); color: #0D0F17;
@@ -80,6 +106,76 @@
       transition: color 0.1s;
     }
     .rx-ep-cancel:hover { color: var(--rx-text); }
+
+    /* ── Studio plugin panel ────────────────────────────────── */
+    .rx-plugin-panel {
+      margin-top: 22px; background: var(--rx-panel);
+      border: 1px solid var(--rx-border); border-radius: 12px;
+      padding: 16px; max-width: 480px;
+    }
+    .rx-plugin-hdr {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 700; color: var(--rx-text);
+      margin-bottom: 14px;
+    }
+    .rx-plugin-hdr svg { flex-shrink: 0; }
+    .rx-plugin-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+    .rx-plugin-step { display: flex; align-items: flex-start; gap: 10px; }
+    .rx-step-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--rx-border); color: var(--rx-muted);
+      font-size: 10px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .rx-step-num.done { background: var(--rx-green); color: #0D0F17; }
+    .rx-step-title { font-size: 11px; color: var(--rx-muted); margin-bottom: 6px; }
+    .rx-plugin-install {
+      padding: 7px 12px; background: var(--rx-blue-d); border: 1px solid var(--rx-blue);
+      border-radius: 7px; color: #60a5fa; font: 700 11px/1 inherit;
+      cursor: pointer; transition: all 0.13s;
+    }
+    .rx-plugin-install:hover { background: var(--rx-blue); color: #fff; }
+    .rx-plugin-install.done {
+      background: rgba(34,197,94,0.12); border-color: var(--rx-green);
+      color: var(--rx-green); cursor: default;
+    }
+    .rx-plugin-token-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rx-plugin-token {
+      font-family: 'Courier New', monospace; font-size: 15px; font-weight: 700;
+      letter-spacing: 0.18em; color: var(--rx-yellow);
+      background: var(--rx-yellow-d); border: 1px solid var(--rx-yellow-g);
+      padding: 5px 10px; border-radius: 7px; user-select: all;
+    }
+    .rx-plugin-copy {
+      padding: 5px 10px; background: none; border: 1px solid var(--rx-border);
+      border-radius: 7px; color: var(--rx-muted); font: 700 10px/1 inherit;
+      cursor: pointer; transition: all 0.12s;
+    }
+    .rx-plugin-copy:hover { border-color: var(--rx-text); color: var(--rx-text); }
+    .rx-plugin-status {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; color: var(--rx-muted);
+      padding-top: 12px; border-top: 1px solid var(--rx-border);
+    }
+    .rx-pdot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      background: var(--rx-quiet);
+    }
+    .rx-pdot.waiting { background: var(--rx-quiet); animation: pulse 1.8s infinite; }
+    .rx-pdot.connected { background: var(--rx-green); animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+    .rx-plugin-rojo-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px; font-size: 11px; color: var(--rx-muted);
+    }
+    .rx-rojo-badge {
+      padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700;
+      background: var(--rx-panel); border: 1px solid var(--rx-border); color: var(--rx-quiet);
+    }
+    .rx-rojo-badge.running { background: rgba(34,197,94,0.12); border-color: var(--rx-green); color: var(--rx-green); }
 
     /* ── App shell ──────────────────────────────────────────── */
     .rx-app {
@@ -370,6 +466,11 @@
       max-width: 600px;
       margin: 0 auto;
     }
+    .ai-msg-system {
+      font-size: 11px; color: var(--rx-quiet);
+      background: var(--rx-panel); border: 1px solid var(--rx-border);
+      border-radius: 8px; padding: 6px 10px; max-width: 480px;
+    }
 
     .ai-composer {
       padding: 12px 16px 10px;
@@ -521,18 +622,15 @@
       <div style="font-size:13px;color:var(--rx-muted);margin-top:4px;">Pick your engine — the AI tunes its context for it</div>
     </div>
     <div class="rx-ep-cards">
-      <div class="rx-ep-card" data-engine="Unity">
-        <div class="rx-ep-icon" style="background:rgba(37,99,235,0.18);color:#60a5fa;">U</div>
-        <div style="font-size:13px;font-weight:700;color:var(--rx-text);">Unity</div>
-        <div style="font-size:11px;color:var(--rx-muted);text-align:center;">C#, physics, scenes</div>
-        <label class="rx-ep-blender-opt" onclick="event.stopPropagation()">
-          <input type="checkbox" id="rxEpUnityBlender"> Also using Blender
-        </label>
+      <div class="rx-ep-soon-card">
+        <div class="rx-ep-icon" style="background:rgba(37,99,235,0.1);color:rgba(96,165,250,0.4);">U</div>
+        <div style="font-size:13px;font-weight:700;color:var(--rx-quiet);">Unity</div>
+        <div class="rx-ep-soon-badge">Coming Soon</div>
       </div>
-      <div class="rx-ep-card" data-engine="Blender">
-        <div class="rx-ep-icon" style="background:rgba(249,115,22,0.18);color:#fb923c;">B</div>
-        <div style="font-size:13px;font-weight:700;color:var(--rx-text);">Blender</div>
-        <div style="font-size:11px;color:var(--rx-muted);text-align:center;">3D modeling, rigging</div>
+      <div class="rx-ep-soon-card">
+        <div class="rx-ep-icon" style="background:rgba(249,115,22,0.1);color:rgba(251,146,60,0.4);">B</div>
+        <div style="font-size:13px;font-weight:700;color:var(--rx-quiet);">Blender</div>
+        <div class="rx-ep-soon-badge">Coming Soon</div>
       </div>
       <div class="rx-ep-card" data-engine="Roblox">
         <div class="rx-ep-icon" style="background:rgba(239,68,68,0.18);color:#f87171;">R</div>
@@ -543,7 +641,11 @@
         </label>
       </div>
     </div>
-    <button class="rx-ep-start" id="rxEpStart" disabled>Start Chat →</button>
+    <div class="rx-ep-name-step" id="rxEpNameStep">
+      <div class="rx-ep-name-label">Name your <strong id="rxEpEngineLabel">project</strong> package</div>
+      <input class="rx-ep-name-input" id="rxEpNameInput" type="text" maxlength="60" placeholder="e.g. MyGame, PlatformerProto…" autocomplete="off" />
+    </div>
+    <button class="rx-ep-start" id="rxEpStart" disabled>Next →</button>
     <button class="rx-ep-cancel" id="rxEpCancel">Cancel</button>
   </div>
 </div>
@@ -666,12 +768,9 @@
           </button>
 
           <select class="ai-mode-select" id="rxProjectMode" style="background:var(--rx-panel);border:1px solid var(--rx-border);border-radius:7px;color:var(--rx-text);font:inherit;font-size:12px;min-height:30px;padding:0 8px;cursor:pointer;">
-            <option value="Unity">Unity</option>
-            <option value="Unity+Blender">Unity + Blender</option>
             <option value="Roblox">Roblox</option>
-            <option value="Roblox+Blender">Roblox + Blender</option>
-            <option value="Blender">Blender</option>
-            <option value="General">General</option>
+            <option value="Unity" disabled>Unity (Coming Soon)</option>
+            <option value="Blender" disabled>Blender (Coming Soon)</option>
           </select>
 
           <button class="agent-toggle danger" id="rxStopBtn" type="button">Stop</button>
@@ -804,13 +903,34 @@
             document.getElementById('rxProfileName').textContent = (user.displayName || user.email || 'Account').split(' ')[0];
             loadChats(user.uid);
           } else {
-            loadLocalChats();
+            // Firebase says not logged in — check localStorage fallback before redirecting
+            const stored = (() => { try { return JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null'); } catch { return null; } })();
+            if (stored?.uid && Number(stored.exp) > Date.now()) {
+              currentUser = { uid: stored.uid, email: stored.email, displayName: stored.name };
+              document.getElementById('rxUserAvatar').textContent = (stored.name || stored.email || 'U').charAt(0).toUpperCase();
+              document.getElementById('rxProfileName').textContent = (stored.name || stored.email || 'Account').split(' ')[0];
+              loadChats(stored.uid);
+            } else {
+              goPage('login');
+            }
           }
         });
         return;
       }
     } catch {}
-    loadLocalChats();
+    // Firebase not configured — check localStorage
+    const stored = (() => { try { return JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null'); } catch { return null; } })();
+    if (stored?.uid && Number(stored.exp) > Date.now()) {
+      currentUser = { uid: stored.uid, email: stored.email, displayName: stored.name };
+      loadChats(stored.uid);
+    } else {
+      goPage('login');
+    }
+  }
+
+  function goPage(page) {
+    if (window.rotexDesktop) window.rotexDesktop.navigate(page);
+    else window.location.href = `/${page}.html`;
   }
 
   /* ── Load chats ─────────────────────────────────────────────── */
@@ -886,26 +1006,48 @@
   /* ── Engine picker modal ────────────────────────────────────── */
   let epPickedEngine = null;
 
+  let epStep = 1; // 1 = pick engine, 2 = name project
+
   function openEnginePicker(onConfirm) {
     epPickedEngine = null;
+    epStep = 1;
     document.querySelectorAll('.rx-ep-card').forEach(c => c.classList.remove('selected'));
-    document.getElementById('rxEpUnityBlender').checked = false;
     document.getElementById('rxEpRobloxBlender').checked = false;
+    document.getElementById('rxEpNameInput').value = '';
+    document.getElementById('rxEpNameStep').classList.remove('visible');
     document.getElementById('rxEpStart').disabled = true;
+    document.getElementById('rxEpStart').textContent = 'Next →';
     document.getElementById('rxEpOverlay').classList.add('open');
 
     document.getElementById('rxEpStart').onclick = async () => {
-      if (!epPickedEngine) return;
-      let mode = epPickedEngine;
-      if (mode === 'Unity'  && document.getElementById('rxEpUnityBlender').checked)  mode = 'Unity+Blender';
-      if (mode === 'Roblox' && document.getElementById('rxEpRobloxBlender').checked) mode = 'Roblox+Blender';
-      document.getElementById('rxEpOverlay').classList.remove('open');
-      await onConfirm(mode);
+      if (epStep === 1) {
+        if (!epPickedEngine) return;
+        let mode = epPickedEngine;
+        if (mode === 'Roblox' && document.getElementById('rxEpRobloxBlender').checked) mode = 'Roblox+Blender';
+        epPickedEngine = mode;
+        // Advance to step 2
+        epStep = 2;
+        document.getElementById('rxEpEngineLabel').textContent = mode;
+        document.getElementById('rxEpNameStep').classList.add('visible');
+        document.getElementById('rxEpStart').textContent = 'Start Chat →';
+        document.getElementById('rxEpStart').disabled = false;
+        document.getElementById('rxEpNameInput').focus();
+      } else {
+        const name = document.getElementById('rxEpNameInput').value.trim();
+        document.getElementById('rxEpOverlay').classList.remove('open');
+        await onConfirm(epPickedEngine, name || null);
+      }
+    };
+
+    document.getElementById('rxEpNameInput').onkeydown = e => {
+      if (e.key === 'Enter') document.getElementById('rxEpStart').click();
     };
   }
 
   document.querySelectorAll('.rx-ep-card').forEach(card => {
     card.addEventListener('click', () => {
+      if (epStep !== 1) return;
+      if (card.classList.contains('coming-soon')) return;
       document.querySelectorAll('.rx-ep-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
       epPickedEngine = card.dataset.engine;
@@ -926,10 +1068,11 @@
     openEnginePicker(createChat);
   }
 
-  async function createChat(projectMode) {
+  async function createChat(projectMode, projectName) {
     const uid = currentUser?.uid || 'local';
     const now = serverTimestamp ? serverTimestamp() : Date.now();
-    const data = { uid, title: 'New Chat', projectMode, createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
+    const chatTitle = projectName ? projectName : 'New Chat';
+    const data = { uid, title: chatTitle, projectMode, projectName: projectName || '', createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
     let id = `local_${Date.now()}`;
 
     if (db && currentUser) {
@@ -944,7 +1087,7 @@
     localStorage.setItem('rotex_active_chat', id);
     allChats = local;
     renderChatList(allChats);
-    clearChatView(projectMode);
+    clearChatView(projectMode, projectName);
     setProjectMode(projectMode);
   }
 
@@ -966,20 +1109,224 @@
     if (sel && mode) sel.value = mode;
   }
 
-  function clearChatView(projectMode) {
+  /* ── Plugin panel helpers ───────────────────────────────────────── */
+  let _pluginToken = '';
+  let _pluginInstalled = false;
+
+  function genPluginToken() {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase().slice(0, 6);
+  }
+
+  function pluginPanelHtml(token) {
+    return `<div class="rx-plugin-panel" id="rxPluginPanel">
+      <div class="rx-plugin-hdr">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        Studio Plugin
+      </div>
+      <div class="rx-plugin-steps">
+        <div class="rx-plugin-step">
+          <span class="rx-step-num" id="rxStep1Num">1</span>
+          <div>
+            <div class="rx-step-title">Install the ROTEX plugin into Roblox Studio</div>
+            <button class="rx-plugin-install" id="rxInstallPlugin">Install to Studio →</button>
+          </div>
+        </div>
+        <div class="rx-plugin-step">
+          <span class="rx-step-num">2</span>
+          <div>
+            <div class="rx-step-title">Enter this token in the plugin — then click Connect</div>
+            <div class="rx-plugin-token-row">
+              <code class="rx-plugin-token" id="rxPluginToken">${token}</code>
+              <button class="rx-plugin-copy" id="rxCopyToken">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rx-plugin-status" id="rxPluginStatus">
+        <span class="rx-pdot waiting" id="rxPluginDot"></span>
+        <span id="rxPluginStatusText">Waiting for plugin...</span>
+        <span class="rx-plugin-rojo-row" id="rxRojoRow" style="display:none">
+          &nbsp;·&nbsp; Rojo <span class="rx-rojo-badge" id="rxRojoBadge">stopped</span>
+        </span>
+      </div>
+    </div>`;
+  }
+
+  function browserPanelHtml(token) {
+    return `<div class="rx-plugin-panel" id="rxPluginPanel">
+      <div class="rx-plugin-hdr">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+        Browser Extension
+      </div>
+      <div class="rx-plugin-steps">
+        <div class="rx-plugin-step">
+          <span class="rx-step-num">1</span>
+          <div>
+            <div class="rx-step-title">Install the ROTEX browser extension</div>
+            <div class="rx-browser-note">Chrome/Edge: go to <code>Extensions</code> → enable <code>Developer mode</code> → <code>Load unpacked</code> → select the <code>browser-extension/</code> folder</div>
+          </div>
+        </div>
+        <div class="rx-plugin-step">
+          <span class="rx-step-num">2</span>
+          <div>
+            <div class="rx-step-title">Enter this token in the extension — then click Connect</div>
+            <div class="rx-plugin-token-row">
+              <code class="rx-plugin-token" id="rxPluginToken">${token}</code>
+              <button class="rx-plugin-copy" id="rxCopyToken">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rx-plugin-status" id="rxPluginStatus">
+        <span class="rx-pdot waiting" id="rxPluginDot"></span>
+        <span id="rxPluginStatusText">Waiting for browser...</span>
+      </div>
+    </div>`;
+  }
+
+  function setupBrowserPanel(token, projectName) {
+    const copyBtn = document.getElementById('rxCopyToken');
+    if (!copyBtn) return;
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(token).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    });
+
+    if (window.rotexDesktop) {
+      const proPass = localStorage.getItem('rotex_pro_pass') || '';
+      window.rotexDesktop.startPluginServer(token, projectName, proPass, 'Supabase');
+
+      window.rotexDesktop.onBrowserConnected(() => {
+        const dot  = document.getElementById('rxPluginDot');
+        const text = document.getElementById('rxPluginStatusText');
+        if (dot)  dot.className = 'rx-pdot connected';
+        if (text) text.textContent = 'Browser connected';
+      });
+    }
+  }
+
+  function setupPluginPanel(token, projectName) {
+    const installBtn = document.getElementById('rxInstallPlugin');
+    const copyBtn    = document.getElementById('rxCopyToken');
+    if (!installBtn || !copyBtn) return;
+
+    function markPluginInstalled() {
+      _pluginInstalled = true;
+      installBtn.textContent = '✓ Installed';
+      installBtn.classList.add('done');
+      installBtn.disabled = false;
+      document.getElementById('rxStep1Num')?.classList.add('done');
+    }
+
+    if (window.rotexDesktop?.checkStudioPlugin) {
+      window.rotexDesktop.checkStudioPlugin().then(result => {
+        if (result?.installed) markPluginInstalled();
+      }).catch(() => {});
+    }
+
+    if (_pluginInstalled) {
+      installBtn.textContent = '✓ Installed';
+      installBtn.classList.add('done');
+      document.getElementById('rxStep1Num')?.classList.add('done');
+    }
+
+    installBtn.addEventListener('click', async () => {
+      if (!window.rotexDesktop) return;
+      if (installBtn.classList.contains('done')) return;
+      installBtn.textContent = 'Installing...';
+      installBtn.disabled = true;
+      const [result] = await Promise.all([
+        window.rotexDesktop.installStudioPlugin(),
+        new Promise(r => setTimeout(r, 1200)),
+      ]);
+      if (result?.ok) {
+        _pluginInstalled = true;
+        installBtn.textContent = '✓ Installed';
+        installBtn.classList.add('done');
+        document.getElementById('rxStep1Num')?.classList.add('done');
+      } else {
+        installBtn.textContent = 'Failed — retry';
+        installBtn.disabled = false;
+      }
+    });
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(token).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    });
+
+    // Listen for plugin events from Electron
+    if (window.rotexDesktop) {
+      window.rotexDesktop.startPluginServer(token, projectName || '');
+
+      window.rotexDesktop.onPluginConnected(() => {
+        const dot  = document.getElementById('rxPluginDot');
+        const text = document.getElementById('rxPluginStatusText');
+        const row  = document.getElementById('rxRojoRow');
+        if (dot)  { dot.className = 'rx-pdot connected'; }
+        if (text) { text.textContent = 'Studio connected'; }
+        if (row)  { row.style.display = 'flex'; }
+      });
+
+      window.rotexDesktop.onRojoStatus(status => {
+        const badge = document.getElementById('rxRojoBadge');
+        if (!badge) return;
+        badge.textContent = status;
+        badge.className = 'rx-rojo-badge' + (status === 'running' ? ' running' : '');
+      });
+
+      window.rotexDesktop.onPluginContext(ctx => {
+        if (!ctx || !activeChatId) return;
+        const scriptNames = (ctx.scripts || []).map(s => s.name).join(', ');
+        if (scriptNames) {
+          appendAssistantNote(`[Studio context received: ${scriptNames}]`);
+        }
+      });
+    }
+  }
+
+  function appendAssistantNote(text) {
+    const msgs = document.getElementById('rxAiMessages');
+    if (!msgs) return;
+    const div = document.createElement('div');
+    div.className = 'ai-msg ai-msg-system';
+    div.textContent = text;
+    msgs.appendChild(div);
+  }
+
+  function clearChatView(projectMode, projectName) {
     const msgs = document.getElementById('rxAiMessages');
     const engineLabel = projectMode ? ` · ${projectMode}` : '';
+    const nameLabel = projectName ? ` — ${projectName}` : '';
+    const isRoblox = projectMode && projectMode.toLowerCase().includes('roblox');
+
+    let pluginHtml = '';
+    if (isRoblox) {
+      _pluginToken = genPluginToken();
+      pluginHtml = pluginPanelHtml(_pluginToken);
+    }
+
     msgs.innerHTML = `<div class="ai-welcome-msg" id="rxWelcomeMsg">
-      <p><strong>ROTEX AI${engineLabel}</strong></p>
+      <p><strong>ROTEX AI${engineLabel}${nameLabel}</strong></p>
       <p>What are you working on? I can write code, debug, explain, refactor, and plan.</p>
+      ${pluginHtml}
     </div>`;
+
+    if (isRoblox) setupPluginPanel(_pluginToken, projectName);
   }
 
   function loadChatMessages(chat) {
     const msgs = document.getElementById('rxAiMessages');
     if (chat?.projectMode) setProjectMode(chat.projectMode);
     if (!chat?.messages?.length) {
-      clearChatView(chat?.projectMode);
+      clearChatView(chat?.projectMode, chat?.projectName);
       return;
     }
     msgs.innerHTML = '';
@@ -1064,9 +1411,19 @@
     msgs.scrollTop = msgs.scrollHeight;
 
     // Call API
-    const mode   = document.getElementById('rxProjectMode')?.value || 'General';
+    const mode   = document.getElementById('rxProjectMode')?.value || 'Roblox';
     const isAgent = currentMode === 'agent' || currentMode === 'supreme' || currentMode === 'plan';
     const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
+
+    // Build plugin connection context for the AI
+    const pluginDot  = document.getElementById('rxPluginDot');
+    const pluginConnected = pluginDot && pluginDot.className.includes('connected');
+    const rojoStatus = document.getElementById('rxRojoBadge')?.textContent || 'stopped';
+    const pluginCtx = _pluginToken
+      ? (pluginConnected
+          ? `Studio plugin: CONNECTED. Rojo sync: ${rojoStatus}.`
+          : 'Studio plugin: NOT CONNECTED — token shown but Studio has not connected yet.')
+      : '';
 
     // Build message history from the current chat
     const activeChat = allChats.find(c => c.id === activeChatId);
@@ -1080,7 +1437,9 @@
         body: JSON.stringify({
           messages: history,
           model: selectedModel,
+          mode: 'editor',
           projectMode: mode,
+          projectContext: pluginCtx,
           agent: isAgent,
           proPass: localStorage.getItem('rotex_pro_pass') || '',
           stream: true,

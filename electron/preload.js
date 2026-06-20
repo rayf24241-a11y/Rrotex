@@ -25,4 +25,13 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
   // ─── Utils ────────────────────────────────────────────────────────────
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   startAuthServer: () => ipcRenderer.invoke('start-auth-server'),
+
+  // ─── Studio plugin ────────────────────────────────────────────────────────
+  installStudioPlugin: () => ipcRenderer.invoke('install-studio-plugin'),
+  checkStudioPlugin: () => ipcRenderer.invoke('check-studio-plugin'),
+  startPluginServer: (token, projectName, proPass, projectMode) => ipcRenderer.invoke('start-plugin-server', token, projectName, proPass, projectMode),
+  onPluginConnected: (fn) => ipcRenderer.on('plugin-connected', fn),
+  onBrowserConnected: (fn) => ipcRenderer.on('browser-connected', fn),
+  onPluginContext: (fn) => ipcRenderer.on('plugin-context', (_, ctx) => fn(ctx)),
+  onRojoStatus: (fn) => ipcRenderer.on('rojo-status', (_, status) => fn(status)),
 });

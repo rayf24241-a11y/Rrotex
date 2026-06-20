@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "ROTEX AI",
+  "description": "Open ROTEX AI from your browser — requires the ROTEX desktop app to be running",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ROTEX AI"
+  },
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1:7878/*"]
+}

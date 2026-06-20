@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ROTEX AI</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width: 380px; height: 520px; overflow: hidden;
+  background: #0d0f17; color: #e8edf8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px; display: flex; flex-direction: column;
+}
+
+/* ── Header ── */
+.hdr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; background: #141720;
+  border-bottom: 1px solid #252d40; flex-shrink: 0;
+}
+.logo-mark {
+  width: 26px; height: 26px; border-radius: 7px;
+  background: #ffd60a; color: #0d0f17;
+  font-size: 10px; font-weight: 900; letter-spacing: -.5px;
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-name { font-size: 13px; font-weight: 700; }
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.project-chip {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+  background: rgba(62,207,142,0.15); color: #3ecf8e; letter-spacing: .04em;
+}
+.new-chat-btn {
+  background: none; border: none; cursor: pointer;
+  color: #52607a; font-size: 14px; padding: 2px 4px; line-height: 1;
+  border-radius: 4px; transition: color .15s;
+}
+.new-chat-btn:hover { color: #e8edf8; }
+.conn-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #52607a; animation: pulse 2s infinite;
+}
+.conn-dot.on { background: #22c55e; animation: none; }
+@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+/* ── Connect screen ── */
+#connectScreen {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px; padding: 28px 24px;
+}
+.connect-icon {
+  width: 48px; height: 48px; border-radius: 14px;
+  background: #ffd60a; color: #0d0f17;
+  font-size: 20px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+}
+.connect-title { font-size: 16px; font-weight: 700; text-align: center; }
+.connect-sub {
+  font-size: 11px; color: #8a93aa; text-align: center;
+  line-height: 1.7; max-width: 280px;
+}
+.token-row { display: flex; gap: 6px; width: 100%; }
+input[type="text"] {
+  flex: 1; background: #1a1f2e; border: 1.5px solid #252d40;
+  border-radius: 8px; padding: 8px 10px; color: #e8edf8;
+  font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; outline: none;
+  transition: border-color .15s;
+}
+input[type="text"]:focus { border-color: #ffd60a; }
+input[type="text"]::placeholder {
+  color: #52607a; font-weight: 400;
+  letter-spacing: 0; text-transform: none; font-family: inherit;
+}
+.btn {
+  padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+  font-size: 12px; font-weight: 700; transition: opacity .15s; white-space: nowrap;
+}
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-yellow { background: #ffd60a; color: #0d0f17; }
+.status-msg { font-size: 11px; min-height: 16px; text-align: center; color: #8a93aa; }
+.status-msg.err { color: #ff4757; }
+.status-msg.ok  { color: #22c55e; }
+
+/* ── Chat screen ── */
+#chatScreen { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+
+/* Page context banner */
+.page-banner {
+  background: #0f1219; border-bottom: 1px solid #1e2538;
+  padding: 5px 10px; display: flex; align-items: center; gap: 5px;
+  flex-shrink: 0;
+}
+.page-icon { font-size: 10px; flex-shrink: 0; color: #52607a; }
+.page-url {
+  font-size: 10px; color: #3a4460;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+
+/* Messages area */
+.msgs {
+  flex: 1; overflow-y: auto; padding: 12px 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.msgs::-webkit-scrollbar { width: 3px; }
+.msgs::-webkit-scrollbar-track { background: transparent; }
+.msgs::-webkit-scrollbar-thumb { background: #252d40; border-radius: 2px; }
+
+.msg { display: flex; gap: 7px; }
+.msg.user { flex-direction: row-reverse; }
+
+.msg-avatar {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 900; margin-top: 2px;
+}
+.msg-avatar.ai-av { background: #ffd60a; color: #0d0f17; }
+.msg-avatar.user-av { background: #1e2538; color: #52607a; }
+
+.msg-bubble {
+  padding: 8px 10px; border-radius: 10px;
+  font-size: 12px; line-height: 1.6; max-width: 278px; word-break: break-word;
+}
+.msg.ai .msg-bubble { background: #141c2b; color: #c8d4e8; border-top-left-radius: 3px; }
+.msg.user .msg-bubble { background: #1e3a5f; color: #e8edf8; border-top-right-radius: 3px; }
+
+.msg-bubble strong { color: #e8edf8; }
+.msg-bubble code {
+  background: #0d0f17; border-radius: 3px; padding: 1px 5px;
+  font-size: 11px; font-family: 'Courier New', monospace; color: #a8d8a8;
+}
+.msg-bubble pre {
+  background: #0d0f17; border-radius: 6px; padding: 8px 10px;
+  margin: 6px 0; overflow-x: auto;
+}
+.msg-bubble pre code { background: none; padding: 0; color: #a8d8a8; display: block; }
+
+/* Typing dots */
+.typing-bubble {
+  background: #141c2b; border-radius: 10px; border-top-left-radius: 3px;
+  padding: 10px 12px; display: flex; gap: 4px; align-items: center;
+}
+.tdot {
+  width: 6px; height: 6px; border-radius: 50%; background: #52607a;
+  animation: tdot 1.2s infinite;
+}
+.tdot:nth-child(2) { animation-delay: .2s; }
+.tdot:nth-child(3) { animation-delay: .4s; }
+@keyframes tdot { 0%,80%,100%{opacity:.2;transform:scale(1)} 40%{opacity:1;transform:scale(1.2)} }
+
+/* Input area */
+.input-area {
+  border-top: 1px solid #1e2538; padding: 8px 10px;
+  display: flex; gap: 6px; align-items: flex-end; flex-shrink: 0;
+}
+textarea {
+  flex: 1; background: #141c2b; border: 1.5px solid #252d40;
+  border-radius: 8px; padding: 7px 10px; color: #e8edf8;
+  font-family: inherit; font-size: 12px; outline: none;
+  resize: none; max-height: 80px; line-height: 1.5;
+  transition: border-color .15s;
+}
+textarea:focus { border-color: #3b82f6; }
+textarea::placeholder { color: #3a4460; }
+.send-btn {
+  width: 32px; height: 32px; border: none; border-radius: 8px; cursor: pointer;
+  background: #3b82f6; color: #fff; font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity .15s; flex-shrink: 0;
+}
+.send-btn:hover { opacity: .85; }
+.send-btn:disabled { opacity: .35; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="logo-mark">RX</div>
+  <span class="logo-name">ROTEX</span>
+  <div class="hdr-right">
+    <span class="project-chip" id="projectChip" style="display:none">Supabase</span>
+    <button class="new-chat-btn" id="newChatBtn" title="New chat" style="display:none">⊕</button>
+    <div class="conn-dot" id="connDot"></div>
+  </div>
+</div>
+
+<!-- Connect screen -->
+<div id="connectScreen">
+  <div class="connect-icon">RX</div>
+  <div class="connect-title">Connect to ROTEX</div>
+  <div class="connect-sub">
+    Open ROTEX, start or open a Supabase project,
+    then copy the token shown in the Browser Extension panel.
+  </div>
+  <div class="token-row">
+    <input type="text" id="tokenInput" placeholder="Paste token from ROTEX" maxlength="8" spellcheck="false" autocomplete="off">
+    <button class="btn btn-yellow" id="connectBtn">Connect</button>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+</div>
+
+<!-- Chat screen -->
+<div id="chatScreen">
+  <div class="page-banner" id="pageBanner" style="display:none">
+    <span class="page-icon">🌐</span>
+    <span class="page-url" id="pageUrl"></span>
+  </div>
+  <div class="msgs" id="msgs"></div>
+  <div class="input-area">
+    <textarea id="msgInput" placeholder="Ask about Supabase…" rows="1"></textarea>
+    <button class="send-btn" id="sendBtn" title="Send">↑</button>
+  </div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

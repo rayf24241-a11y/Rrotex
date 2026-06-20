@@ -2,8 +2,16 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const { spawn } = require('child_process');
 
-let authServer = null;
+let authServer        = null;
+let pluginServer      = null;
+let pluginToken       = null;
+let rojoProcess       = null;
+let aiContext         = null;
+let currentProjectName = '';
+let userAuthToken     = '';
+let userProjectMode   = '';
 
 // ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -33,6 +41,12 @@ app.on('open-url', (event, url) => {
 
 let mainWindow;
 
+function appAssetPath(relativePath) {
+  const packagedPath = path.join(process.resourcesPath || '', relativePath);
+  if (app.isPackaged && fs.existsSync(packagedPath)) return packagedPath;
+  return path.join(__dirname, '..', relativePath);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -56,7 +70,7 @@ function createWindow() {
   });
 
   // Always start at login — login.html auto-redirects if already authenticated.
-  mainWindow.loadFile(path.join(__dirname, '..', 'login.html'));
+  mainWindow.loadFile(appAssetPath('login.html'));
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -105,6 +119,7 @@ function handleDeepLink(url) {
   } catch {}
 }
 
+app.commandLine.appendSwitch('disable-cache');
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
@@ -117,9 +132,9 @@ app.on('activate', () => {
 
 // ─── Page navigation ──────────────────────────────────────────────────────────
 const PAGE_FILES = {
-  login: '../login.html',
-  projects: '../projects.html',
-  editor: '../editor.html',
+  login: 'login.html',
+  projects: 'projects.html',
+  editor: 'editor.html',
 };
 
 ipcMain.handle('load-page', async (event, page) => {
@@ -130,7 +145,7 @@ ipcMain.handle('load-page', async (event, page) => {
   const overlayColor = page === 'editor' ? '#1e1e1e' : '#05070b';
   mainWindow.setTitleBarOverlay({ color: overlayColor, symbolColor: '#a0aec1', height: 36 });
 
-  await mainWindow.loadFile(path.join(__dirname, file));
+  await mainWindow.loadFile(appAssetPath(file));
 });
 
 // ─── IPC: File System ─────────────────────────────────────────────────────────
@@ -210,6 +225,181 @@ ipcMain.handle('exec-command', async (event, command, cwd) => {
 
 ipcMain.handle('open-external', async (event, url) => {
   shell.openExternal(url);
+});
+
+// ─── IPC: Local auth callback server ─────────────────────────────────────────
+// ─── IPC: Studio Plugin Server ───────────────────────────────────────────────
+ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass, projectMode) => {
+  pluginToken = token;
+  currentProjectName = projectName || '';
+  userAuthToken = proPass || '';
+  userProjectMode = projectMode || '';
+
+  if (pluginServer) return 7878; // reuse existing server, just update token
+
+  pluginServer = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
+
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+    const url = new URL(req.url, 'http://127.0.0.1:7878');
+    const reqToken = url.searchParams.get('token') || '';
+
+    // /ping — no auth needed for the check itself, but token must match
+    if (url.pathname === '/ping' && req.method === 'GET') {
+      if (reqToken === pluginToken) {
+        res.end(JSON.stringify({ ok: true, project: currentProjectName }));
+        const source = url.searchParams.get('source') || 'studio';
+        if (mainWindow) {
+          mainWindow.webContents.send(source === 'browser' ? 'browser-connected' : 'plugin-connected');
+        }
+      } else {
+        res.writeHead(401);
+        res.end(JSON.stringify({ ok: false, error: 'bad token' }));
+      }
+      return;
+    }
+
+    if (reqToken !== pluginToken) {
+      res.writeHead(401); res.end(JSON.stringify({ ok: false, error: 'bad token' })); return;
+    }
+
+    if (url.pathname === '/rojo/start' && req.method === 'POST') {
+      if (!rojoProcess) {
+        rojoProcess = spawn('rojo', ['serve'], { shell: true, stdio: 'ignore', detached: false });
+        rojoProcess.on('close', () => {
+          rojoProcess = null;
+          if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
+        });
+        if (mainWindow) mainWindow.webContents.send('rojo-status', 'running');
+      }
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (url.pathname === '/rojo/stop' && req.method === 'POST') {
+      if (rojoProcess) { rojoProcess.kill(); rojoProcess = null; }
+      if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (url.pathname === '/ai/start' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try { aiContext = JSON.parse(body); } catch {}
+        if (mainWindow) mainWindow.webContents.send('plugin-context', aiContext);
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+
+    if (url.pathname === '/chat' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(body);
+          const postData = JSON.stringify({
+            messages: payload.messages || [],
+            model: payload.model || 'fast',
+            projectMode: userProjectMode || 'Supabase',
+            projectName: currentProjectName || '',
+            proPass: userAuthToken || '',
+            stream: false,
+          });
+          const https = require('https');
+          const options = {
+            hostname: 'rrotex.com',
+            port: 443,
+            path: '/api/chat',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+          };
+          const apiReq = https.request(options, (apiRes) => {
+            let data = '';
+            apiRes.on('data', chunk => { data += chunk; });
+            apiRes.on('end', () => {
+              res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
+              res.end(data);
+            });
+          });
+          apiReq.on('error', err => {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+          });
+          apiReq.write(postData);
+          apiReq.end();
+        } catch (err) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    res.writeHead(404); res.end(JSON.stringify({ ok: false, error: 'not found' }));
+  });
+
+  return new Promise(resolve => {
+    pluginServer.listen(7878, '127.0.0.1', () => resolve(7878));
+    pluginServer.on('error', err => {
+      if (err.code === 'EADDRINUSE') resolve(7878);
+      else resolve(null);
+    });
+  });
+});
+
+function studioPluginPath() {
+  return path.join(
+    process.env.LOCALAPPDATA || path.join(require('os').homedir(), 'AppData', 'Local'),
+    'Roblox', 'Plugins', 'ROTEX.lua'
+  );
+}
+
+async function findStudioPluginSource() {
+  const candidates = [
+    path.join(__dirname, '..', 'plugin', 'rotex-plugin.lua'),
+    path.join(__dirname, 'plugin', 'rotex-plugin.lua'),
+    path.join(process.resourcesPath || '', 'plugin', 'rotex-plugin.lua'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await fs.promises.access(candidate, fs.constants.R_OK);
+      return candidate;
+    } catch {}
+  }
+  return null;
+}
+
+ipcMain.handle('install-studio-plugin', async () => {
+  const dest = studioPluginPath();
+  try {
+    const src = await findStudioPluginSource();
+    if (!src) throw new Error('ROTEX Roblox plugin source was not found in this app build.');
+    await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+    await fs.promises.copyFile(src, dest);
+    return { ok: true, installed: true, path: dest };
+  } catch (err) {
+    return { ok: false, installed: false, error: err.message, path: dest };
+  }
+});
+
+ipcMain.handle('check-studio-plugin', async () => {
+  const dest = studioPluginPath();
+  try {
+    const stat = await fs.promises.stat(dest);
+    return { ok: true, installed: stat.isFile(), path: dest };
+  } catch {
+    return { ok: true, installed: false, path: dest };
+  }
 });
 
 // ─── IPC: Local auth callback server ─────────────────────────────────────────

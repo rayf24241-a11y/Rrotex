@@ -41,7 +41,7 @@
     .ep-head h2 { font-size: 20px; font-weight: 700; color: var(--text); }
     .ep-head p  { font-size: 13px; color: var(--muted); margin-top: 5px; }
     .ep-cards {
-      display: grid; grid-template-columns: repeat(3,1fr); gap: 10px;
+      display: grid; grid-template-columns: repeat(2,1fr); gap: 10px;
     }
     .ep-card {
       background: var(--panel); border: 2px solid var(--border);
@@ -52,6 +52,17 @@
     }
     .ep-card:hover { border-color: rgba(255,214,10,0.4); background: #1e2538; }
     .ep-card.selected { border-color: var(--yellow); background: var(--yellow-d); }
+    .ep-soon-card {
+      background: var(--panel); border: 2px solid var(--border);
+      border-radius: 14px; padding: 18px 14px 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      opacity: 0.4; cursor: not-allowed; pointer-events: none; user-select: none;
+    }
+    .ep-soon-badge {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 6px; color: var(--muted);
+    }
     .ep-card-icon {
       width: 48px; height: 48px; border-radius: 14px;
       display: flex; align-items: center; justify-content: center;
@@ -70,6 +81,18 @@
     .ep-card.selected .ep-blender-opt { display: flex; }
     .ep-blender-opt input { accent-color: var(--yellow); cursor: pointer; }
     .ep-blender-opt:hover { color: var(--text); }
+    .ep-name-step { display: none; flex-direction: column; gap: 10px; }
+    .ep-name-step.visible { display: flex; }
+    .ep-name-label { font-size: 12px; color: var(--muted); }
+    .ep-name-label strong { color: var(--text); }
+    .ep-name-input {
+      width: 100%; padding: 10px 12px; background: var(--panel);
+      border: 1.5px solid var(--border); border-radius: 10px;
+      color: var(--text); font: inherit; font-size: 13px;
+      outline: none; transition: border-color 0.15s; box-sizing: border-box;
+    }
+    .ep-name-input:focus { border-color: var(--yellow); }
+    .ep-name-input::placeholder { color: var(--quiet); }
     .ep-start {
       width: 100%; padding: 12px; border: none; border-radius: 11px;
       background: var(--yellow); color: #0D0F17;
@@ -319,22 +342,19 @@
       </div>
       <div class="ep-cards">
 
-        <div class="ep-card" data-engine="Unity" id="epUnity">
+        <div class="ep-soon-card">
           <div class="ep-card-icon ep-unity-icon">U</div>
           <div class="ep-card-name">Unity</div>
-          <div class="ep-card-sub">C#, physics, scenes, prefabs</div>
-          <label class="ep-blender-opt" onclick="event.stopPropagation()">
-            <input type="checkbox" id="epUnityBlender"> Also using Blender
-          </label>
+          <div class="ep-soon-badge">Coming Soon</div>
         </div>
 
-        <div class="ep-card" data-engine="Blender" id="epBlender">
+        <div class="ep-soon-card">
           <div class="ep-card-icon ep-blender-icon">B</div>
           <div class="ep-card-name">Blender</div>
-          <div class="ep-card-sub">3D modeling, rigging, rendering</div>
+          <div class="ep-soon-badge">Coming Soon</div>
         </div>
 
-        <div class="ep-card" data-engine="Roblox" id="epRoblox">
+        <div class="ep-card" data-engine="Roblox" id="epRoblox" style="grid-column:1/-1">
           <div class="ep-card-icon ep-roblox-icon">R</div>
           <div class="ep-card-name">Roblox</div>
           <div class="ep-card-sub">Lua, Studio, game dev</div>
@@ -343,8 +363,13 @@
           </label>
         </div>
 
+
       </div>
-      <button class="ep-start" id="epStart" disabled>Start Chat →</button>
+      <div class="ep-name-step" id="epNameStep">
+        <div class="ep-name-label">Name your <strong id="epEngineLabel">project</strong> package</div>
+        <input class="ep-name-input" id="epNameInput" type="text" maxlength="60" placeholder="e.g. MyGame, PlatformerProto…" autocomplete="off" />
+      </div>
+      <button class="ep-start" id="epStart" disabled>Next →</button>
       <button class="ep-cancel" id="epCancel">Cancel</button>
     </div>
   </div>
@@ -600,18 +625,23 @@
 
     /* ── Engine picker modal ────────────────────────────────────────── */
     let pickedEngine = null;
+    let epStep = 1;
 
     function openEnginePicker() {
       pickedEngine = null;
+      epStep = 1;
       document.querySelectorAll('.ep-card').forEach(c => c.classList.remove('selected'));
-      document.getElementById('epUnityBlender').checked = false;
       document.getElementById('epRobloxBlender').checked = false;
+      document.getElementById('epNameInput').value = '';
+      document.getElementById('epNameStep').classList.remove('visible');
       document.getElementById('epStart').disabled = true;
+      document.getElementById('epStart').textContent = 'Next →';
       document.getElementById('epOverlay').classList.add('open');
     }
 
     document.querySelectorAll('.ep-card').forEach(card => {
       card.addEventListener('click', () => {
+        if (epStep !== 1) return;
         document.querySelectorAll('.ep-card').forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
         pickedEngine = card.dataset.engine;
@@ -627,13 +657,27 @@
       if (e.target === e.currentTarget) document.getElementById('epOverlay').classList.remove('open');
     });
 
+    document.getElementById('epNameInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('epStart').click();
+    });
+
     document.getElementById('epStart').addEventListener('click', async () => {
-      if (!pickedEngine) return;
-      let mode = pickedEngine;
-      if (mode === 'Unity'  && document.getElementById('epUnityBlender').checked)  mode = 'Unity+Blender';
-      if (mode === 'Roblox' && document.getElementById('epRobloxBlender').checked) mode = 'Roblox+Blender';
-      document.getElementById('epOverlay').classList.remove('open');
-      await createChat(mode);
+      if (epStep === 1) {
+        if (!pickedEngine) return;
+        let mode = pickedEngine;
+        if (mode === 'Roblox' && document.getElementById('epRobloxBlender').checked) mode = 'Roblox+Blender';
+        pickedEngine = mode;
+        epStep = 2;
+        document.getElementById('epEngineLabel').textContent = mode;
+        document.getElementById('epNameStep').classList.add('visible');
+        document.getElementById('epStart').textContent = 'Start Chat →';
+        document.getElementById('epStart').disabled = false;
+        document.getElementById('epNameInput').focus();
+      } else {
+        const name = document.getElementById('epNameInput').value.trim();
+        document.getElementById('epOverlay').classList.remove('open');
+        await createChat(pickedEngine, name || null);
+      }
     });
 
     /* ── New chat ───────────────────────────────────────────────────── */
@@ -642,12 +686,13 @@
       openEnginePicker();
     }
 
-    async function createChat(projectMode) {
+    async function createChat(projectMode, projectName) {
       if (!currentUser) return go('login');
       const uid = currentUser.uid;
       const now = serverTimestamp ? serverTimestamp() : Date.now();
+      const chatTitle = projectName || 'New Chat';
 
-      const data = { uid, title: 'New Chat', projectMode, createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
+      const data = { uid, title: chatTitle, projectMode, projectName: projectName || '', createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
       let id = `local_${Date.now()}`;
 
       if (db) {
