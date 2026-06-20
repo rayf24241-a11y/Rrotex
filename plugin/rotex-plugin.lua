@@ -172,8 +172,22 @@ outputScroll.CanvasSize           = UDim2.new(0,0,0,0)
 outputScroll.Parent               = root
 Instance.new("UICorner", outputScroll).CornerRadius = UDim.new(0, 8)
 
-local outputText = Label(outputScroll, "", UDim2.new(1,-10,0,0), UDim2.new(0,5,0,5), C.muted, 10, false, true)
-outputText.AutomaticSize = Enum.AutomaticSize.Y
+local outputText = Instance.new("TextBox")
+outputText.Size                   = UDim2.new(1,-10,0,0)
+outputText.Position               = UDim2.new(0,5,0,5)
+outputText.BackgroundTransparency = 1
+outputText.Text                   = ""
+outputText.TextColor3             = C.muted
+outputText.TextSize               = 10
+outputText.Font                   = Enum.Font.Code
+outputText.TextXAlignment         = Enum.TextXAlignment.Left
+outputText.TextYAlignment         = Enum.TextYAlignment.Top
+outputText.TextWrapped            = true
+outputText.MultiLine              = true
+outputText.ClearTextOnFocus       = false
+outputText.TextEditable           = false
+outputText.AutomaticSize          = Enum.AutomaticSize.Y
+outputText.Parent                 = outputScroll
 
 -- ── State ────────────────────────────────────────────────────────────────────
 local connected    = false
