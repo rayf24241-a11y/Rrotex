@@ -406,34 +406,12 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
   });
 });
 
-// ─── IPC: TexBrain 0.5-β local Ollama pipeline ───────────────────────────────
-ipcMain.handle('texbrain-call', async (event, messages) => {
+// ─── IPC: TexBrain 0.5-β (single Ollama call, engine-aware) ──────────────────
+ipcMain.handle('texbrain-call', async (event, messages, projectMode) => {
   const http = require('http');
   const OLLAMA_PORT = 11434;
 
-  function ollamaRequest(endpoint, body) {
-    return new Promise((resolve, reject) => {
-      const postData = JSON.stringify(body);
-      const req = http.request(
-        { hostname: '127.0.0.1', port: OLLAMA_PORT, path: endpoint, method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
-        res => {
-          let d = '';
-          res.on('data', c => { d += c; });
-          res.on('end', () => {
-            try { resolve(JSON.parse(d)); }
-            catch { reject(new Error('Ollama parse error')); }
-          });
-        }
-      );
-      req.on('error', reject);
-      req.setTimeout(90000, () => { req.destroy(); reject(new Error('Ollama timeout')); });
-      req.write(postData);
-      req.end();
-    });
-  }
-
-  // Pick best available local model
+  // Auto-detect best installed model
   let model = 'llama3.2';
   try {
     const tags = await new Promise((resolve, reject) => {
@@ -452,29 +430,40 @@ ipcMain.handle('texbrain-call', async (event, messages) => {
     return { error: 'Ollama is not running. Download it from ollama.ai, then run: ollama pull llama3.2' };
   }
 
+  // Engine-specific focus
+  const engineGuides = {
+    Roblox:         'You only help with Roblox game development: Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, Roblox services (Players, DataStoreService, TweenService, RunService, etc.), Roblox Studio, and the Roblox API. Do not help with anything outside Roblox.',
+    Unity:          'You only help with Unity game development: C# scripting, MonoBehaviour lifecycle, Unity APIs, GameObjects, physics, animations, and the Unity Editor.',
+    Blender:        'You only help with Blender 3D: Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering.',
+    'Roblox+Blender': 'You only help with Roblox game development (Luau) and Blender 3D (bpy) for creating assets used in Roblox games.',
+    'Unity+Blender':  'You only help with Unity (C#) and Blender 3D (bpy) for creating assets used in Unity projects.',
+  };
+  const engine = (projectMode || 'Roblox').trim();
+  const engineFocus = engineGuides[engine] || engineGuides['Roblox'];
+
+  const systemPrompt = [
+    'You are TexBrain 0.5-β, the free local AI model inside the ROTEX app for game developers.',
+    engineFocus,
+    'ROTEX model ranking (best → worst): Pro Smart (Claude Haiku, best) > Smart (Llama 70B) > Balanced (Qwen3 32B) > Fast (Llama 8B) > TexBrain (you — free, local, least powerful). If asked which model is best, say Pro Smart. Be honest that you are the lowest-ranked model.',
+    'Be concise and direct. Answer with working code using Markdown fenced code blocks. Do not go off-topic or hallucinate APIs that do not exist.',
+  ].join('\n');
+
   try {
-    const lastMsg = (messages[messages.length - 1] || {}).content || '';
-
-    // Agent 1 — Clarifier: expand user intent into detailed task description
-    const clarifyRes = await ollamaRequest('/api/chat', {
-      model, stream: false,
-      messages: [
-        { role: 'system', content: 'You are a task clarifier. Rewrite the user\'s request in precise, specific detail. Include all implied requirements. Output only the rewritten task — no preamble.' },
-        { role: 'user', content: lastMsg },
-      ],
+    // Limit history to last 6 messages to keep responses fast
+    const history = messages.slice(-6);
+    const res = await new Promise((resolve, reject) => {
+      const postData = JSON.stringify({ model, stream: false, messages: [{ role: 'system', content: systemPrompt }, ...history] });
+      const req = http.request(
+        { hostname: '127.0.0.1', port: OLLAMA_PORT, path: '/api/chat', method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
+        r => { let d = ''; r.on('data', c => { d += c; }); r.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } }); }
+      );
+      req.on('error', reject);
+      req.setTimeout(120000, () => { req.destroy(); reject(new Error('timeout')); });
+      req.write(postData);
+      req.end();
     });
-    const clarified = clarifyRes.message?.content || lastMsg;
-
-    // Agent 2 — Worker: do the actual work with full conversation context
-    const workerMsgs = [
-      { role: 'system', content: 'You are TexBrain, a local AI expert for Roblox game development (Luau/Lua scripting, UI, physics, Roblox APIs). Provide complete, working code when asked. Be direct and technical. Use Markdown fenced code blocks.' },
-      ...messages.slice(0, -1),
-      { role: 'user', content: clarified },
-    ];
-    const workRes = await ollamaRequest('/api/chat', { model, stream: false, messages: workerMsgs });
-    const response = workRes.message?.content || '(no response from local model)';
-
-    return { text: response, model };
+    return { text: res.message?.content || '(no response from local model)', model };
   } catch (err) {
     if (err.message.includes('ECONNREFUSED')) {
       return { error: 'Ollama is not running. Install from ollama.ai then run: ollama pull llama3.2' };

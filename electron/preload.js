@@ -31,7 +31,7 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
   checkStudioPlugin: () => ipcRenderer.invoke('check-studio-plugin'),
   startPluginServer: (token, projectName, proPass, projectMode) => ipcRenderer.invoke('start-plugin-server', token, projectName, proPass, projectMode),
   queueStudioActions: (actions) => ipcRenderer.invoke('queue-studio-actions', actions),
-  callTexBrain: (messages) => ipcRenderer.invoke('texbrain-call', messages),
+  callTexBrain: (messages, projectMode) => ipcRenderer.invoke('texbrain-call', messages, projectMode),
   onPluginConnected: (fn) => ipcRenderer.on('plugin-connected', fn),
   onBrowserConnected: (fn) => ipcRenderer.on('browser-connected', fn),
   onPluginContext: (fn) => ipcRenderer.on('plugin-context', (_, ctx) => fn(ctx)),

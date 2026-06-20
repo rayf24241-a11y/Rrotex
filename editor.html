@@ -1517,7 +1517,8 @@
         return;
       }
       try {
-        const tbResult = await window.rotexDesktop.callTexBrain(history);
+        const mode = document.getElementById('rxProjectMode')?.value || 'Roblox';
+        const tbResult = await window.rotexDesktop.callTexBrain(history, mode);
         typing.remove();
         if (tbResult.error) {
           const errEl = document.createElement('div');
@@ -1715,11 +1716,11 @@
 
   /* ── Model selector ─────────────────────────────────────────── */
   const MODELS = [
+    { id: 'texbrain',  name: 'TexBrain 0.5-β',   role: 'Free',       svg: TEXBRAIN_SVG, pro: false, localOnly: true  },
     { id: 'fast',      name: 'Fast',              role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false },
     { id: 'balanced',  name: 'Balanced',          role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false },
     { id: 'smart',     name: 'Smart',             role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false },
     { id: 'pro-smart', name: 'Claude Haiku',      role: 'Expensive',  svg: CLAUDE_SVG,   pro: true,  localOnly: false },
-    { id: 'texbrain',  name: 'TexBrain 0.5-β',   role: 'Free · Local', svg: TEXBRAIN_SVG, pro: false, localOnly: true  },
   ];
 
   let selectedModel = localStorage.getItem('rotex_model') || 'fast';
