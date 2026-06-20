@@ -521,8 +521,8 @@
             <span id="rxAvatarLetter">?</span>
           </div>
           <div style="min-width:0;flex:1;">
-            <div id="rxProfileName" style="font-size:12px;font-weight:600;color:var(--rx-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
-            <div id="rxProfileEmail" style="font-size:10px;color:var(--rx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+            <div id="rxSidebarUserName" style="font-size:12px;font-weight:600;color:var(--rx-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+            <div id="rxSidebarUserEmail" style="font-size:10px;color:var(--rx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
           </div>
         </div>
       </div>
@@ -1189,7 +1189,7 @@
       const email = (auth.email || '').trim().toLowerCase();
       const letter = (name[0] || '?').toUpperCase();
       document.getElementById('rxAvatarLetter').textContent = letter;
-      const nameEl = document.getElementById('rxProfileName');
+      const nameEl = document.getElementById('rxSidebarUserName');
       nameEl.textContent = name || 'Not signed in';
       if (email === 'rayf24241@gmail.com') {
         const badge = document.createElement('span');
@@ -1197,7 +1197,7 @@
         badge.style.cssText = 'margin-left:5px;padding:1px 5px;background:#7c3aed;color:#fff;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:.05em;vertical-align:middle;';
         nameEl.appendChild(badge);
       }
-      document.getElementById('rxProfileEmail').textContent = email;
+      document.getElementById('rxSidebarUserEmail').textContent = email;
     } catch {}
   })();
   document.getElementById('rxProfileRow').addEventListener('click', () => {
