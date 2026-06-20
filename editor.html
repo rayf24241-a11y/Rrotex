@@ -1112,6 +1112,9 @@
   /* ── Plugin panel helpers ───────────────────────────────────────── */
   let _pluginToken = '';
   let _pluginInstalled = false;
+  let _studioConnected = false;
+  let _browserConnected = false;
+  let _rojoStatus = 'stopped';
 
   function genPluginToken() {
     const bytes = new Uint8Array(4);
@@ -1202,6 +1205,7 @@
       window.rotexDesktop.startPluginServer(token, projectName, proPass, 'Supabase');
 
       window.rotexDesktop.onBrowserConnected(() => {
+        _browserConnected = true;
         const dot  = document.getElementById('rxPluginDot');
         const text = document.getElementById('rxPluginStatusText');
         if (dot)  dot.className = 'rx-pdot connected';
@@ -1267,6 +1271,7 @@
       window.rotexDesktop.startPluginServer(token, projectName || '');
 
       window.rotexDesktop.onPluginConnected(() => {
+        _studioConnected = true;
         const dot  = document.getElementById('rxPluginDot');
         const text = document.getElementById('rxPluginStatusText');
         const row  = document.getElementById('rxRojoRow');
@@ -1276,6 +1281,7 @@
       });
 
       window.rotexDesktop.onRojoStatus(status => {
+        _rojoStatus = status || 'stopped';
         const badge = document.getElementById('rxRojoBadge');
         if (!badge) return;
         badge.textContent = status;
@@ -1417,11 +1423,11 @@
 
     // Build plugin connection context for the AI
     const pluginDot  = document.getElementById('rxPluginDot');
-    const pluginConnected = pluginDot && pluginDot.className.includes('connected');
-    const rojoStatus = document.getElementById('rxRojoBadge')?.textContent || 'stopped';
+    const pluginConnected = _studioConnected || (pluginDot && pluginDot.className.includes('connected'));
+    const rojoStatus = _rojoStatus || document.getElementById('rxRojoBadge')?.textContent || 'stopped';
     const pluginCtx = _pluginToken
       ? (pluginConnected
-          ? `Studio plugin: CONNECTED. Rojo sync: ${rojoStatus}.`
+          ? `Studio plugin: CONNECTED. Roblox Studio has authenticated with the current ROTEX token. Rojo sync: ${rojoStatus}. If the user asks whether Studio/the plugin is connected, answer yes.`
           : 'Studio plugin: NOT CONNECTED — token shown but Studio has not connected yet.')
       : '';
 
