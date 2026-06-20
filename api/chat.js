@@ -158,27 +158,43 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  // TexToken daily budget for free users (150k/day). Dev account is exempt.
+  // TexToken daily budget for free users (150k/day base). Dev account is exempt.
+  // Authenticated users who have purchased extra TexTokens get an extended daily
+  // cap equal to their purchased balance (up to 10M/day max). Once that balance
+  // is spent, they fall back to the base 150k limit next day.
   // Both the per-user key AND the per-IP key are checked — whichever is more
   // restrictive wins. This makes multi-accounting pointless: all accounts on
-  // the same IP share a single 150k/day pool.
+  // the same IP share a single pool.
   if (!isPro && !isDev) {
     const freeKey = userId !== 'unknown' ? `uid:${userId}` : `ip:${ip}`;
     const ipKey   = `ip:${ip}`;
     const usedByKey = getFreeTokensUsed(freeKey);
     const usedByIp  = getFreeTokensUsed(ipKey);
     const usedToday = Math.max(usedByKey, usedByIp);
-    // We don't have the estimate yet, so do a quick pre-check assuming ~2k min cost
-    if (usedToday >= FREE_DAILY_TEXTOKENS) {
+
+    // Authenticated users with purchased tokens get an extended daily cap.
+    // We trust their client-reported balance only when they have a valid Firebase
+    // token (authResult.ok) so unauthenticated callers can't fake a higher limit.
+    const isAuth = authResult.ok && userId !== 'unknown' && userId !== ip;
+    const clientBalance = isAuth ? Math.max(0, Number(texTokensLeft) || 0) : 0;
+    const effectiveDailyLimit = clientBalance > FREE_DAILY_TEXTOKENS
+      ? Math.min(clientBalance, 10_000_000)
+      : FREE_DAILY_TEXTOKENS;
+
+    if (usedToday >= effectiveDailyLimit) {
+      const hasPurchased = effectiveDailyLimit > FREE_DAILY_TEXTOKENS;
       response.status(402).json({
         error: 'no_textokens',
-        text: "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
+        text: hasPurchased
+          ? "You've used all your TexTokens for today. Buy more at rrotex.com/tokens."
+          : "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
       });
       return;
     }
-    // Store keys on request for post-estimate deduction below
+    // Store keys and effective limit on request for post-estimate deduction below
     request._freeKey = freeKey;
     request._ipKey   = ipKey;
+    request._effectiveDailyLimit = effectiveDailyLimit;
   }
 
   if (!isPro && !isDev && selected.freeDailyCap) {
@@ -275,10 +291,14 @@ module.exports = async function handler(request, response) {
     const usedByKey = getFreeTokensUsed(request._freeKey);
     const usedByIp  = request._ipKey ? getFreeTokensUsed(request._ipKey) : 0;
     const usedToday = Math.max(usedByKey, usedByIp);
-    if (usedToday + estimate.textokens > FREE_DAILY_TEXTOKENS) {
+    const effectiveDailyLimit = request._effectiveDailyLimit || FREE_DAILY_TEXTOKENS;
+    if (usedToday + estimate.textokens > effectiveDailyLimit) {
+      const hasPurchased = effectiveDailyLimit > FREE_DAILY_TEXTOKENS;
       response.status(402).json({
         error: 'no_textokens',
-        text: "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
+        text: hasPurchased
+          ? "You've used all your TexTokens for today. Buy more at rrotex.com/tokens."
+          : "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
       });
       return;
     }
