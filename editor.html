@@ -527,24 +527,49 @@
 
         <!-- Model bar -->
         <div class="ai-model-bar" style="display:flex;gap:6px;align-items:center;padding:8px 16px 10px;background:var(--rx-surface);border-top:1px solid var(--rx-border);flex-wrap:wrap;">
+
+          <!-- Mode dropdown -->
+          <div style="position:relative;">
+            <button id="rxModeBtn" type="button" style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:rgba(255,255,255,0.04);border:1px solid var(--rx-border);border-radius:7px;cursor:pointer;color:var(--rx-text);font:600 12px/1 inherit;white-space:nowrap;">
+              <span id="rxModeLabel">Ask</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="rxModeMenu" hidden style="position:absolute;bottom:calc(100% + 6px);left:0;background:var(--rx-surface);border:1px solid var(--rx-border);border-radius:10px;padding:5px;min-width:160px;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+              <div class="rx-mode-opt" data-mode="ask" style="padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;">
+                <strong>Ask</strong><span style="font-size:11px;color:var(--rx-muted);">Plain chat, no agent actions</span>
+              </div>
+              <div class="rx-mode-opt" data-mode="plan" style="padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;">
+                <strong>Plan</strong><span style="font-size:11px;color:var(--rx-muted);">Think step-by-step before acting</span>
+              </div>
+              <div class="rx-mode-opt" data-mode="agent" style="padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;">
+                <strong>Agent</strong><span style="font-size:11px;color:var(--rx-muted);">Edit files, run commands</span>
+              </div>
+              <div class="rx-mode-opt" data-mode="supreme" style="padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;">
+                <strong>Supreme Agent</strong><span style="font-size:11px;color:var(--rx-muted);">Full autonomy, multi-step tasks</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Model picker -->
           <button class="ai-model-select" id="rxModelButton" type="button" style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:rgba(255,255,255,0.04);border:1px solid var(--rx-border);border-radius:7px;cursor:pointer;min-width:90px;color:var(--rx-text);">
             <span id="rxSelectedModel" style="font-size:12px;font-weight:600;">Fast</span>
             <small id="rxSelectedRole" style="font-size:11px;color:var(--rx-muted);margin-left:auto;">0.2x</small>
           </button>
+
           <select class="ai-mode-select" id="rxProjectMode" style="background:var(--rx-panel);border:1px solid var(--rx-border);border-radius:7px;color:var(--rx-text);font:inherit;font-size:12px;min-height:30px;padding:0 8px;cursor:pointer;">
             <option value="Unity">Unity</option>
             <option value="Roblox">Roblox</option>
             <option value="Blender">Blender</option>
             <option value="General">General</option>
           </select>
-          <button class="agent-toggle" id="rxAgentToggle" type="button">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            Agent
-          </button>
-          <button class="agent-toggle" id="rxSuperAgent" type="button">Super Agent</button>
+
           <button class="agent-toggle danger" id="rxStopBtn" type="button">Stop</button>
           <span class="ai-cost-preview" id="rxCostPreview" style="color:var(--rx-quiet);font-size:11px;"></span>
           <div class="ai-model-menu" id="rxModelMenu" hidden></div>
+
+          <!-- hidden stubs editor.js still needs -->
+          <button id="rxAgentToggle" type="button" hidden></button>
+          <button id="rxSuperAgent"  type="button" hidden></button>
         </div>
 
       </div>
@@ -879,7 +904,7 @@
     // Call API
     const model  = document.getElementById('rxSelectedModel')?.textContent || 'Fast';
     const mode   = document.getElementById('rxProjectMode')?.value || 'General';
-    const isAgent = document.getElementById('rxAgentToggle')?.classList.contains('on');
+    const isAgent = currentMode === 'agent' || currentMode === 'supreme' || currentMode === 'plan';
     const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
 
     try {
@@ -1040,16 +1065,45 @@
   document.getElementById('rxSelectedModel').textContent = initModel.name;
   document.getElementById('rxSelectedRole').textContent  = initModel.role;
 
-  /* ── Agent toggles ──────────────────────────────────────────── */
-  document.getElementById('rxAgentToggle').addEventListener('click', function() {
-    this.classList.toggle('on');
+  /* ── Mode dropdown ──────────────────────────────────────────── */
+  let currentMode = 'ask';
+  const modeBtn  = document.getElementById('rxModeBtn');
+  const modeMenu = document.getElementById('rxModeMenu');
+  const modeLabel = document.getElementById('rxModeLabel');
+
+  const MODE_LABELS = { ask: 'Ask', plan: 'Plan', agent: 'Agent', supreme: 'Supreme Agent' };
+  const MODE_COLORS = { ask: '', plan: 'rgba(75,157,255,0.15)', agent: 'rgba(75,157,255,0.22)', supreme: 'rgba(168,85,247,0.22)' };
+  const MODE_BORDERS = { ask: '', plan: 'rgba(75,157,255,0.4)', agent: 'rgba(75,157,255,0.55)', supreme: 'rgba(168,85,247,0.55)' };
+
+  function setMode(mode) {
+    currentMode = mode;
+    modeLabel.textContent = MODE_LABELS[mode];
+    modeBtn.style.background = MODE_COLORS[mode] || 'rgba(255,255,255,0.04)';
+    modeBtn.style.borderColor = MODE_BORDERS[mode] || 'var(--rx-border)';
+    modeMenu.hidden = true;
+    document.querySelectorAll('.rx-mode-opt').forEach(el => {
+      el.style.background = el.dataset.mode === mode ? 'rgba(255,255,255,0.07)' : '';
+    });
+    // Sync hidden editor.js stubs
+    const agentOn = currentMode === 'agent' || currentMode === 'supreme';
+    const superOn = currentMode === 'supreme';
+    const agentBtn = document.getElementById('agentToggle');
+    const superBtn = document.getElementById('superAgentToggle');
+    if (agentBtn && agentOn !== agentBtn.classList.contains('on')) agentBtn.click();
+    if (superBtn && superOn !== superBtn.classList.contains('on')) superBtn.click();
+  }
+
+  modeBtn.addEventListener('click', e => { e.stopPropagation(); modeMenu.hidden = !modeMenu.hidden; });
+  document.querySelectorAll('.rx-mode-opt').forEach(el => {
+    el.addEventListener('click', () => setMode(el.dataset.mode));
+    el.addEventListener('mouseenter', () => { el.style.background = 'rgba(255,255,255,0.06)'; });
+    el.addEventListener('mouseleave', () => { el.style.background = el.dataset.mode === currentMode ? 'rgba(255,255,255,0.07)' : ''; });
   });
-  document.getElementById('rxSuperAgent').addEventListener('click', function() {
-    this.classList.toggle('on');
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#rxModeBtn') && !e.target.closest('#rxModeMenu')) modeMenu.hidden = true;
   });
-  document.getElementById('rxStopBtn').addEventListener('click', () => {
-    // No active stream to stop in this simplified version
-  });
+
+  document.getElementById('rxStopBtn').addEventListener('click', () => {});
 
   /* ── New chat from header shortcut ──────────────────────────── */
   document.getElementById('rxSettingsBtn').addEventListener('click', () => {
