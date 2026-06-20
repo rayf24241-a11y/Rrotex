@@ -31,6 +31,56 @@
     /* Reset editor.css globals for new layout */
     html, body { height: 100%; overflow: hidden; background: var(--rx-bg); color: var(--rx-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; font-size: 13px; -webkit-font-smoothing: antialiased; }
 
+    /* ── Engine picker modal ──────────────────────────────────── */
+    .rx-ep-overlay {
+      display: none; position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,0.72);
+      align-items: center; justify-content: center;
+    }
+    .rx-ep-overlay.open { display: flex; }
+    .rx-ep-modal {
+      background: var(--rx-surface); border: 1px solid var(--rx-border);
+      border-radius: 18px; padding: 28px 24px 20px;
+      width: 460px; max-width: calc(100vw - 32px);
+      display: flex; flex-direction: column; gap: 20px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .rx-ep-head { display: flex; flex-direction: column; }
+    .rx-ep-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+    .rx-ep-card {
+      background: var(--rx-panel); border: 2px solid var(--rx-border);
+      border-radius: 14px; padding: 16px 12px 12px;
+      cursor: pointer; transition: all 0.14s;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      user-select: none;
+    }
+    .rx-ep-card:hover { border-color: rgba(255,214,10,0.4); }
+    .rx-ep-card.selected { border-color: var(--rx-yellow); background: var(--rx-yellow-d); }
+    .rx-ep-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; flex-shrink: 0;
+    }
+    .rx-ep-blender-opt {
+      display: none; font-size: 11px; color: var(--rx-muted);
+      align-items: center; gap: 5px; cursor: pointer; margin-top: 2px;
+    }
+    .rx-ep-card.selected .rx-ep-blender-opt { display: flex; }
+    .rx-ep-blender-opt input { accent-color: var(--rx-yellow); cursor: pointer; }
+    .rx-ep-start {
+      width: 100%; padding: 11px; border: none; border-radius: 10px;
+      background: var(--rx-yellow); color: #0D0F17;
+      font: 700 13px/1 inherit; cursor: pointer; transition: all 0.13s;
+    }
+    .rx-ep-start:disabled { opacity: 0.4; cursor: not-allowed; }
+    .rx-ep-start:not(:disabled):hover { background: #FFE033; }
+    .rx-ep-cancel {
+      background: none; border: none; color: var(--rx-muted); cursor: pointer;
+      font: inherit; font-size: 12px; text-align: center; padding: 2px;
+      transition: color 0.1s;
+    }
+    .rx-ep-cancel:hover { color: var(--rx-text); }
+
     /* ── App shell ──────────────────────────────────────────── */
     .rx-app {
       display: grid;
@@ -463,6 +513,41 @@
 <!-- ══════════════════════════════════════════════════════════════
      VISIBLE APP
      ══════════════════════════════════════════════════════════════ -->
+<!-- Engine picker modal -->
+<div class="rx-ep-overlay" id="rxEpOverlay">
+  <div class="rx-ep-modal">
+    <div class="rx-ep-head">
+      <div style="font-size:18px;font-weight:700;color:var(--rx-text);">What are you working on?</div>
+      <div style="font-size:13px;color:var(--rx-muted);margin-top:4px;">Pick your engine — the AI tunes its context for it</div>
+    </div>
+    <div class="rx-ep-cards">
+      <div class="rx-ep-card" data-engine="Unity">
+        <div class="rx-ep-icon" style="background:rgba(37,99,235,0.18);color:#60a5fa;">U</div>
+        <div style="font-size:13px;font-weight:700;color:var(--rx-text);">Unity</div>
+        <div style="font-size:11px;color:var(--rx-muted);text-align:center;">C#, physics, scenes</div>
+        <label class="rx-ep-blender-opt" onclick="event.stopPropagation()">
+          <input type="checkbox" id="rxEpUnityBlender"> Also using Blender
+        </label>
+      </div>
+      <div class="rx-ep-card" data-engine="Blender">
+        <div class="rx-ep-icon" style="background:rgba(249,115,22,0.18);color:#fb923c;">B</div>
+        <div style="font-size:13px;font-weight:700;color:var(--rx-text);">Blender</div>
+        <div style="font-size:11px;color:var(--rx-muted);text-align:center;">3D modeling, rigging</div>
+      </div>
+      <div class="rx-ep-card" data-engine="Roblox">
+        <div class="rx-ep-icon" style="background:rgba(239,68,68,0.18);color:#f87171;">R</div>
+        <div style="font-size:13px;font-weight:700;color:var(--rx-text);">Roblox</div>
+        <div style="font-size:11px;color:var(--rx-muted);text-align:center;">Lua, Studio, game dev</div>
+        <label class="rx-ep-blender-opt" onclick="event.stopPropagation()">
+          <input type="checkbox" id="rxEpRobloxBlender"> Also using Blender
+        </label>
+      </div>
+    </div>
+    <button class="rx-ep-start" id="rxEpStart" disabled>Start Chat →</button>
+    <button class="rx-ep-cancel" id="rxEpCancel">Cancel</button>
+  </div>
+</div>
+
 <div class="rx-app">
 
   <!-- Header -->
@@ -582,7 +667,9 @@
 
           <select class="ai-mode-select" id="rxProjectMode" style="background:var(--rx-panel);border:1px solid var(--rx-border);border-radius:7px;color:var(--rx-text);font:inherit;font-size:12px;min-height:30px;padding:0 8px;cursor:pointer;">
             <option value="Unity">Unity</option>
+            <option value="Unity+Blender">Unity + Blender</option>
             <option value="Roblox">Roblox</option>
+            <option value="Roblox+Blender">Roblox + Blender</option>
             <option value="Blender">Blender</option>
             <option value="General">General</option>
           </select>
@@ -796,11 +883,53 @@
     });
   }
 
+  /* ── Engine picker modal ────────────────────────────────────── */
+  let epPickedEngine = null;
+
+  function openEnginePicker(onConfirm) {
+    epPickedEngine = null;
+    document.querySelectorAll('.rx-ep-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('rxEpUnityBlender').checked = false;
+    document.getElementById('rxEpRobloxBlender').checked = false;
+    document.getElementById('rxEpStart').disabled = true;
+    document.getElementById('rxEpOverlay').classList.add('open');
+
+    document.getElementById('rxEpStart').onclick = async () => {
+      if (!epPickedEngine) return;
+      let mode = epPickedEngine;
+      if (mode === 'Unity'  && document.getElementById('rxEpUnityBlender').checked)  mode = 'Unity+Blender';
+      if (mode === 'Roblox' && document.getElementById('rxEpRobloxBlender').checked) mode = 'Roblox+Blender';
+      document.getElementById('rxEpOverlay').classList.remove('open');
+      await onConfirm(mode);
+    };
+  }
+
+  document.querySelectorAll('.rx-ep-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.rx-ep-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      epPickedEngine = card.dataset.engine;
+      document.getElementById('rxEpStart').disabled = false;
+    });
+  });
+
+  document.getElementById('rxEpCancel').addEventListener('click', () => {
+    document.getElementById('rxEpOverlay').classList.remove('open');
+  });
+
+  document.getElementById('rxEpOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) document.getElementById('rxEpOverlay').classList.remove('open');
+  });
+
   /* ── New chat ───────────────────────────────────────────────── */
-  async function newChat() {
+  function newChat() {
+    openEnginePicker(createChat);
+  }
+
+  async function createChat(projectMode) {
     const uid = currentUser?.uid || 'local';
     const now = serverTimestamp ? serverTimestamp() : Date.now();
-    const data = { uid, title: 'New Chat', createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
+    const data = { uid, title: 'New Chat', projectMode, createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
     let id = `local_${Date.now()}`;
 
     if (db && currentUser) {
@@ -815,7 +944,8 @@
     localStorage.setItem('rotex_active_chat', id);
     allChats = local;
     renderChatList(allChats);
-    clearChatView();
+    clearChatView(projectMode);
+    setProjectMode(projectMode);
   }
 
   /* ── Switch chat ────────────────────────────────────────────── */
@@ -826,23 +956,30 @@
     document.querySelectorAll('.rx-chat-item').forEach(el => {
       el.classList.toggle('active', el.dataset.id === id);
     });
-    // Load messages for this chat
     const chat = allChats.find(c => c.id === id);
     loadChatMessages(chat);
+    if (chat?.projectMode) setProjectMode(chat.projectMode);
   }
 
-  function clearChatView() {
+  function setProjectMode(mode) {
+    const sel = document.getElementById('rxProjectMode');
+    if (sel && mode) sel.value = mode;
+  }
+
+  function clearChatView(projectMode) {
     const msgs = document.getElementById('rxAiMessages');
+    const engineLabel = projectMode ? ` · ${projectMode}` : '';
     msgs.innerHTML = `<div class="ai-welcome-msg" id="rxWelcomeMsg">
-      <p><strong>ROTEX AI</strong></p>
+      <p><strong>ROTEX AI${engineLabel}</strong></p>
       <p>What are you working on? I can write code, debug, explain, refactor, and plan.</p>
     </div>`;
   }
 
   function loadChatMessages(chat) {
     const msgs = document.getElementById('rxAiMessages');
+    if (chat?.projectMode) setProjectMode(chat.projectMode);
     if (!chat?.messages?.length) {
-      clearChatView();
+      clearChatView(chat?.projectMode);
       return;
     }
     msgs.innerHTML = '';
@@ -927,21 +1064,26 @@
     msgs.scrollTop = msgs.scrollHeight;
 
     // Call API
-    const model  = document.getElementById('rxSelectedModel')?.textContent || 'Fast';
     const mode   = document.getElementById('rxProjectMode')?.value || 'General';
     const isAgent = currentMode === 'agent' || currentMode === 'supreme' || currentMode === 'plan';
     const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
+
+    // Build message history from the current chat
+    const activeChat = allChats.find(c => c.id === activeChatId);
+    const history = (activeChat?.messages || []).slice(-24).map(m => ({ role: m.role, content: m.content }));
+    history.push({ role: 'user', content: text });
 
     try {
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: text,
-          model: model.toLowerCase().replace(' ', '-'),
+          messages: history,
+          model: selectedModel,
           projectMode: mode,
-          agentMode: isAgent,
+          agent: isAgent,
           proPass: localStorage.getItem('rotex_pro_pass') || '',
+          stream: true,
         }),
       });
 
@@ -971,25 +1113,39 @@
       const reader = res.body.getReader();
       const dec    = new TextDecoder();
       let full = '';
+      let buf = '';
+      let streamError = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = dec.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const raw = line.slice(6).trim();
-          if (raw === '[DONE]') break;
-          try {
-            const j = JSON.parse(raw);
-            const delta = j.d || j.choices?.[0]?.delta?.content || j.content || '';
-            full += delta;
+        buf += dec.decode(value, { stream: true });
+        const events = buf.split('\n\n');
+        buf = events.pop() || '';
+        for (const event of events) {
+          const line = event.split('\n').find(l => l.startsWith('data:'));
+          if (!line) continue;
+          let payload;
+          try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (payload.d) {
+            full += payload.d;
             streamDiv.textContent = full;
             msgs.scrollTop = msgs.scrollHeight;
-          } catch {}
+          }
+          if (payload.error) streamError = payload.text || 'servers are down';
         }
       }
       assistantEl.classList.remove('ai-msg-streaming');
+
+      if (streamError && !full) {
+        assistantEl.remove();
+        const errEl = document.createElement('div');
+        errEl.className = 'ai-msg ai-msg-assistant';
+        errEl.style.color = 'var(--rx-red)';
+        errEl.textContent = streamError;
+        msgs.appendChild(errEl);
+        msgs.scrollTop = msgs.scrollHeight;
+        return;
+      }
 
       // Save to chat
       await saveChatMessage(activeChatId, text, full);
