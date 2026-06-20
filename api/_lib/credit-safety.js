@@ -31,7 +31,7 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
 
 async function checkCreditSafety({ selected, provider, model, userId, estimate, texTokensLeft }) {
   const balance = providerBalanceUsd();
-  if (Number.isFinite(Number(texTokensLeft)) && Number(texTokensLeft) <= 0) {
+  if (texTokensLeft != null && Number.isFinite(Number(texTokensLeft)) && Number(texTokensLeft) <= 0) {
     return {
       ok: false,
       error: 'no_textokens',
@@ -39,7 +39,7 @@ async function checkCreditSafety({ selected, provider, model, userId, estimate, 
       balance,
     };
   }
-  if (Number.isFinite(Number(texTokensLeft)) && estimate.textokens > Number(texTokensLeft)) {
+  if (texTokensLeft != null && Number.isFinite(Number(texTokensLeft)) && estimate.textokens > Number(texTokensLeft)) {
     return {
       ok: false,
       error: 'no_textokens',
