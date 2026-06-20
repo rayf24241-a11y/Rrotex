@@ -3,6 +3,8 @@ node_modules/
 build/
 dist/
 downloads/desktop/*-unpacked/
+downloads/desktop/ROTEX-Desktop-win/
+downloads/electron-build/
 *.spec
 .env
 firebase-config.local.js
