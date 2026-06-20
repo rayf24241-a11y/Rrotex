@@ -66,6 +66,25 @@ function appAssetPath(relativePath) {
   return path.join(__dirname, '..', relativePath);
 }
 
+async function completeDesktopAuth(data) {
+  if (!data || !data.uid || !mainWindow) return false;
+  if (!data.exp) data.exp = String(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const authJson = JSON.stringify({
+    uid: String(data.uid || ''),
+    email: String(data.email || ''),
+    name: String(data.name || ''),
+    exp: String(data.exp || ''),
+    token: String(data.token || ''),
+  });
+  await mainWindow.webContents.executeJavaScript(
+    `localStorage.setItem('rotex_desktop_auth', ${JSON.stringify(authJson)});`,
+    true
+  ).catch(() => {});
+  await mainWindow.loadFile(appAssetPath('projects.html'));
+  mainWindow.focus();
+  return true;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -127,9 +146,7 @@ function handleDeepLink(url) {
     }
     // Add expiry: 1-hour window from now (website also sets exp param if available)
     if (!data.exp) data.exp = String(Date.now() + 60 * 60 * 1000);
-    if (mainWindow) {
-      mainWindow.webContents.send('auth-callback', data);
-    }
+    completeDesktopAuth(data);
   } catch {}
 }
 
@@ -579,10 +596,7 @@ ipcMain.handle('start-auth-server', () => {
             const data = JSON.parse(body);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));
-            if (mainWindow) {
-              mainWindow.webContents.send('auth-callback', data);
-              mainWindow.focus();
-            }
+            completeDesktopAuth(data);
             server.close();
             authServer = null;
           } catch { res.writeHead(400); res.end('Bad request'); }

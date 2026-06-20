@@ -391,6 +391,7 @@
           </div>
         `;
         const callbackPort = new URLSearchParams(window.location.search).get('callback');
+        const deepLink = `rotex://auth?${new URLSearchParams(authData).toString()}`;
         if (callbackPort) {
           try {
             const callbackRes = await fetch(`http://127.0.0.1:${callbackPort}/auth`, {
@@ -400,11 +401,13 @@
             });
             if (!callbackRes.ok) throw new Error('Desktop callback failed');
           } catch {
-            document.getElementById('desktopCallbackTitle').textContent = 'Signed in, but ROTEX Desktop did not connect';
-            document.querySelector('.card p').textContent = 'Keep ROTEX Desktop open, then click sign in from the app again.';
+            window.location.href = deepLink;
+            document.getElementById('desktopCallbackTitle').textContent = 'Signed in. Return to ROTEX Desktop.';
+            document.querySelector('.card p').textContent = 'If your browser asks, allow it to open ROTEX Desktop.';
             return;
           }
         }
+        window.location.href = deepLink;
         document.getElementById('desktopCallbackTitle').textContent = 'Signed in!';
         document.querySelector('.card p').textContent = 'You can close this tab and return to ROTEX Desktop.';
         return;

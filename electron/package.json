@@ -73,8 +73,12 @@
     },
     "nsis": {
       "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
       "allowToChangeInstallationDirectory": false,
-      "shortcutName": "ROTEX Desktop"
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ROTEX"
     },
     "publish": {
       "provider": "github",
