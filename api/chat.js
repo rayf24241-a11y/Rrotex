@@ -215,10 +215,11 @@ module.exports = async function handler(request, response) {
 
   // Never trust client-provided texTokensLeft for non-Pro users.
   // Free user budget is already enforced above via freeTokenCounters (server-side).
-  // Passing null disables the client-influenced check inside checkCreditSafety.
+  // Use undefined (not null) so checkCreditSafety skips the TexToken check —
+  // Number(null)=0 would wrongly block free users who still have budget.
   // Pro users have a verified proPass, so their client value is used to enforce
   // their own plan limits (the server trusts the pass, not the number).
-  const trustedTexTokensLeft = (isPro && !isDev) ? texTokensLeft : null;
+  const trustedTexTokensLeft = (isPro && !isDev) ? texTokensLeft : undefined;
 
   const safety = await checkCreditSafety({
     selected,
