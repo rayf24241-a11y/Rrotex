@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+
+let authServer = null;
 
 // ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -198,4 +201,48 @@ ipcMain.handle('exec-command', async (event, command, cwd) => {
 
 ipcMain.handle('open-external', async (event, url) => {
   shell.openExternal(url);
+});
+
+// ─── IPC: Local auth callback server ─────────────────────────────────────────
+ipcMain.handle('start-auth-server', () => {
+  return new Promise((resolve, reject) => {
+    if (authServer) { authServer.close(); authServer = null; }
+
+    const server = http.createServer((req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+      if (req.method === 'POST' && req.url === '/auth') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+            if (mainWindow) {
+              mainWindow.webContents.send('auth-callback', data);
+              mainWindow.focus();
+            }
+            server.close();
+            authServer = null;
+          } catch { res.writeHead(400); res.end('Bad request'); }
+        });
+        return;
+      }
+      res.writeHead(404); res.end();
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      authServer = server;
+      resolve(port);
+      setTimeout(() => { server.close(); authServer = null; }, 5 * 60 * 1000);
+    });
+
+    server.on('error', reject);
+  });
 });

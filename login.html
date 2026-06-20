@@ -302,8 +302,9 @@
         </div>
       `;
 
-      document.getElementById('openBrowserBtn').onclick = () => {
-        window.rotexDesktop.openExternal('https://www.rrotex.com/login?desktop=1');
+      document.getElementById('openBrowserBtn').onclick = async () => {
+        const port = await window.rotexDesktop.startAuthServer();
+        window.rotexDesktop.openExternal(`https://www.rrotex.com/login?desktop=1&callback=${port}`);
         document.getElementById('openBrowserBtn').style.display = 'none';
         document.getElementById('waitingState').style.display = 'block';
       };
@@ -370,24 +371,27 @@
       };
       localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
 
-      // If this is a desktop-initiated login, fire the deep link back to the app
+      // If this is a desktop-initiated login, POST auth data to the local callback server
       if (isDesktopLogin) {
-        const params = new URLSearchParams({
-          uid:   authData.uid,
-          email: authData.email,
-          name:  authData.name,
-          token: authData.token,
-          exp:   authData.exp,
-        });
         document.querySelector('.card').innerHTML = `
           <div style="text-align:center;padding:16px 0;">
             <div style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--text)">Signed in!</div>
             <p style="color:var(--muted);font-size:13px;line-height:1.6;">
-              You can close this tab and return to ROTEX Desktop.
+              Connecting to ROTEX Desktop…
             </p>
           </div>
         `;
-        window.location.href = `rotex://auth?${params}`;
+        const callbackPort = new URLSearchParams(window.location.search).get('callback');
+        if (callbackPort) {
+          try {
+            await fetch(`http://127.0.0.1:${callbackPort}/auth`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(authData),
+            });
+          } catch {}
+        }
+        document.querySelector('.card p').textContent = 'You can close this tab and return to ROTEX Desktop.';
         return;
       }
 

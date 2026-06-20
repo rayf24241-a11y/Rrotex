@@ -24,4 +24,5 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
 
   // ─── Utils ────────────────────────────────────────────────────────────
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  startAuthServer: () => ipcRenderer.invoke('start-auth-server'),
 });
