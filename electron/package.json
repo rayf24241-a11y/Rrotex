@@ -29,7 +29,9 @@
     },
     "files": [
       "main.js",
-      "preload.js"
+      "preload.js",
+      "icon.png",
+      "icon.ico"
     ],
     "protocols": [
       {
@@ -48,7 +50,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "icon.png",
+      "icon": "icon.ico",
       "publisherName": "ROTEX"
     },
     "mac": {

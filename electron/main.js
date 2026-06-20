@@ -29,6 +29,7 @@ let userAuthToken     = '';
 let userProjectMode   = '';
 let studioActionQueue = [];
 const PLUGIN_PORTS    = [7878, 7874, 7871, 7870, 7861, 7865, 7822, 7854, 7813, 7816, 7898, 7875];
+const APP_ICON        = path.join(__dirname, process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 
 // ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -44,6 +45,7 @@ if (process.defaultApp) {
 } else {
   app.setAsDefaultProtocolClient('rotex');
 }
+app.setAppUserModelId('com.rrotex.editor');
 
 // ─── macOS: deep-link arrives before window is ready ──────────────────────────
 let pendingDeepLink = null;
@@ -71,19 +73,14 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'ROTEX',
-    icon: path.join(__dirname, 'icon.png'),
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       devTools: false,
     },
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#05070b',
-      symbolColor: '#a0aec1',
-      height: 36,
-    },
+    titleBarStyle: 'default',
   });
 
   // Always start at login — login.html auto-redirects if already authenticated.
