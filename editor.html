@@ -807,7 +807,7 @@
       <!-- Sidebar footer: token balance + profile -->
       <div id="rxSidebarFooter" style="padding:10px 12px;border-top:1px solid var(--rx-border);display:flex;flex-direction:column;gap:8px;background:var(--rx-surface);">
         <!-- TexTokens row -->
-        <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div id="rxTexTokensRow" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" title="View token balance">
           <div>
             <div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--rx-muted);margin-bottom:2px;">TexTokens</div>
             <div id="rxTokenBalance" style="font-size:14px;font-weight:700;color:#4B9DFF;">—</div>
@@ -885,8 +885,9 @@
 
           <!-- Model picker -->
           <button class="ai-model-select" id="rxModelButton" type="button" style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:rgba(255,255,255,0.04);border:1px solid var(--rx-border);border-radius:7px;cursor:pointer;min-width:90px;color:var(--rx-text);">
+            <span id="rxSelectedModelIcon" style="display:flex;align-items:center;flex-shrink:0;"></span>
             <span id="rxSelectedModel" style="font-size:12px;font-weight:600;">Fast</span>
-            <small id="rxSelectedRole" style="font-size:11px;color:var(--rx-muted);margin-left:auto;">0.2x</small>
+            <small id="rxSelectedRole" style="font-size:11px;color:var(--rx-muted);margin-left:auto;">Cheap</small>
           </button>
 
           <select class="ai-mode-select" id="rxProjectMode" style="background:var(--rx-panel);border:1px solid var(--rx-border);border-radius:7px;color:var(--rx-text);font:inherit;font-size:12px;min-height:30px;padding:0 8px;cursor:pointer;">
@@ -1232,16 +1233,56 @@
   }
 
   /* ── Plugin panel helpers ───────────────────────────────────────── */
-  let _pluginToken = '';
+  let _pluginToken = localStorage.getItem('rotex_plugin_token') || '';
   let _pluginInstalled = false;
   let _studioConnected = false;
   let _browserConnected = false;
   let _rojoStatus = 'stopped';
+  let _studioEventsReady = false;
 
   function genPluginToken() {
     const bytes = new Uint8Array(4);
     crypto.getRandomValues(bytes);
     return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase().slice(0, 6);
+  }
+
+  function ensurePluginToken() {
+    if (!_pluginToken) {
+      _pluginToken = genPluginToken();
+      localStorage.setItem('rotex_plugin_token', _pluginToken);
+    }
+    return _pluginToken;
+  }
+
+  function startStudioBridge(projectName, projectMode) {
+    if (!window.rotexDesktop?.startPluginServer) return;
+    registerStudioEvents();
+    const token = ensurePluginToken();
+    const proPass = localStorage.getItem('rotex_pro_pass') || '';
+    window.rotexDesktop.startPluginServer(token, projectName || '', proPass, projectMode || 'Roblox');
+  }
+
+  function registerStudioEvents() {
+    if (_studioEventsReady || !window.rotexDesktop) return;
+    _studioEventsReady = true;
+
+    window.rotexDesktop.onPluginConnected(() => {
+      _studioConnected = true;
+      const dot  = document.getElementById('rxPluginDot');
+      const text = document.getElementById('rxPluginStatusText');
+      const row  = document.getElementById('rxRojoRow');
+      if (dot)  { dot.className = 'rx-pdot connected'; }
+      if (text) { text.textContent = 'Studio connected'; }
+      if (row)  { row.style.display = 'flex'; }
+    });
+
+    window.rotexDesktop.onRojoStatus(status => {
+      _rojoStatus = status || 'stopped';
+      const badge = document.getElementById('rxRojoBadge');
+      if (!badge) return;
+      badge.textContent = status;
+      badge.className = 'rx-rojo-badge' + (status === 'running' ? ' running' : '');
+    });
   }
 
   function pluginPanelHtml(token) {
@@ -1390,7 +1431,7 @@
 
     // Listen for plugin events from Electron
     if (window.rotexDesktop) {
-      window.rotexDesktop.startPluginServer(token, projectName || '');
+      startStudioBridge(projectName || '', 'Roblox');
 
       window.rotexDesktop.onPluginConnected(() => {
         _studioConnected = true;
@@ -1547,7 +1588,7 @@
 
     let pluginHtml = '';
     if (isRoblox) {
-      _pluginToken = genPluginToken();
+      _pluginToken = ensurePluginToken();
       pluginHtml = pluginPanelHtml(_pluginToken);
     }
 
@@ -1575,6 +1616,9 @@
       msgs.appendChild(div);
     });
     msgs.scrollTop = msgs.scrollHeight;
+    if (chat?.projectMode && chat.projectMode.toLowerCase().includes('roblox')) {
+      startStudioBridge(chat.projectName || chat.title || '', chat.projectMode);
+    }
   }
 
   /* ── Delete chat ────────────────────────────────────────────── */
@@ -1786,14 +1830,23 @@
       }
       assistantEl.classList.remove('ai-msg-streaming');
 
-      // Deduct estimated TexTokens from local balance display
+      // Deduct estimated TexTokens and track daily spend (TexBrain is free)
       if (full) {
-        const rates = { fast: 0.16, balanced: 1.18, smart: 1.58, 'pro-smart': 5 };
-        const rate = rates[selectedModel] || 0.16;
-        const deduct = Math.ceil((full.length / 4) * rate);
-        const cur = Number(localStorage.getItem('rotex_textokens_balance') || 0);
-        if (cur > 0) {
-          localStorage.setItem('rotex_textokens_balance', Math.max(0, cur - deduct).toString());
+        const rates = { texbrain: 0, fast: 0.16, balanced: 1.18, smart: 1.58, 'pro-smart': 5 };
+        const rate = rates[selectedModel] ?? 0.16;
+        if (rate > 0) {
+          const deduct = Math.ceil((full.length / 4) * rate);
+          const cur = Number(localStorage.getItem('rotex_textokens_balance') || 0);
+          if (cur > 0) {
+            localStorage.setItem('rotex_textokens_balance', Math.max(0, cur - deduct).toString());
+          }
+          const today = new Date().toDateString();
+          if (localStorage.getItem('rotex_textokens_spent_date') !== today) {
+            localStorage.setItem('rotex_textokens_spent_date', today);
+            localStorage.setItem('rotex_textokens_spent_today', '0');
+          }
+          const newSpent = Number(localStorage.getItem('rotex_textokens_spent_today') || 0) + deduct;
+          localStorage.setItem('rotex_textokens_spent_today', String(newSpent));
           refreshBalance();
         }
       }
@@ -1928,6 +1981,7 @@
         selectedModel = el.dataset.id;
         localStorage.setItem('rotex_model', selectedModel);
         const m = MODELS.find(x => x.id === selectedModel);
+        document.getElementById('rxSelectedModelIcon').innerHTML = m.svg;
         document.getElementById('rxSelectedModel').textContent = m.name;
         document.getElementById('rxSelectedRole').textContent  = m.role;
         menu.hidden = true;
@@ -1950,6 +2004,7 @@
 
   // Init model display
   const initModel = MODELS.find(m => m.id === selectedModel) || MODELS[0];
+  document.getElementById('rxSelectedModelIcon').innerHTML = initModel.svg;
   document.getElementById('rxSelectedModel').textContent = initModel.name;
   document.getElementById('rxSelectedRole').textContent  = initModel.role;
 
@@ -2012,11 +2067,24 @@
     return String(n);
   }
   function refreshBalance() {
-    const bal = Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
-    document.getElementById('rxTokenBalance').textContent = formatTT(bal) + ' TT';
+    const FREE_DAILY = 150000;
+    const today = new Date().toDateString();
+    const spentDate = localStorage.getItem('rotex_textokens_spent_date');
+    const spent = spentDate === today ? Math.max(0, Number(localStorage.getItem('rotex_textokens_spent_today') || 0)) : 0;
+    const freeRemaining = Math.max(0, FREE_DAILY - spent);
+    const purchased = Math.max(0, Number(localStorage.getItem('rotex_textokens_balance') || 0));
+    document.getElementById('rxTokenBalance').textContent = formatTT(freeRemaining + purchased) + ' TT';
   }
   refreshBalance();
-  window.addEventListener('storage', e => { if (e.key === 'rotex_textokens_balance') refreshBalance(); });
+  window.addEventListener('storage', e => {
+    if (e.key === 'rotex_textokens_balance' || e.key === 'rotex_textokens_spent_today') refreshBalance();
+  });
+
+  document.getElementById('rxTexTokensRow').addEventListener('click', (e) => {
+    if (e.target.closest('#rxBuyTokens')) return;
+    if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/tokens');
+    else window.open('/tokens', '_blank');
+  });
 
   document.getElementById('rxBuyTokens').addEventListener('click', () => {
     if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/tokens');
@@ -2054,6 +2122,7 @@
 
   /* ── Start ──────────────────────────────────────────────────── */
   boot().then(() => {
+    if (window.rotexDesktop) startStudioBridge('', 'Roblox');
     // Load active chat if one is set
     if (activeChatId && allChats.length) {
       const chat = allChats.find(c => c.id === activeChatId);

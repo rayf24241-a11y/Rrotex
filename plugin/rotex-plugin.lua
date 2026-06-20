@@ -556,6 +556,14 @@ local function doConnect()
                 appendLog("[Scan] Sent " .. n .. " scripts to ROTEX — ready to chat!")
             end)
         else
+            if ok2 and data and data.error == "bad token" and data.token and data.token ~= "" and data.token ~= token then
+                tokenBox.Text = data.token
+                currentToken = data.token
+                plugin:SetSetting("rotex_token", data.token)
+                appendLog("[ROTEX] Updated token from desktop")
+                task.delay(0.2, doConnect)
+                return
+            end
             setStatus("● Wrong token", C.red)
         end
     else

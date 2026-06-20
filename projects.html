@@ -712,6 +712,24 @@
       go('editor');
     }
 
+    function ensureStudioBridgeToken() {
+      let token = localStorage.getItem('rotex_plugin_token') || '';
+      if (!token) {
+        const bytes = new Uint8Array(4);
+        crypto.getRandomValues(bytes);
+        token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase().slice(0, 6);
+        localStorage.setItem('rotex_plugin_token', token);
+      }
+      return token;
+    }
+
+    function startBackgroundStudioBridge() {
+      if (!window.rotexDesktop?.startPluginServer) return;
+      const token = ensureStudioBridgeToken();
+      const proPass = localStorage.getItem('rotex_pro_pass') || '';
+      window.rotexDesktop.startPluginServer(token, '', proPass, 'Roblox');
+    }
+
     async function deleteChat(id) {
       if (!id) return;
       if (db && !id.startsWith('local_')) {
@@ -733,6 +751,7 @@
     });
 
     boot();
+    startBackgroundStudioBridge();
   </script>
 </body>
 </html>

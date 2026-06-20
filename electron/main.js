@@ -304,7 +304,7 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
     const url = new URL(req.url, `http://127.0.0.1:${pluginServerPort || 7878}`);
     const reqToken = url.searchParams.get('token') || '';
 
-    // /ping — no auth needed for the check itself, but token must match
+    // /ping — always 200 so the plugin can distinguish "not running" from "wrong token"
     if (url.pathname === '/ping' && req.method === 'GET') {
       if (reqToken === pluginToken) {
         res.end(JSON.stringify({ ok: true, project: currentProjectName }));
@@ -313,8 +313,7 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
           mainWindow.webContents.send(source === 'browser' ? 'browser-connected' : 'plugin-connected');
         }
       } else {
-        res.writeHead(401);
-        res.end(JSON.stringify({ ok: false, error: 'bad token' }));
+        res.end(JSON.stringify({ ok: false, error: 'bad token', token: pluginToken }));
       }
       return;
     }
