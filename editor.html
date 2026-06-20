@@ -1013,13 +1013,27 @@
     renderChatList(allChats);
   }
 
+  /* ── Model logos ────────────────────────────────────────────── */
+  const GROQ_SVG = `<svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+    <circle cx="11" cy="11" r="9" stroke="#A855F7" stroke-width="1.8"/>
+    <circle cx="11" cy="11" r="4.5" fill="#A855F7" opacity="0.25"/>
+    <circle cx="11" cy="11" r="2" fill="#A855F7"/>
+  </svg>`;
+
+  const CLAUDE_SVG = `<svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+    <g transform="translate(11,11)">
+      ${[0,30,60,90,120,150,180,210,240,270,300,330].map(d =>
+        `<path d="M-1.8 -4.5 L0 -9.5 L1.8 -4.5" fill="#D97706" transform="rotate(${d})" opacity="${d % 60 === 0 ? '1' : '0.65'}"/>`
+      ).join('')}
+    </g>
+  </svg>`;
+
   /* ── Model selector ─────────────────────────────────────────── */
   const MODELS = [
-    { id: 'fast',      name: 'Fast',         role: '0.2x',  logo: 'F', pro: false },
-    { id: 'balanced',  name: 'Balanced',      role: '0.75x', logo: 'B', pro: false },
-    { id: 'smart',     name: 'Smart',         role: '1x',    logo: 'S', pro: false },
-    { id: 'pro-smart', name: 'Claude Haiku',  role: '6x',    logo: 'H', pro: true  },
-    { id: 'pro-sonnet',name: 'Claude Sonnet', role: '12x',   logo: 'C', pro: true  },
+    { id: 'fast',      name: 'Fast',        role: '5× cost',  svg: GROQ_SVG,   pro: false },
+    { id: 'balanced',  name: 'Balanced',    role: '5× cost',  svg: GROQ_SVG,   pro: false },
+    { id: 'smart',     name: 'Smart',       role: '5× cost',  svg: GROQ_SVG,   pro: false },
+    { id: 'pro-smart', name: 'Claude Haiku',role: '10× cost', svg: CLAUDE_SVG, pro: true  },
   ];
 
   let selectedModel = localStorage.getItem('rotex_model') || 'fast';
@@ -1028,11 +1042,14 @@
     const menu = document.getElementById('rxModelMenu');
     menu.innerHTML = `<div class="ai-model-scroll">` +
       MODELS.map(m => `
-        <div class="ai-model-option${m.id === selectedModel ? ' selected' : ''}${m.pro ? ' locked' : ''}" data-id="${m.id}">
-          <div class="ai-model-logo ai-model-logo-${m.id === 'fast' || m.id === 'balanced' || m.id === 'smart' ? 'groq' : 'claude'}">${m.logo}</div>
-          <div class="model-name">${m.name}</div>
-          <div class="model-desc">${m.role}</div>
-          ${m.pro ? '<span class="pro-badge">Pro</span>' : ''}
+        <div class="ai-model-option${m.id === selectedModel ? ' selected' : ''}${m.pro ? ' locked' : ''}" data-id="${m.id}"
+          style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;cursor:pointer;${m.id === selectedModel ? 'background:rgba(255,255,255,0.07)' : ''}">
+          <div style="width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${m.svg}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;">${m.name}</div>
+            <div style="font-size:11px;color:var(--rx-muted);">${m.role}</div>
+          </div>
+          ${m.pro ? '<span style="font-size:10px;font-weight:700;padding:2px 6px;background:rgba(75,157,255,0.18);color:#4B9DFF;border-radius:4px;border:1px solid rgba(75,157,255,0.3);">PRO</span>' : ''}
         </div>`).join('') + `</div>`;
 
     menu.querySelectorAll('.ai-model-option:not(.locked)').forEach(el => {
