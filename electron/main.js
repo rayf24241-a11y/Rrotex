@@ -61,6 +61,14 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Inject long-lived dev pro pass into localStorage on every page load.
+  const DEV_PRO_PASS = 'eyJ1aWQiOiJkZXYtcmF5ZjI0MjQxIiwic3ViIjoiZGV2IiwicGxhbiI6InBybyIsImV4cCI6MjA5NzI3NzE1MTMzMH0.jXr6ra4H_g77_311en6AxnxMnYVmODPKzLae6odbi2Q';
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.executeJavaScript(
+      `localStorage.setItem('rotex_pro_pass', ${JSON.stringify(DEV_PRO_PASS)})`
+    ).catch(() => {});
+  });
+
   // Flush any deep link that arrived before the window was ready (macOS)
   if (pendingDeepLink) {
     mainWindow.webContents.once('did-finish-load', () => {
