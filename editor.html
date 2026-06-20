@@ -502,6 +502,19 @@
       <div class="rx-chat-list" id="rxChatList">
         <div class="rx-loading"><span></span><span></span><span></span></div>
       </div>
+
+      <!-- Sidebar footer: token balance + buy -->
+      <div id="rxSidebarFooter" style="padding:10px 12px;border-top:1px solid var(--rx-border);display:flex;flex-direction:column;gap:6px;background:var(--rx-surface);">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--rx-muted);margin-bottom:2px;">TexTokens</div>
+            <div id="rxTokenBalance" style="font-size:14px;font-weight:700;color:#4B9DFF;">—</div>
+          </div>
+          <button id="rxBuyTokens" type="button" style="padding:7px 12px;background:#4B9DFF;color:#fff;border:none;border-radius:8px;font:700 12px/1 inherit;cursor:pointer;white-space:nowrap;transition:opacity .15s;">
+            Buy Tokens
+          </button>
+        </div>
+      </div>
     </aside>
 
     <!-- Main AI chat -->
@@ -796,6 +809,7 @@
 
   /* ── Switch chat ────────────────────────────────────────────── */
   function switchChat(id) {
+    if (id === activeChatId) return;
     activeChatId = id;
     localStorage.setItem('rotex_active_chat', id);
     document.querySelectorAll('.rx-chat-item').forEach(el => {
@@ -1136,6 +1150,24 @@
   document.getElementById('rxUserAvatar').addEventListener('click', () => {
     if (window.rotexDesktop) window.rotexDesktop.navigate('projects');
     else window.location.href = '/projects.html';
+  });
+
+  /* ── Token balance display ──────────────────────────────────── */
+  function formatTT(n) {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K';
+    return String(n);
+  }
+  function refreshBalance() {
+    const bal = Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
+    document.getElementById('rxTokenBalance').textContent = formatTT(bal) + ' TT';
+  }
+  refreshBalance();
+  window.addEventListener('storage', e => { if (e.key === 'rotex_textokens_balance') refreshBalance(); });
+
+  document.getElementById('rxBuyTokens').addEventListener('click', () => {
+    if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/tokens');
+    else window.open('/tokens', '_blank');
   });
 
   /* ── Start ──────────────────────────────────────────────────── */
