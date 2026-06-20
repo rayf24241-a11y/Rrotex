@@ -11,9 +11,57 @@ const {
 
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
-const FREE_DAILY_TEXTOKENS = 100_000;
+const FREE_DAILY_TEXTOKENS = 150_000;
 const freeTokenCounters  = new Map();
 const proCounters = new Map();
+
+// Multi-account detection — tracks IP → Set<uid> and normalizedEmail → firstUid.
+// Prevents users from making multiple accounts to farm free TexTokens.
+const ipUidRegistry    = new Map(); // `${ip}:${date}` → Set<uid>
+const emailUidRegistry = new Map(); // `${normalizedEmail}:${date}` → uid
+
+function normalizeGmail(email) {
+  if (typeof email !== 'string' || !email.includes('@')) return '';
+  const lower = email.toLowerCase();
+  const at = lower.lastIndexOf('@');
+  const domain = lower.slice(at + 1);
+  const local  = lower.slice(0, at);
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    return local.split('+')[0].replace(/\./g, '') + '@gmail.com';
+  }
+  return lower;
+}
+
+// Returns true if this request looks like a multi-account abuse attempt.
+function isMultiAccount(ip, uid, email) {
+  // Only fire for authenticated users (uid !== ip means they have a real Firebase UID)
+  if (!uid || uid === 'unknown' || uid === ip) return false;
+  const d = _today();
+
+  // 1) Email normalization check (Gmail dot/plus tricks)
+  const norm = normalizeGmail(email);
+  if (norm) {
+    const eKey = `${norm}:${d}`;
+    const firstUid = emailUidRegistry.get(eKey);
+    if (!firstUid) {
+      emailUidRegistry.set(eKey, uid);
+      if (emailUidRegistry.size > 5000) emailUidRegistry.clear();
+    } else if (firstUid !== uid) {
+      return true; // same Gmail base address, different account
+    }
+  }
+
+  // 2) IP multi-account check (same IP, 2+ distinct Firebase UIDs today)
+  const iKey = `${ip}:${d}`;
+  let uidSet = ipUidRegistry.get(iKey);
+  if (!uidSet) {
+    uidSet = new Set();
+    ipUidRegistry.set(iKey, uidSet);
+    if (ipUidRegistry.size > 3000) ipUidRegistry.clear();
+  }
+  uidSet.add(uid);
+  return uidSet.size > 1; // two or more accounts on the same IP today
+}
 const GROQ_BUSY_TEXT = 'This AI is being used too much. Please use a different AI and go to this one later.';
 const OPENROUTER_OUT_TEXT = 'ai is being used to much! please purchase pro to bypass this!';
 
@@ -101,20 +149,36 @@ module.exports = async function handler(request, response) {
 
   const ip = ipFromRequest(request);
 
-  // TexToken daily budget for free users (100k/day per IP). Dev account is exempt.
+  // ── Multi-account gate — runs before any token check ──────────────────────
+  if (!isPro && !isDev && isMultiAccount(ip, userId, userEmail)) {
+    response.status(403).json({
+      error: 'multi_account',
+      text: 'Multiple accounts detected from the same person. Only one free account is allowed per person. Sign in with your original account, or upgrade to Pro at rrotex.com/pro.',
+    });
+    return;
+  }
+
+  // TexToken daily budget for free users (150k/day). Dev account is exempt.
+  // Both the per-user key AND the per-IP key are checked — whichever is more
+  // restrictive wins. This makes multi-accounting pointless: all accounts on
+  // the same IP share a single 150k/day pool.
   if (!isPro && !isDev) {
     const freeKey = userId !== 'unknown' ? `uid:${userId}` : `ip:${ip}`;
-    const usedToday = getFreeTokensUsed(freeKey);
+    const ipKey   = `ip:${ip}`;
+    const usedByKey = getFreeTokensUsed(freeKey);
+    const usedByIp  = getFreeTokensUsed(ipKey);
+    const usedToday = Math.max(usedByKey, usedByIp);
     // We don't have the estimate yet, so do a quick pre-check assuming ~2k min cost
     if (usedToday >= FREE_DAILY_TEXTOKENS) {
       response.status(402).json({
         error: 'no_textokens',
-        text: "You've used your 100k free TexTokens for today. Come back tomorrow, or buy more on rrotex.com/tokens.",
+        text: "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
       });
       return;
     }
-    // Store key on request for post-estimate deduction below
+    // Store keys on request for post-estimate deduction below
     request._freeKey = freeKey;
+    request._ipKey   = ipKey;
   }
 
   if (!isPro && !isDev && selected.freeDailyCap) {
@@ -164,15 +228,16 @@ module.exports = async function handler(request, response) {
     cleanMessages.unshift({
       role: 'system',
       content: [
-        'You are ROTEX AI, the assistant inside the ROTEX desktop and web app for game developers.',
-        buildEngineSection(projectMode),
+        'You are ROTEX AI, the assistant inside the ROTEX desktop and web app for game developers. ROTEX is primarily used for Roblox game development.',
+        buildEngineSection(projectMode || 'Roblox'),
         'Keep all replies short and direct. Answer the actual question — no intros, no "Great question!", no capability lists, no marketing. 2-4 sentences max for simple questions.',
         'Never start a response with "Certainly", "Sure", "Of course", "Absolutely", or similar filler.',
         'Use Markdown in your responses: **bold** for emphasis, `code` for inline code, fenced code blocks for multi-line code.',
         'When asked what models are available or to list the models, output EXACTLY these four lines and nothing else — no intro, no outro:\n**Fast** (Groq Llama 3.1 8B Instant, Free, 0.16x TexTokens/output token) — Cheap\n**Balanced** (Groq Qwen3 32B, Free limited, 1.18x TexTokens/output token) — Normal\n**Smart** (Groq Llama 3.3 70B Versatile, Free small test, 1.58x TexTokens/output token) — Normal\n**Pro Smart** (Claude Haiku 4.5, Pro only, 16x TexTokens/output token) — Expensive',
-        `You are currently running as: **${selected.name}**. If asked which model you are, say it in one sentence.`,
+        `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
+        `ROTEX model ranking, best to worst: 1st Pro Smart (Claude Haiku 4.5, Pro only) → 2nd Smart (Llama 3.3 70B) → 3rd Balanced (Qwen3 32B) → 4th Fast (Llama 3.1 8B). If asked which is best: Pro Smart. If asked which is worst or least powerful: Fast. Never claim to be the best unless you are Pro Smart.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a desktop and web AI app for game devs. Website: rrotex.com. Free plan: 100k TexTokens/day, 1M/month, Fast free, Balanced/Smart have daily limits, no Claude Haiku. Pro: $20/month, 40M TexTokens/month, all models, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens. TexToken rates — Fast: 0.2x, Balanced: 0.75x, Smart: 1x, Pro Smart: 6x. Agent mode 2x cost, Super Agent 4x.',
+        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person (multi-account detected and blocked), Fast free, Balanced/Smart have daily limits, no Claude Haiku. Pro: $20/month, 40M TexTokens/month, all models, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens. TexToken rates — Fast: 0.2x, Balanced: 0.75x, Smart: 1x, Pro Smart: 6x. Agent mode 2x cost, Super Agent 4x.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
@@ -207,15 +272,21 @@ module.exports = async function handler(request, response) {
 
   // Enforce free daily TexToken budget now that we have an accurate estimate.
   if (!isPro && !isDev && request._freeKey) {
-    const usedToday = getFreeTokensUsed(request._freeKey);
+    const usedByKey = getFreeTokensUsed(request._freeKey);
+    const usedByIp  = request._ipKey ? getFreeTokensUsed(request._ipKey) : 0;
+    const usedToday = Math.max(usedByKey, usedByIp);
     if (usedToday + estimate.textokens > FREE_DAILY_TEXTOKENS) {
       response.status(402).json({
         error: 'no_textokens',
-        text: "You've used your 100k free TexTokens for today. Come back tomorrow, or buy more on rrotex.com/tokens.",
+        text: "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
       });
       return;
     }
     addFreeTokensUsed(request._freeKey, estimate.textokens);
+    // Also charge the IP-level pool so multiple accounts on the same IP share the quota
+    if (request._ipKey && request._ipKey !== request._freeKey) {
+      addFreeTokensUsed(request._ipKey, estimate.textokens);
+    }
   }
 
   // Never trust client-provided texTokensLeft for non-Pro users.
@@ -321,8 +392,8 @@ function buildEngineSection(projectMode) {
 function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode) {
   const parts = [
     'You are ROTEX AI, the coding assistant inside the ROTEX desktop app chat.',
-    `You are running as the ${selected.name} model.`,
-    buildEngineSection(projectMode),
+    `You are running as the **${selected.name}** model (${selected.providerName}). Always be honest about which model you are. Model ranking best→worst: Pro Smart (Claude Haiku) > Smart (Llama 70B) > Balanced (Qwen3 32B) > Fast (Llama 8B). Never claim to be the best unless you are Pro Smart.`,
+    buildEngineSection(projectMode || 'Roblox'),
     'Be direct and practical. Answer code questions with working code. Keep explanations short and put them after the code.',
     'When showing code changes for a specific file, ALWAYS use a file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. The editor shows the user a diff and an Apply button for each file block.',
     'Never use placeholder comments like "rest of the code stays the same" inside file blocks — file blocks must contain the complete file.',

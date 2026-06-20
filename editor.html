@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ROTEX AI</title>
   <meta name="theme-color" content="#0D0F17" />
+  <link rel="icon" type="image/png" href="./icon.png" />
   <link rel="stylesheet" href="./editor.css" />
   <style>
     /* ═══════════════════════════════════════════════════════
@@ -176,6 +177,34 @@
       background: var(--rx-panel); border: 1px solid var(--rx-border); color: var(--rx-quiet);
     }
     .rx-rojo-badge.running { background: rgba(34,197,94,0.12); border-color: var(--rx-green); color: var(--rx-green); }
+
+    /* ── Spinning cube loading animation ────────────────────── */
+    .rx-cube-wrapper {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .rx-cube-scene {
+      perspective: 50px; width: 20px; height: 20px; flex-shrink: 0;
+    }
+    .rx-cube {
+      width: 20px; height: 20px; position: relative;
+      transform-style: preserve-3d;
+      animation: rxCubeSpin 2s linear infinite;
+    }
+    .rx-cube-face {
+      position: absolute; width: 20px; height: 20px;
+      border: 1.5px solid var(--rx-yellow);
+      background: var(--rx-yellow-d);
+    }
+    .rx-cube-face.cf  { transform: translateZ(10px); }
+    .rx-cube-face.cba { transform: rotateY(180deg) translateZ(10px); }
+    .rx-cube-face.cl  { transform: rotateY(-90deg) translateZ(10px); }
+    .rx-cube-face.cr  { transform: rotateY(90deg) translateZ(10px); }
+    .rx-cube-face.ct  { transform: rotateX(90deg) translateZ(10px); }
+    .rx-cube-face.cbo { transform: rotateX(-90deg) translateZ(10px); }
+    @keyframes rxCubeSpin {
+      0%   { transform: rotateX(18deg) rotateY(0deg); }
+      100% { transform: rotateX(18deg) rotateY(360deg); }
+    }
 
     /* ── App shell ──────────────────────────────────────────── */
     .rx-app {
@@ -688,6 +717,14 @@
       </div>
       <div class="rx-chat-list" id="rxChatList">
         <div class="rx-loading"><span></span><span></span><span></span></div>
+      </div>
+
+      <!-- Docs link -->
+      <div style="padding:6px 12px;">
+        <button id="rxDocsBtn" type="button" style="width:100%;display:flex;align-items:center;gap:7px;padding:7px 10px;background:none;border:1px solid var(--rx-border);border-radius:8px;color:var(--rx-muted);font:600 12px/1 inherit;cursor:pointer;transition:all .13s;" onmouseover="this.style.borderColor='var(--rx-yellow)';this.style.color='var(--rx-text)'" onmouseout="this.style.borderColor='var(--rx-border)';this.style.color='var(--rx-muted)'">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/><line x1="3.5" y1="4.5" x2="10.5" y2="4.5" stroke="currentColor" stroke-width="1.1"/><line x1="3.5" y1="7" x2="10.5" y2="7" stroke="currentColor" stroke-width="1.1"/><line x1="3.5" y1="9.5" x2="8" y2="9.5" stroke="currentColor" stroke-width="1.1"/></svg>
+          Docs &amp; Benchmark
+        </button>
       </div>
 
       <!-- Sidebar footer: token balance + profile -->
@@ -1433,10 +1470,17 @@
     msgs.appendChild(userEl);
     msgs.scrollTop = msgs.scrollHeight;
 
-    // Show typing indicator
+    // Show spinning cube while AI works
     const typing = document.createElement('div');
     typing.className = 'ai-msg-typing';
-    typing.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    typing.innerHTML = `<div class="rx-cube-wrapper">
+      <div class="rx-cube-scene"><div class="rx-cube">
+        <div class="rx-cube-face cf"></div><div class="rx-cube-face cba"></div>
+        <div class="rx-cube-face cl"></div><div class="rx-cube-face cr"></div>
+        <div class="rx-cube-face ct"></div><div class="rx-cube-face cbo"></div>
+      </div></div>
+      <span style="font-size:12px;color:var(--rx-muted);">Thinking…</span>
+    </div>`;
     msgs.appendChild(typing);
     msgs.scrollTop = msgs.scrollHeight;
 
@@ -1459,6 +1503,48 @@
     const activeChat = allChats.find(c => c.id === activeChatId);
     const history = (activeChat?.messages || []).slice(-24).map(m => ({ role: m.role, content: m.content }));
     history.push({ role: 'user', content: text });
+
+    // TexBrain 0.5-β — route to local Ollama via Electron IPC
+    if (selectedModel === 'texbrain') {
+      if (!window.rotexDesktop) {
+        typing.remove();
+        const errEl = document.createElement('div');
+        errEl.className = 'ai-msg ai-msg-assistant';
+        errEl.style.color = 'var(--rx-red)';
+        errEl.textContent = 'TexBrain 0.5-β requires the ROTEX desktop app with Ollama installed (ollama.ai).';
+        msgs.appendChild(errEl);
+        msgs.scrollTop = msgs.scrollHeight;
+        return;
+      }
+      try {
+        const tbResult = await window.rotexDesktop.callTexBrain(history);
+        typing.remove();
+        if (tbResult.error) {
+          const errEl = document.createElement('div');
+          errEl.className = 'ai-msg ai-msg-assistant';
+          errEl.style.color = 'var(--rx-red)';
+          errEl.textContent = tbResult.error;
+          msgs.appendChild(errEl);
+        } else {
+          const assistantEl = document.createElement('div');
+          assistantEl.className = 'ai-msg ai-msg-assistant';
+          assistantEl.textContent = tbResult.text || '(empty response)';
+          msgs.appendChild(assistantEl);
+          msgs.scrollTop = msgs.scrollHeight;
+          await saveChatMessage(activeChatId, text, tbResult.text || '');
+          await applyRobloxFileBlocks(tbResult.text || '');
+        }
+      } catch (tbErr) {
+        typing.remove();
+        const errEl = document.createElement('div');
+        errEl.className = 'ai-msg ai-msg-assistant';
+        errEl.style.color = 'var(--rx-red)';
+        errEl.textContent = 'Failed to reach TexBrain — make sure Ollama is running.';
+        msgs.appendChild(errEl);
+      }
+      msgs.scrollTop = msgs.scrollHeight;
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE}/api/chat`, {
@@ -1484,7 +1570,9 @@
         errEl.className = 'ai-msg ai-msg-assistant';
         errEl.style.cssText = 'color:var(--rx-red);display:flex;flex-direction:column;gap:8px;';
         if (err.error === 'no_textokens') {
-          errEl.innerHTML = `<span>You're out of TexTokens.</span><a href="https://www.rrotex.com/tokens" target="_blank" style="display:inline-block;padding:8px 16px;background:#4B9DFF;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;width:fit-content;">Buy TexTokens →</a>`;
+          errEl.innerHTML = `<span>You're out of TexTokens for today.</span><a href="https://www.rrotex.com/tokens" target="_blank" style="display:inline-block;padding:8px 16px;background:#4B9DFF;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;width:fit-content;">Buy TexTokens →</a>`;
+        } else if (err.error === 'multi_account') {
+          errEl.innerHTML = `<span style="font-weight:700;">Multiple accounts detected.</span><span style="font-size:12px;color:var(--rx-muted);">${err.text || 'Only one free account per person is allowed.'}</span><a href="https://www.rrotex.com/pro" target="_blank" style="display:inline-block;padding:8px 16px;background:var(--rx-yellow);color:#0D0F17;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;width:fit-content;">Upgrade to Pro →</a>`;
         } else {
           errEl.textContent = err.text || err.error || `Error ${res.status}`;
         }
@@ -1524,6 +1612,18 @@
         }
       }
       assistantEl.classList.remove('ai-msg-streaming');
+
+      // Deduct estimated TexTokens from local balance display
+      if (full) {
+        const rates = { fast: 0.16, balanced: 1.18, smart: 1.58, 'pro-smart': 5 };
+        const rate = rates[selectedModel] || 0.16;
+        const deduct = Math.ceil((full.length / 4) * rate);
+        const cur = Number(localStorage.getItem('rotex_textokens_balance') || 0);
+        if (cur > 0) {
+          localStorage.setItem('rotex_textokens_balance', Math.max(0, cur - deduct).toString());
+          refreshBalance();
+        }
+      }
 
       if (streamError && !full) {
         assistantEl.remove();
@@ -1603,29 +1703,51 @@
     </g>
   </svg>`;
 
+  const TEXBRAIN_SVG = `<svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+    <rect x="3" y="3" width="16" height="16" rx="3" stroke="#22C55E" stroke-width="1.5"/>
+    <rect x="6" y="6" width="10" height="10" rx="2" stroke="#22C55E" stroke-width="1" opacity="0.5"/>
+    <circle cx="11" cy="11" r="2.5" fill="#22C55E"/>
+    <line x1="11" y1="3" x2="11" y2="6" stroke="#22C55E" stroke-width="1.5"/>
+    <line x1="11" y1="16" x2="11" y2="19" stroke="#22C55E" stroke-width="1.5"/>
+    <line x1="3" y1="11" x2="6" y2="11" stroke="#22C55E" stroke-width="1.5"/>
+    <line x1="16" y1="11" x2="19" y2="11" stroke="#22C55E" stroke-width="1.5"/>
+  </svg>`;
+
   /* ── Model selector ─────────────────────────────────────────── */
   const MODELS = [
-    { id: 'fast',      name: 'Fast',        role: 'Cheap',     svg: GROQ_SVG,   pro: false },
-    { id: 'balanced',  name: 'Balanced',    role: 'Cheap',     svg: GROQ_SVG,   pro: false },
-    { id: 'smart',     name: 'Smart',       role: 'Cheap',     svg: GROQ_SVG,   pro: false },
-    { id: 'pro-smart', name: 'Claude Haiku',role: 'Expensive', svg: CLAUDE_SVG, pro: true  },
+    { id: 'fast',      name: 'Fast',              role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false },
+    { id: 'balanced',  name: 'Balanced',          role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false },
+    { id: 'smart',     name: 'Smart',             role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false },
+    { id: 'pro-smart', name: 'Claude Haiku',      role: 'Expensive',  svg: CLAUDE_SVG,   pro: true,  localOnly: false },
+    { id: 'texbrain',  name: 'TexBrain 0.5-β',   role: 'Free · Local', svg: TEXBRAIN_SVG, pro: false, localOnly: true  },
   ];
 
   let selectedModel = localStorage.getItem('rotex_model') || 'fast';
 
   function buildMenu() {
     const menu = document.getElementById('rxModelMenu');
+    const isDesktop = Boolean(window.rotexDesktop);
     menu.innerHTML = `<div class="ai-model-scroll">` +
-      MODELS.map(m => `
-        <div class="ai-model-option${m.id === selectedModel ? ' selected' : ''}${m.pro ? ' locked' : ''}" data-id="${m.id}"
-          style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;cursor:pointer;${m.id === selectedModel ? 'background:rgba(255,255,255,0.07)' : ''}">
+      MODELS.map(m => {
+        const locked = m.pro || (m.localOnly && !isDesktop);
+        const badge = m.pro
+          ? '<span style="font-size:10px;font-weight:700;padding:2px 6px;background:rgba(75,157,255,0.18);color:#4B9DFF;border-radius:4px;border:1px solid rgba(75,157,255,0.3);">PRO</span>'
+          : m.localOnly && !isDesktop
+            ? '<span style="font-size:10px;font-weight:700;padding:2px 6px;background:rgba(255,255,255,0.08);color:var(--rx-muted);border-radius:4px;border:1px solid var(--rx-border);">DESKTOP</span>'
+            : m.localOnly
+              ? '<span style="font-size:10px;font-weight:700;padding:2px 6px;background:rgba(34,197,94,0.15);color:#22C55E;border-radius:4px;border:1px solid rgba(34,197,94,0.3);">FREE</span>'
+              : '';
+        return `
+        <div class="ai-model-option${m.id === selectedModel ? ' selected' : ''}${locked ? ' locked' : ''}" data-id="${m.id}"
+          style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;cursor:pointer;${m.id === selectedModel ? 'background:rgba(255,255,255,0.07)' : ''}${locked ? ';opacity:0.5;cursor:not-allowed' : ''}">
           <div style="width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${m.svg}</div>
           <div style="flex:1;min-width:0;">
             <div style="font-size:13px;font-weight:600;">${m.name}</div>
             <div style="font-size:11px;color:var(--rx-muted);">${m.role}</div>
           </div>
-          ${m.pro ? '<span style="font-size:10px;font-weight:700;padding:2px 6px;background:rgba(75,157,255,0.18);color:#4B9DFF;border-radius:4px;border:1px solid rgba(75,157,255,0.3);">PRO</span>' : ''}
-        </div>`).join('') + `</div>`;
+          ${badge}
+        </div>`;
+      }).join('') + `</div>`;
 
     menu.querySelectorAll('.ai-model-option:not(.locked)').forEach(el => {
       el.addEventListener('click', () => {
@@ -1725,6 +1847,11 @@
   document.getElementById('rxBuyTokens').addEventListener('click', () => {
     if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/tokens');
     else window.open('/tokens', '_blank');
+  });
+
+  document.getElementById('rxDocsBtn').addEventListener('click', () => {
+    if (window.rotexDesktop) window.rotexDesktop.navigate('docs');
+    else window.open('/docs.html', '_blank');
   });
 
   /* ── Sidebar profile row ────────────────────────────────────── */

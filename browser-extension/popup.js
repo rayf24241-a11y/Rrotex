@@ -104,7 +104,7 @@ async function showChat(project) {
   messages = await loadHistory(token);
   msgsEl.innerHTML = '';
   if (messages.length === 0) {
-    const greeting = `Hi! I'm your ${project || 'Supabase'} AI. Ask me about tables, RLS, Edge Functions, Auth, storage, realtime — anything Supabase.`;
+    const greeting = `Hi! I'm the ROTEX AI for your ${project || 'project'}. Ask me anything about your Roblox game — scripting, UI, mechanics, APIs.`;
     addMsg('ai', greeting);
     messages.push({ role: 'assistant', content: greeting });
     saveHistory();
@@ -215,7 +215,11 @@ async function send() {
       reply = data.text || '(empty response)';
     } else {
       const err = await res.json().catch(() => ({}));
-      reply = err.text || `Error ${res.status} — try again`;
+      if (err.error === 'multi_account') {
+        reply = '⛔ Multiple accounts detected. Only one free account is allowed per person. Upgrade to Pro at rrotex.com/pro to remove this limit.';
+      } else {
+        reply = err.text || `Error ${res.status} — try again`;
+      }
     }
 
     addMsg('ai', reply);

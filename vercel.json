@@ -4,6 +4,7 @@
     { "source": "/account", "destination": "/account.html" },
     { "source": "/login",   "destination": "/login.html" },
     { "source": "/tokens",  "destination": "/tokens.html" },
+    { "source": "/docs",    "destination": "/docs.html" },
     { "source": "/app", "destination": "/index.html" },
     { "source": "/chat", "destination": "/index.html" }
   ],

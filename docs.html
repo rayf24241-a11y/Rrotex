@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROTEX Docs</title>
+  <link rel="icon" type="image/png" href="./icon.png" />
+  <style>
+    :root {
+      --bg:      #0D0F17;
+      --surface: #141720;
+      --panel:   #1A1F2E;
+      --border:  #252D40;
+      --text:    #E8EDF8;
+      --muted:   #8A93AA;
+      --quiet:   #525C78;
+      --yellow:  #FFD60A;
+      --yellow-d: rgba(255,214,10,0.12);
+      --blue:    #2563EB;
+      --green:   #22C55E;
+      --red:     #FF4757;
+      --purple:  #A855F7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    body { display: flex; min-height: 100vh; }
+
+    /* ── Sidebar nav ── */
+    .nav { width: 220px; min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; text-decoration: none; }
+    .nav-logo { width: 30px; height: 30px; background: var(--yellow); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; color: #0D0F17; }
+    .nav-name { font-size: 15px; font-weight: 700; color: var(--text); }
+    .nav-section { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--quiet); margin-bottom: 8px; margin-top: 20px; }
+    .nav a { display: block; padding: 7px 10px; border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px; transition: all 0.12s; }
+    .nav a:hover, .nav a.active { background: rgba(255,255,255,0.06); color: var(--text); }
+
+    /* ── Main content ── */
+    .main { flex: 1; max-width: 860px; padding: 48px 48px 80px; }
+    h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    h2 { font-size: 20px; font-weight: 700; margin: 40px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 16px; font-weight: 700; margin: 24px 0 8px; color: var(--yellow); }
+    p { color: var(--muted); margin-bottom: 14px; }
+    .lead { font-size: 15px; color: var(--text); margin-bottom: 28px; }
+    code { background: rgba(255,255,255,0.07); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-family: 'Courier New', monospace; font-size: 12px; color: var(--yellow); }
+    pre { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 14px 0 20px; }
+    pre code { background: none; border: none; padding: 0; color: var(--text); font-size: 13px; }
+
+    /* ── Info boxes ── */
+    .box { border-radius: 10px; padding: 14px 16px; margin: 14px 0 20px; display: flex; gap: 12px; }
+    .box-note { background: rgba(37,99,235,0.12); border: 1px solid rgba(37,99,235,0.3); }
+    .box-warn { background: rgba(255,214,10,0.1); border: 1px solid rgba(255,214,10,0.3); }
+    .box-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+    .box p { margin: 0; color: var(--text); font-size: 13px; }
+
+    /* ── Tokens section ── */
+    .token-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin: 16px 0 24px; }
+    .token-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .token-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; color: var(--yellow); }
+    .token-card .amount { font-size: 22px; font-weight: 800; color: var(--text); }
+    .token-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Benchmark table ── */
+    .bench-wrap { overflow-x: auto; margin: 16px 0 32px; }
+    .bench { width: 100%; border-collapse: collapse; }
+    .bench th { background: var(--panel); text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--border); }
+    .bench td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; vertical-align: middle; }
+    .bench tr:last-child td { border-bottom: none; }
+    .bench tr:hover td { background: rgba(255,255,255,0.025); }
+    .model-cell { display: flex; align-items: center; gap: 10px; }
+    .model-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .model-name { font-weight: 600; }
+    .model-sub { font-size: 11px; color: var(--muted); }
+    /* Stars: 1-5 */
+    .stars { display: flex; gap: 3px; }
+    .star { width: 14px; height: 14px; border-radius: 3px; }
+    .star.on  { background: var(--yellow); }
+    .star.off { background: var(--border); }
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+    .badge-free  { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+    .badge-pro   { background: rgba(37,99,235,0.18); color: #60a5fa; border: 1px solid rgba(37,99,235,0.35); }
+    .badge-local { background: rgba(168,85,247,0.15); color: var(--purple); border: 1px solid rgba(168,85,247,0.3); }
+
+    /* ── Model cards ── */
+    .model-cards { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; margin: 16px 0 28px; }
+    .model-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .model-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .model-card p { font-size: 12px; color: var(--muted); margin: 0; }
+
+    /* ── Groq refill banner ── */
+    .refill-banner { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin: 16px 0 24px; display: flex; align-items: center; gap: 20px; }
+    .refill-icon { font-size: 32px; flex-shrink: 0; }
+    .refill-text h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .refill-text p { margin: 0; font-size: 13px; color: var(--muted); }
+
+    @media (max-width: 700px) {
+      .nav { display: none; }
+      .main { padding: 24px 20px 60px; }
+      .token-grid { grid-template-columns: 1fr 1fr; }
+      .model-cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="#" class="nav-brand">
+    <div class="nav-logo">RX</div>
+    <span class="nav-name">ROTEX</span>
+  </a>
+  <div class="nav-section">Getting Started</div>
+  <a href="#what-is-rotex" class="active">What is ROTEX?</a>
+  <a href="#quickstart">Quick Start</a>
+  <a href="#studio-plugin">Studio Plugin</a>
+
+  <div class="nav-section">AI Models</div>
+  <a href="#models">Model Overview</a>
+  <a href="#benchmark">Benchmark</a>
+  <a href="#texbrain">TexBrain 0.5-β</a>
+  <a href="#groq-limits">Groq Rate Limits</a>
+
+  <div class="nav-section">Plans & Tokens</div>
+  <a href="#textokens">TexTokens</a>
+  <a href="#plans">Plans</a>
+</nav>
+
+<div class="main">
+
+  <!-- ══ What is ROTEX ══ -->
+  <section id="what-is-rotex">
+    <h1>ROTEX Documentation</h1>
+    <p class="lead">ROTEX is an AI-powered desktop app for Roblox game developers. Ask questions, generate Luau code, plan systems, and sync directly with Roblox Studio — all from one place.</p>
+
+    <div class="box box-note">
+      <div class="box-icon">ℹ️</div>
+      <p><strong>Download:</strong> Get ROTEX at <strong>rrotex.com</strong>. The browser extension and Studio plugin are bundled with the desktop app.</p>
+    </div>
+  </section>
+
+  <!-- ══ Quick Start ══ -->
+  <section id="quickstart">
+    <h2>Quick Start</h2>
+    <h3>1. Open a Project</h3>
+    <p>Launch ROTEX, sign in, and click <strong>New Project</strong>. Choose Roblox as your engine and give it a name.</p>
+
+    <h3>2. Connect Studio</h3>
+    <p>Inside your project, click <strong>Install Studio Plugin</strong> — ROTEX copies the plugin into your Roblox plugins folder. Open Roblox Studio, click the <strong>Open</strong> button in the ROTEX toolbar, and paste the 6-character token shown in the ROTEX desktop app.</p>
+
+    <h3>3. Chat with AI</h3>
+    <p>Type any question in the chat panel. The AI knows which project you're in, whether Studio is connected, and what mode you're working in.</p>
+  </section>
+
+  <!-- ══ Studio Plugin ══ -->
+  <section id="studio-plugin">
+    <h2>Studio Plugin</h2>
+    <p>The ROTEX Studio plugin runs inside Roblox Studio and communicates with the desktop app over a local HTTP server (port 7878). It lets the AI know your Studio session is live, so answers are context-aware.</p>
+
+    <div class="box box-warn">
+      <div class="box-icon">⚠️</div>
+      <p>The token regenerates each session. If Studio disconnects, copy the new token from the desktop app and re-enter it in the plugin panel.</p>
+    </div>
+
+    <h3>Rojo Sync</h3>
+    <p>Click <strong>Rojo Connect</strong> inside the plugin panel to start a Rojo dev session. The AI will see whether Rojo sync is running and can give advice accordingly.</p>
+  </section>
+
+  <!-- ══ Models ══ -->
+  <section id="models">
+    <h2>AI Model Overview</h2>
+    <div class="model-cards">
+      <div class="model-card">
+        <h4>Fast <span class="badge badge-free">FREE</span></h4>
+        <p>Groq Llama 3.1 8B Instant. Best for quick one-liners, simple script fixes, and fast lookups. Lowest TexToken cost.</p>
+      </div>
+      <div class="model-card">
+        <h4>Balanced <span class="badge badge-free">FREE</span></h4>
+        <p>Groq Qwen3 32B. Good balance of speed and quality. Great for mid-size coding tasks and explaining systems.</p>
+      </div>
+      <div class="model-card">
+        <h4>Smart <span class="badge badge-free">FREE</span></h4>
+        <p>Groq Llama 3.3 70B. Best free-tier model for complex debugging, architecture planning, and detailed explanations.</p>
+      </div>
+      <div class="model-card">
+        <h4>Pro Smart <span class="badge badge-pro">PRO</span></h4>
+        <p>Claude Haiku 4.5. The highest quality model. Best code, best reasoning. Requires a Pro plan.</p>
+      </div>
+      <div class="model-card" style="grid-column:1/-1">
+        <h4>TexBrain 0.5-β <span class="badge badge-local">LOCAL · FREE</span></h4>
+        <p>Runs entirely on your machine via Ollama — completely free, no TexTokens, no rate limits. Requires <a href="#texbrain" style="color:var(--yellow)">Ollama installed</a>. Uses a three-agent pipeline: a clarifier expands your request, a worker generates the response, giving you higher quality answers from local hardware.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Benchmark ══ -->
+  <section id="benchmark">
+    <h2>Model Benchmark</h2>
+    <p>How each model performs across game development tasks. Ranked 1 (weakest) to 5 (strongest) within the ROTEX model lineup.</p>
+
+    <div class="bench-wrap">
+      <table class="bench">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Code</th>
+            <th>Modeling</th>
+            <th>Animating</th>
+            <th>Audio</th>
+            <th>Smarts</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="model-cell">
+                <div class="model-dot" style="background:#22C55E"></div>
+                <div>
+                  <div class="model-name">TexBrain 0.5-β</div>
+                  <div class="model-sub">Local · Ollama</div>
+                </div>
+              </div>
+            </td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="model-cell">
+                <div class="model-dot" style="background:#A855F7"></div>
+                <div>
+                  <div class="model-name">Fast</div>
+                  <div class="model-sub">Groq Llama 3.1 8B</div>
+                </div>
+              </div>
+            </td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="model-cell">
+                <div class="model-dot" style="background:#A855F7"></div>
+                <div>
+                  <div class="model-name">Balanced</div>
+                  <div class="model-sub">Groq Qwen3 32B</div>
+                </div>
+              </div>
+            </td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="model-cell">
+                <div class="model-dot" style="background:#A855F7"></div>
+                <div>
+                  <div class="model-name">Smart</div>
+                  <div class="model-sub">Groq Llama 3.3 70B</div>
+                </div>
+              </div>
+            </td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
+          </tr>
+          <tr style="background:rgba(255,214,10,0.04);">
+            <td>
+              <div class="model-cell">
+                <div class="model-dot" style="background:#D97706"></div>
+                <div>
+                  <div class="model-name">Pro Smart</div>
+                  <div class="model-sub">Claude Haiku 4.5</div>
+                </div>
+              </div>
+            </td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div></div></td>
+            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;"><strong>Code</strong> — Luau scripting, APIs, bugs. &nbsp;<strong>Modeling</strong> — 3D logic, mesh math, Studio hierarchy. &nbsp;<strong>Animating</strong> — AnimationController, TweenService, rigging. &nbsp;<strong>Audio</strong> — SoundService, music, mixing logic. &nbsp;<strong>Smarts</strong> — Reasoning, planning, complex queries.</p>
+  </section>
+
+  <!-- ══ TexBrain ══ -->
+  <section id="texbrain">
+    <h2>TexBrain 0.5-β</h2>
+    <p>TexBrain is ROTEX's local AI model — 100% free, runs on your PC, no rate limits, no TexTokens charged. It requires <strong>Ollama</strong> installed on your machine.</p>
+
+    <h3>Setup</h3>
+    <ol style="color:var(--muted);padding-left:20px;line-height:2;">
+      <li>Download <strong>Ollama</strong> from <code>ollama.ai</code> and install it.</li>
+      <li>Open a terminal and run: <code>ollama pull llama3.2</code></li>
+      <li>In ROTEX, open the model picker and select <strong>TexBrain 0.5-β</strong>.</li>
+    </ol>
+
+    <div class="box box-note">
+      <div class="box-icon">ℹ️</div>
+      <p>TexBrain is <strong>desktop-only</strong>. It is not available in the web version. Ollama must be running in the background for it to work.</p>
+    </div>
+
+    <h3>How it works</h3>
+    <p>TexBrain uses a two-agent pipeline under the hood:</p>
+    <ol style="color:var(--muted);padding-left:20px;line-height:2;">
+      <li><strong>Clarifier agent</strong> — reads your message and expands it into a precise, detailed task description so nothing is missed.</li>
+      <li><strong>Worker agent</strong> — receives the expanded task plus full conversation history, then generates the final response.</li>
+    </ol>
+    <p>This two-step approach produces higher-quality results from local models compared to a single direct call.</p>
+
+    <h3>Recommended models</h3>
+    <p>ROTEX auto-detects which Ollama model to use. Best picks (in order):</p>
+    <pre><code>ollama pull llama3.2        # Recommended — fast, good quality
+ollama pull llama3          # Alternative
+ollama pull mistral         # Good coding skills
+ollama pull phi3            # Lightweight if RAM is limited</code></pre>
+  </section>
+
+  <!-- ══ Groq Rate Limits ══ -->
+  <section id="groq-limits">
+    <h2>Groq Rate Limits</h2>
+    <div class="refill-banner">
+      <div class="refill-icon">⏱️</div>
+      <div class="refill-text">
+        <h4>Groq resets every 24 hours at midnight UTC</h4>
+        <p>Groq's free tier has a <strong>daily token limit</strong> that resets at midnight UTC. Per-minute limits reset every 60 seconds. If you hit a rate limit, wait ~1 minute and try again — or switch to <strong>TexBrain 0.5-β</strong> (completely unlimited, runs locally) while you wait.</p>
+      </div>
+    </div>
+    <p>Tips to reduce Groq token usage:</p>
+    <ul style="color:var(--muted);padding-left:20px;line-height:2;">
+      <li>Use <strong>Fast</strong> for simple questions — it burns the fewest tokens.</li>
+      <li>Keep messages short and specific — fewer input tokens = faster refill.</li>
+      <li>Switch to <strong>TexBrain 0.5-β</strong> for unlimited free usage.</li>
+      <li>Upgrade to <strong>Pro</strong> for Claude Haiku which has generous limits.</li>
+    </ul>
+  </section>
+
+  <!-- ══ TexTokens ══ -->
+  <section id="textokens">
+    <h2>TexTokens</h2>
+    <p>TexTokens (TT) are ROTEX's credit system. Every AI request costs a small number of TexTokens based on the model and message length.</p>
+
+    <div class="token-grid">
+      <div class="token-card">
+        <h4>Fast</h4>
+        <div class="amount">0.16x</div>
+        <div class="sub">TexTokens per output token</div>
+      </div>
+      <div class="token-card">
+        <h4>Balanced</h4>
+        <div class="amount">1.18x</div>
+        <div class="sub">TexTokens per output token</div>
+      </div>
+      <div class="token-card">
+        <h4>Smart</h4>
+        <div class="amount">1.58x</div>
+        <div class="sub">TexTokens per output token</div>
+      </div>
+      <div class="token-card">
+        <h4>Pro Smart</h4>
+        <div class="amount">16x</div>
+        <div class="sub">TexTokens per output token</div>
+      </div>
+      <div class="token-card">
+        <h4>TexBrain</h4>
+        <div class="amount" style="color:var(--green)">0</div>
+        <div class="sub">Always free — runs locally</div>
+      </div>
+    </div>
+    <p>Agent mode doubles the cost; Super Agent mode quadruples it, since those modes run extra reasoning passes.</p>
+  </section>
+
+  <!-- ══ Plans ══ -->
+  <section id="plans">
+    <h2>Plans</h2>
+    <div class="model-cards">
+      <div class="model-card">
+        <h4>Free</h4>
+        <p>150,000 TexTokens per day · 1M per month. Access to Fast, Balanced (limited), Smart (limited). No Claude Haiku. No agent mode. One account per person — multi-accounts are detected and blocked.</p>
+      </div>
+      <div class="model-card" style="border-color:rgba(255,214,10,0.4);">
+        <h4 style="color:var(--yellow)">Pro — $20/mo</h4>
+        <p>40M TexTokens per month. All models including Claude Haiku. Agent mode + Super Agent. Up to 5 projects. Extra packs available for $2.50/1M TT.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.nav a[href^="#"]');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`.nav a[href="#${e.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3 });
+  sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>

@@ -138,6 +138,7 @@ const PAGE_FILES = {
   login: 'login.html',
   projects: 'projects.html',
   editor: 'editor.html',
+  docs: 'docs.html',
 };
 
 ipcMain.handle('load-page', async (event, page) => {
@@ -403,6 +404,83 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
     };
     tryListen();
   });
+});
+
+// ─── IPC: TexBrain 0.5-β local Ollama pipeline ───────────────────────────────
+ipcMain.handle('texbrain-call', async (event, messages) => {
+  const http = require('http');
+  const OLLAMA_PORT = 11434;
+
+  function ollamaRequest(endpoint, body) {
+    return new Promise((resolve, reject) => {
+      const postData = JSON.stringify(body);
+      const req = http.request(
+        { hostname: '127.0.0.1', port: OLLAMA_PORT, path: endpoint, method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
+        res => {
+          let d = '';
+          res.on('data', c => { d += c; });
+          res.on('end', () => {
+            try { resolve(JSON.parse(d)); }
+            catch { reject(new Error('Ollama parse error')); }
+          });
+        }
+      );
+      req.on('error', reject);
+      req.setTimeout(90000, () => { req.destroy(); reject(new Error('Ollama timeout')); });
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  // Pick best available local model
+  let model = 'llama3.2';
+  try {
+    const tags = await new Promise((resolve, reject) => {
+      http.get(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`, res => {
+        let d = '';
+        res.on('data', c => { d += c; });
+        res.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } });
+      }).on('error', reject);
+    });
+    const names = (tags.models || []).map(m => m.name);
+    const preferred = ['llama3.2:3b', 'llama3.2', 'llama3:8b', 'llama3', 'mistral', 'phi3', 'gemma3'];
+    const found = preferred.find(p => names.some(n => n.startsWith(p)));
+    if (found) model = found;
+    else if (names.length > 0) model = names[0];
+  } catch {
+    return { error: 'Ollama is not running. Download it from ollama.ai, then run: ollama pull llama3.2' };
+  }
+
+  try {
+    const lastMsg = (messages[messages.length - 1] || {}).content || '';
+
+    // Agent 1 — Clarifier: expand user intent into detailed task description
+    const clarifyRes = await ollamaRequest('/api/chat', {
+      model, stream: false,
+      messages: [
+        { role: 'system', content: 'You are a task clarifier. Rewrite the user\'s request in precise, specific detail. Include all implied requirements. Output only the rewritten task — no preamble.' },
+        { role: 'user', content: lastMsg },
+      ],
+    });
+    const clarified = clarifyRes.message?.content || lastMsg;
+
+    // Agent 2 — Worker: do the actual work with full conversation context
+    const workerMsgs = [
+      { role: 'system', content: 'You are TexBrain, a local AI expert for Roblox game development (Luau/Lua scripting, UI, physics, Roblox APIs). Provide complete, working code when asked. Be direct and technical. Use Markdown fenced code blocks.' },
+      ...messages.slice(0, -1),
+      { role: 'user', content: clarified },
+    ];
+    const workRes = await ollamaRequest('/api/chat', { model, stream: false, messages: workerMsgs });
+    const response = workRes.message?.content || '(no response from local model)';
+
+    return { text: response, model };
+  } catch (err) {
+    if (err.message.includes('ECONNREFUSED')) {
+      return { error: 'Ollama is not running. Install from ollama.ai then run: ollama pull llama3.2' };
+    }
+    return { error: `TexBrain error: ${err.message}` };
+  }
 });
 
 function studioPluginPath() {
