@@ -4,6 +4,20 @@ const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
 
+// ─── Auto-updater (electron-updater) ─────────────────────────────────────────
+// Only active in packaged builds. In dev (electron .) it is silently skipped.
+let autoUpdater = null;
+if (app.isPackaged) {
+  try {
+    autoUpdater = require('electron-updater').autoUpdater;
+    autoUpdater.autoDownload = false;        // never download without user action
+    autoUpdater.autoInstallOnAppQuit = false; // never silently install on quit
+    autoUpdater.logger = null;               // suppress console noise
+  } catch {
+    autoUpdater = null;
+  }
+}
+
 let authServer        = null;
 let pluginServer      = null;
 let pluginServerPort  = null;
@@ -123,7 +137,30 @@ function handleDeepLink(url) {
 }
 
 app.commandLine.appendSwitch('disable-cache');
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+
+  // Check for updates 8 seconds after launch so the window is settled.
+  // autoDownload is false, so nothing happens automatically — the renderer
+  // decides what to do when it receives 'update-available'.
+  if (autoUpdater) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(() => {});
+    }, 8000);
+
+    autoUpdater.on('update-available', (info) => {
+      if (mainWindow) mainWindow.webContents.send('rotex-update-available', info);
+    });
+
+    autoUpdater.on('download-progress', (progress) => {
+      if (mainWindow) mainWindow.webContents.send('rotex-update-progress', progress);
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+      if (mainWindow) mainWindow.webContents.send('rotex-update-ready');
+    });
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -229,6 +266,14 @@ ipcMain.handle('exec-command', async (event, command, cwd) => {
 
 ipcMain.handle('open-external', async (event, url) => {
   shell.openExternal(url);
+});
+
+// ─── IPC: in-app update controls ─────────────────────────────────────────────
+ipcMain.handle('update-download', () => {
+  if (autoUpdater) autoUpdater.downloadUpdate().catch(() => {});
+});
+ipcMain.handle('update-install', () => {
+  if (autoUpdater) autoUpdater.quitAndInstall(false, true);
 });
 
 ipcMain.handle('queue-studio-actions', async (event, actions) => {

@@ -13,6 +13,9 @@
   },
   "author": "ROTEX",
   "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.9.0"
@@ -68,6 +71,11 @@
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,
       "shortcutName": "ROTEX Desktop"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "rayf24241-a11y",
+      "repo": "Rrotex"
     }
   }
 }

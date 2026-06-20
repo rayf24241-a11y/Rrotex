@@ -1,4 +1,7 @@
-name: Build ROTEX Desktop
+name: Build ROTEX Desktop (CI)
+
+# CI only — verifies the build compiles. Does NOT publish or create a release.
+# To release, run the "Release ROTEX Desktop" workflow manually.
 
 on:
   workflow_dispatch:
@@ -25,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: electron
-      - name: Build Windows
+      - name: Build Windows (no publish)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build:win
@@ -53,7 +56,7 @@ jobs:
         working-directory: electron
       - name: Install Linux packaging dependencies
         run: sudo apt-get update && sudo apt-get install -y libfuse2
-      - name: Build Linux
+      - name: Build Linux (no publish)
         run: npm run build:linux
         working-directory: electron
       - name: Upload Linux artifact
@@ -77,7 +80,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: electron
-      - name: Build macOS
+      - name: Build macOS (no publish)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build:mac
@@ -91,26 +94,3 @@ jobs:
             downloads/desktop/ROTEX-Desktop-mac.zip
             downloads/desktop/ROTEX-Desktop-mac.dmg.blockmap
           if-no-files-found: error
-
-  release:
-    needs: [build-windows, build-linux, build-mac]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-      - name: Create or update desktop release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: desktop-latest
-          name: ROTEX Desktop - Latest Build
-          draft: false
-          prerelease: false
-          make_latest: true
-          files: |
-            artifacts/ROTEX-Desktop-win.exe
-            artifacts/ROTEX-Desktop-linux.AppImage
-            artifacts/ROTEX-Desktop-mac.dmg

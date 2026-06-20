@@ -544,6 +544,37 @@
       0%,100% { opacity: 0.2; transform: translateY(0); }
       40%      { opacity: 1;   transform: translateY(-5px); }
     }
+    /* ── Update banner ──────────────────────────────────────────────── */
+    #rxUpdateBanner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: #1a2a1a;
+      border-bottom: 1px solid #22C55E44;
+      font-size: 13px;
+      color: #22C55E;
+      z-index: 200;
+    }
+    #rxUpdateBanner.visible { display: flex; }
+    #rxUpdateBanner .rx-upd-msg { flex: 1; }
+    #rxUpdateBanner .rx-upd-btn {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid #22C55E;
+      background: transparent;
+      color: #22C55E;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #rxUpdateBanner .rx-upd-btn:hover { background: #22C55E22; }
+    #rxUpdateBanner .rx-upd-btn:disabled { opacity: 0.5; cursor: default; }
+    #rxUpdateBanner .rx-upd-dismiss {
+      background: none; border: none; color: #22C55E88;
+      cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px;
+    }
+    #rxUpdateBanner .rx-upd-dismiss:hover { color: #22C55E; }
   </style>
 </head>
 <body>
@@ -680,6 +711,14 @@
 </div>
 
 <div class="rx-app">
+
+  <!-- Update banner (shown by JS when electron-updater signals a new version) -->
+  <div id="rxUpdateBanner">
+    <span class="rx-upd-msg" id="rxUpdateMsg">A new version of ROTEX is available.</span>
+    <button class="rx-upd-btn" id="rxUpdateDownloadBtn">Download update</button>
+    <button class="rx-upd-btn" id="rxUpdateInstallBtn" style="display:none;">Restart &amp; install</button>
+    <button class="rx-upd-dismiss" id="rxUpdateDismiss" title="Dismiss">×</button>
+  </div>
 
   <!-- Header -->
   <header class="rx-header">
@@ -1331,6 +1370,45 @@
         if (scriptNames) {
           appendAssistantNote(`[Studio context received: ${scriptNames}]`);
         }
+      });
+
+      // ── In-app update banner ────────────────────────────────────────────
+      const _updBanner  = document.getElementById('rxUpdateBanner');
+      const _updMsg     = document.getElementById('rxUpdateMsg');
+      const _updDlBtn   = document.getElementById('rxUpdateDownloadBtn');
+      const _updInstBtn = document.getElementById('rxUpdateInstallBtn');
+      const _updDismiss = document.getElementById('rxUpdateDismiss');
+
+      window.rotexDesktop.onUpdateAvailable(info => {
+        const ver = info?.version ? ` (v${info.version})` : '';
+        _updMsg.textContent = `ROTEX update available${ver} — click to download.`;
+        _updBanner.classList.add('visible');
+      });
+
+      window.rotexDesktop.onUpdateProgress(progress => {
+        const pct = Math.round(progress?.percent || 0);
+        _updMsg.textContent = `Downloading update… ${pct}%`;
+        _updDlBtn.disabled = true;
+      });
+
+      window.rotexDesktop.onUpdateReady(() => {
+        _updMsg.textContent = 'Update downloaded. Restart ROTEX to apply it.';
+        _updDlBtn.style.display = 'none';
+        _updInstBtn.style.display = '';
+      });
+
+      _updDlBtn.addEventListener('click', () => {
+        _updDlBtn.textContent = 'Downloading…';
+        _updDlBtn.disabled = true;
+        window.rotexDesktop.downloadUpdate();
+      });
+
+      _updInstBtn.addEventListener('click', () => {
+        window.rotexDesktop.installUpdate();
+      });
+
+      _updDismiss.addEventListener('click', () => {
+        _updBanner.classList.remove('visible');
       });
     }
   }

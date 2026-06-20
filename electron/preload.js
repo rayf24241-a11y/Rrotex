@@ -36,4 +36,11 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
   onBrowserConnected: (fn) => ipcRenderer.on('browser-connected', fn),
   onPluginContext: (fn) => ipcRenderer.on('plugin-context', (_, ctx) => fn(ctx)),
   onRojoStatus: (fn) => ipcRenderer.on('rojo-status', (_, status) => fn(status)),
+
+  // ─── In-app updater ───────────────────────────────────────────────────────
+  onUpdateAvailable:  (fn) => ipcRenderer.on('rotex-update-available', (_, info) => fn(info)),
+  onUpdateProgress:   (fn) => ipcRenderer.on('rotex-update-progress',  (_, p)    => fn(p)),
+  onUpdateReady:      (fn) => ipcRenderer.on('rotex-update-ready',     ()        => fn()),
+  downloadUpdate: () => ipcRenderer.invoke('update-download'),
+  installUpdate:  () => ipcRenderer.invoke('update-install'),
 });
