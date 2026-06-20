@@ -3,7 +3,9 @@ const lowCreditEmailTimes = new Map();
 const usageLogs = [];
 
 function providerBalanceUsd() {
-  const value = Number(process.env.PROVIDER_CREDIT_BALANCE || process.env.ROTEXT_PROVIDER_CREDIT_BALANCE || process.env.ROTEX_PROVIDER_CREDIT_BALANCE || 0);
+  const raw = process.env.PROVIDER_CREDIT_BALANCE || process.env.ROTEXT_PROVIDER_CREDIT_BALANCE || process.env.ROTEX_PROVIDER_CREDIT_BALANCE;
+  if (!raw) return Infinity; // env var not set — no balance tracking, skip limit checks
+  const value = Number(raw);
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
