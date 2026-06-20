@@ -2,6 +2,7 @@
 node_modules/
 build/
 dist/
+downloads/desktop/*-unpacked/
 *.spec
 .env
 firebase-config.local.js
