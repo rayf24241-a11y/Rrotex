@@ -46,6 +46,8 @@
       { "from": "../editor.html", "to": "editor.html" },
       { "from": "../editor.css", "to": "editor.css" },
       { "from": "../editor.js", "to": "editor.js" },
+      { "from": "../icon.png", "to": "icon.png" },
+      { "from": "../favicon.ico", "to": "favicon.ico" },
       { "from": "../plugin/rotex-plugin.lua", "to": "plugin/rotex-plugin.lua" }
     ],
     "win": {

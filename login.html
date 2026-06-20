@@ -275,8 +275,10 @@
       // Check if already signed in via localStorage
       try {
         const s = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
-        if (s?.uid && Number(s.exp) > Date.now()) {
+        if (s?.uid && s?.token && Number(s.exp) > Date.now()) {
           window.rotexDesktop.navigate('projects');
+        } else if (s?.uid) {
+          localStorage.removeItem('rotex_desktop_auth');
         }
       } catch {}
 
@@ -378,7 +380,7 @@
       if (isDesktopLogin) {
         document.querySelector('.card').innerHTML = `
           <div style="text-align:center;padding:16px 0;">
-            <div style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--text)">Signed in!</div>
+            <div id="desktopCallbackTitle" style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--text)">Signing in...</div>
             <p style="color:var(--muted);font-size:13px;line-height:1.6;">
               Connecting to ROTEX Desktop…
             </p>
@@ -387,13 +389,19 @@
         const callbackPort = new URLSearchParams(window.location.search).get('callback');
         if (callbackPort) {
           try {
-            await fetch(`http://127.0.0.1:${callbackPort}/auth`, {
+            const callbackRes = await fetch(`http://127.0.0.1:${callbackPort}/auth`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(authData),
             });
-          } catch {}
+            if (!callbackRes.ok) throw new Error('Desktop callback failed');
+          } catch {
+            document.getElementById('desktopCallbackTitle').textContent = 'Signed in, but ROTEX Desktop did not connect';
+            document.querySelector('.card p').textContent = 'Keep ROTEX Desktop open, then click sign in from the app again.';
+            return;
+          }
         }
+        document.getElementById('desktopCallbackTitle').textContent = 'Signed in!';
         document.querySelector('.card p').textContent = 'You can close this tab and return to ROTEX Desktop.';
         return;
       }
