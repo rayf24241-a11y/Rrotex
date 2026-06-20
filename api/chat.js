@@ -11,22 +11,40 @@ const {
 
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
-const FREE_DAILY_IP_LIMIT = 120;
-const ipCounters = new Map();
+const FREE_DAILY_TEXTOKENS = 100_000;
+const freeTokenCounters  = new Map();
 const proCounters = new Map();
 const GROQ_BUSY_TEXT = 'This AI is being used too much. Please use a different AI and go to this one later.';
 const OPENROUTER_OUT_TEXT = 'ai is being used to much! please purchase pro to bypass this!';
 
+function _today() { return new Date().toISOString().slice(0, 10); }
+
+function getFreeTokensUsed(key) {
+  const e = freeTokenCounters.get(key);
+  return (e && e.date === _today()) ? e.used : 0;
+}
+
+function addFreeTokensUsed(key, amount) {
+  const d = _today();
+  const e = freeTokenCounters.get(key);
+  if (!e || e.date !== d) {
+    freeTokenCounters.set(key, { date: d, used: amount });
+    if (freeTokenCounters.size > 5000) freeTokenCounters.clear();
+  } else {
+    e.used = (e.used || 0) + amount;
+  }
+}
+
 function bumpCounter(map, key) {
-  const today = new Date().toISOString().slice(0, 10);
-  const entry = map.get(key);
-  if (!entry || entry.date !== today) {
-    map.set(key, { date: today, count: 1 });
+  const d = _today();
+  const e = map.get(key);
+  if (!e || e.date !== d) {
+    map.set(key, { date: d, count: 1 });
     if (map.size > 5000) map.clear();
     return 1;
   }
-  entry.count += 1;
-  return entry.count;
+  e.count += 1;
+  return e.count;
 }
 
 module.exports = async function handler(request, response) {
@@ -79,16 +97,25 @@ module.exports = async function handler(request, response) {
   }
 
   const ip = ipFromRequest(request);
+
+  // TexToken daily budget for free users (100k/day per IP).
+  // We pre-deduct the estimate; if the request fails the tokens stay deducted
+  // (conservative, prevents abuse via retries).
   if (!isPro) {
-    const used = bumpCounter(ipCounters, ip);
-    if (used > FREE_DAILY_IP_LIMIT) {
-      response.status(429).json({
-        error: 'rate_limited',
-        text: 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.',
+    const freeKey = userId !== 'unknown' ? `uid:${userId}` : `ip:${ip}`;
+    const usedToday = getFreeTokensUsed(freeKey);
+    // We don't have the estimate yet, so do a quick pre-check assuming ~2k min cost
+    if (usedToday >= FREE_DAILY_TEXTOKENS) {
+      response.status(402).json({
+        error: 'no_textokens',
+        text: "You've used your 100k free TexTokens for today. Come back tomorrow, or buy more on rrotex.com/tokens.",
       });
       return;
     }
+    // Store key on request for post-estimate deduction below
+    request._freeKey = freeKey;
   }
+
   if (!isPro && selected.freeDailyCap) {
     const used = bumpCounter(proCounters, `${ip}:${modelId}`);
     if (used > selected.freeDailyCap) {
@@ -172,6 +199,20 @@ module.exports = async function handler(request, response) {
   }
 
   const estimate = estimateTexTokens(selected, cleanMessages, maxTokens, { agent, superAgent });
+
+  // Enforce free daily TexToken budget now that we have an accurate estimate.
+  if (!isPro && request._freeKey) {
+    const usedToday = getFreeTokensUsed(request._freeKey);
+    if (usedToday + estimate.textokens > FREE_DAILY_TEXTOKENS) {
+      response.status(402).json({
+        error: 'no_textokens',
+        text: "You've used your 100k free TexTokens for today. Come back tomorrow, or buy more on rrotex.com/tokens.",
+      });
+      return;
+    }
+    addFreeTokensUsed(request._freeKey, estimate.textokens);
+  }
+
   const safety = await checkCreditSafety({
     selected,
     provider: providerCall.provider,
