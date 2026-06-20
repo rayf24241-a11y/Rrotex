@@ -1185,9 +1185,9 @@
   (function loadSidebarProfile() {
     try {
       const auth = JSON.parse(localStorage.getItem('rotex_desktop_auth') || '{}');
-      const name = auth.name || auth.email || '';
-      const email = auth.email || '';
-      const letter = (name.trim()[0] || '?').toUpperCase();
+      const name = (auth.name || auth.email || '').trim();
+      const email = (auth.email || '').trim().toLowerCase();
+      const letter = (name[0] || '?').toUpperCase();
       document.getElementById('rxAvatarLetter').textContent = letter;
       const nameEl = document.getElementById('rxProfileName');
       nameEl.textContent = name || 'Not signed in';
