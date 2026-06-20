@@ -6,12 +6,14 @@ const { spawn } = require('child_process');
 
 let authServer        = null;
 let pluginServer      = null;
+let pluginServerPort  = null;
 let pluginToken       = null;
 let rojoProcess       = null;
 let aiContext         = null;
 let currentProjectName = '';
 let userAuthToken     = '';
 let userProjectMode   = '';
+const PLUGIN_PORTS    = [7878, 7879, 7880, 7881, 7882, 7883, 7884, 7885, 7886, 7887];
 
 // ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -235,7 +237,7 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
   userAuthToken = proPass || '';
   userProjectMode = projectMode || '';
 
-  if (pluginServer) return 7878; // reuse existing server, just update token
+  if (pluginServer) return pluginServerPort || 7878; // reuse existing server, just update token
 
   pluginServer = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -245,7 +247,7 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
 
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-    const url = new URL(req.url, 'http://127.0.0.1:7878');
+    const url = new URL(req.url, `http://127.0.0.1:${pluginServerPort || 7878}`);
     const reqToken = url.searchParams.get('token') || '';
 
     // /ping — no auth needed for the check itself, but token must match
@@ -349,11 +351,30 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
   });
 
   return new Promise(resolve => {
-    pluginServer.listen(7878, '127.0.0.1', () => resolve(7878));
-    pluginServer.on('error', err => {
-      if (err.code === 'EADDRINUSE') resolve(7878);
-      else resolve(null);
-    });
+    let index = 0;
+    const tryListen = () => {
+      const port = PLUGIN_PORTS[index++];
+      if (!port) {
+        pluginServer = null;
+        pluginServerPort = null;
+        resolve(null);
+        return;
+      }
+      pluginServer.once('error', err => {
+        if (err.code === 'EADDRINUSE') {
+          tryListen();
+        } else {
+          pluginServer = null;
+          pluginServerPort = null;
+          resolve(null);
+        }
+      });
+      pluginServer.listen(port, '127.0.0.1', () => {
+        pluginServerPort = port;
+        resolve(port);
+      });
+    };
+    tryListen();
   });
 });
 

@@ -2,7 +2,8 @@
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 -- Install: place this file in %LOCALAPPDATA%\Roblox\Plugins\ROTEX.lua
 
-local HTTP_PORT = 7878
+local PORTS = {7878, 7879, 7880, 7881, 7882, 7883, 7884, 7885, 7886, 7887}
+local HTTP_PORT = PORTS[1]
 local BASE_URL  = "http://127.0.0.1:" .. HTTP_PORT
 
 local HttpService  = game:GetService("HttpService")
@@ -204,17 +205,41 @@ local function appendLog(text)
     end)
 end
 
-local function request(method, path)
+local function setPort(port)
+    HTTP_PORT = port
+    BASE_URL = "http://127.0.0.1:" .. HTTP_PORT
+end
+
+local function requestOnPort(method, path, port)
     local token = currentToken:match("^%s*(.-)%s*$")
     local ok, result = pcall(function()
         return HttpService:RequestAsync({
-            Url     = BASE_URL .. path .. "?token=" .. token,
+            Url     = "http://127.0.0.1:" .. port .. path .. "?token=" .. token,
             Method  = method,
             Headers = { ["Content-Type"] = "application/json" },
         })
     end)
     if ok then return result end
     return nil
+end
+
+local function request(method, path)
+    return requestOnPort(method, path, HTTP_PORT)
+end
+
+local function findRotex(method, path)
+    local lastResponse = nil
+    for _, port in ipairs(PORTS) do
+        local res = requestOnPort(method, path, port)
+        if res then
+            if res.StatusCode == 200 then
+                setPort(port)
+                return res
+            end
+            lastResponse = res
+        end
+    end
+    return lastResponse
 end
 
 -- ── Connect handler ──────────────────────────────────────────────────────────
@@ -227,7 +252,7 @@ local function doConnect()
     currentToken = token
     setStatus("● Connecting...", C.yellow)
 
-    local res = request("GET", "/ping")
+    local res = findRotex("GET", "/ping")
     if res and res.StatusCode == 200 then
         local ok2, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
         if ok2 and data and data.ok then
@@ -243,7 +268,7 @@ local function doConnect()
         end
     else
         setStatus("● ROTEX not running — open the app", C.red)
-        appendLog("[Error] Could not reach ROTEX on port " .. HTTP_PORT)
+        appendLog("[Error] Could not reach ROTEX on ports 7878-7887")
     end
 end
 

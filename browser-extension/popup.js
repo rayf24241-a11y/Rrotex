@@ -1,4 +1,5 @@
-const ROTEX = 'http://127.0.0.1:7878';
+const ROTEX_PORTS = [7878, 7879, 7880, 7881, 7882, 7883, 7884, 7885, 7886, 7887];
+let rotexBase = 'http://127.0.0.1:7878';
 let token = '';
 let messages = [];
 let busy = false;
@@ -127,15 +128,21 @@ async function connect(t) {
   connectBtn.disabled = true;
   setStatus('Connecting…', '');
   try {
-    const res = await fetch(
-      `${ROTEX}/ping?token=${encodeURIComponent(token)}&source=browser`,
-      { signal: AbortSignal.timeout(4000) }
-    );
-    const data = res.ok ? await res.json() : null;
-    if (data?.ok) {
-      chrome.storage.local.set({ rotex_token: token });
-      showChat(data.project);
-      return;
+    for (const port of ROTEX_PORTS) {
+      const base = `http://127.0.0.1:${port}`;
+      try {
+        const res = await fetch(
+          `${base}/ping?token=${encodeURIComponent(token)}&source=browser`,
+          { signal: AbortSignal.timeout(1500) }
+        );
+        const data = res.ok ? await res.json() : null;
+        if (data?.ok) {
+          rotexBase = base;
+          chrome.storage.local.set({ rotex_token: token, rotex_port: port });
+          showChat(data.project);
+          return;
+        }
+      } catch {}
     }
     token = '';
     setStatus('Wrong token — check ROTEX', 'err');
@@ -190,7 +197,7 @@ async function send() {
   showTyping();
 
   try {
-    const res = await fetch(`${ROTEX}/chat?token=${encodeURIComponent(token)}`, {
+    const res = await fetch(`${rotexBase}/chat?token=${encodeURIComponent(token)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
