@@ -97,7 +97,7 @@ const MODEL_ALIASES = {
   'gbt-5-5': 'pro-smart',
   'grok': 'smart',
   'grok-3-4': 'smart',
-  'claude-sonnet': 'pro-smart',
+  'claude-haiku-latest': 'pro-smart',
   'claude-opus': 'pro-smart',
 };
 
