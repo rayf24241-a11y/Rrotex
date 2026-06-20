@@ -544,6 +544,44 @@
       0%,100% { opacity: 0.2; transform: translateY(0); }
       40%      { opacity: 1;   transform: translateY(-5px); }
     }
+    /* ── Studio connection overlay ──────────────────────────────────── */
+    #rxStudioConnectOverlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(13,15,23,0.95);
+      z-index: 50;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      border-radius: 0 0 var(--rx-radius,10px) 0;
+    }
+    #rxStudioConnectOverlay.visible { display: flex; }
+    .rx-sco-check {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: rgba(34,197,94,0.15);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px;
+      animation: rxScoPop 0.45s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes rxScoPop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .rx-sco-title { font-size: 20px; font-weight: 700; color: #22C55E; }
+    .rx-sco-sub { font-size: 13px; color: var(--rx-muted); text-align: center; max-width: 300px; line-height: 1.7; }
+    .rx-sco-ok {
+      margin-top: 6px;
+      padding: 13px 40px;
+      border-radius: 10px;
+      border: none;
+      background: #22C55E;
+      color: #0D0F17;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      box-shadow: 0 4px 18px rgba(34,197,94,0.25);
+    }
+    .rx-sco-ok:hover { background: #16A34A; transform: scale(1.04); }
     /* ── Update banner ──────────────────────────────────────────────── */
     #rxUpdateBanner {
       display: none;
@@ -794,7 +832,15 @@
     <!-- Main AI chat -->
     <div class="rx-main">
       <!-- Visible AI chat panel (mirrors editor.js's aiPanel content) -->
-      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;position:relative;">
+
+        <!-- Studio connection overlay: shown when plugin connects, OK dismisses it -->
+        <div id="rxStudioConnectOverlay">
+          <div class="rx-sco-check">✓</div>
+          <div class="rx-sco-title">Roblox Studio Connected!</div>
+          <div class="rx-sco-sub" id="rxScoSub">Reading your game scripts…</div>
+          <button class="rx-sco-ok" id="rxScoOk">OK, start chatting →</button>
+        </div>
 
         <!-- Messages -->
         <div class="ai-messages" id="rxAiMessages" style="flex:1;overflow-y:auto;padding:20px 24px 10px;display:flex;flex-direction:column;gap:14px;">
@@ -1354,6 +1400,12 @@
         if (dot)  { dot.className = 'rx-pdot connected'; }
         if (text) { text.textContent = 'Studio connected'; }
         if (row)  { row.style.display = 'flex'; }
+
+        // Show the "OK to start chatting" overlay and lock the input
+        const overlay = document.getElementById('rxStudioConnectOverlay');
+        if (overlay) overlay.classList.add('visible');
+        const inp = document.getElementById('rxAiInput');
+        if (inp) { inp.disabled = true; inp.placeholder = 'Click OK above to start chatting…'; }
       });
 
       window.rotexDesktop.onRojoStatus(status => {
@@ -1365,10 +1417,20 @@
       });
 
       window.rotexDesktop.onPluginContext(ctx => {
-        if (!ctx || !activeChatId) return;
-        const scriptNames = (ctx.scripts || []).map(s => s.name).join(', ');
+        if (!ctx) return;
+
+        // Update the connection overlay with script count info
+        const sub = document.getElementById('rxScoSub');
+        const n = (ctx.scripts || []).length;
+        const s = (ctx.selected || []).length;
+        if (sub && n > 0) {
+          sub.textContent = `Loaded ${n} script${n !== 1 ? 's' : ''} from your game.${s > 0 ? ` ${s} selected.` : ''} Click OK to start chatting.`;
+        }
+
+        if (!activeChatId) return;
+        const scriptNames = (ctx.scripts || []).map(sc => sc.name).join(', ');
         if (scriptNames) {
-          appendAssistantNote(`[Studio context received: ${scriptNames}]`);
+          appendAssistantNote(`[Studio: ${n} scripts loaded — ${scriptNames.slice(0, 120)}${scriptNames.length > 120 ? '…' : ''}]`);
         }
       });
 
@@ -1411,6 +1473,18 @@
         _updBanner.classList.remove('visible');
       });
     }
+
+    // ── Studio connect overlay OK button ─────────────────────────────────────
+    document.getElementById('rxScoOk')?.addEventListener('click', () => {
+      const overlay = document.getElementById('rxStudioConnectOverlay');
+      if (overlay) overlay.classList.remove('visible');
+      const inp = document.getElementById('rxAiInput');
+      if (inp) {
+        inp.disabled = false;
+        inp.placeholder = 'Ask ROTEX…';
+        inp.focus();
+      }
+    });
   }
 
   function appendAssistantNote(text) {
@@ -1443,6 +1517,25 @@
     const result = await window.rotexDesktop.queueStudioActions([{ type: 'apply_files', files }]);
     if (result?.ok) {
       appendAssistantNote(`[Studio apply queued: ${files.map(f => f.path).join(', ')}]`);
+    }
+  }
+
+  async function applyRobloxModelBlocks(markdown) {
+    if (!window.rotexDesktop?.queueStudioActions || !_studioConnected) return;
+    const regex = /```roblox-model\r?\n([\s\S]*?)```/g;
+    const actions = [];
+    let match;
+    while ((match = regex.exec(markdown)) !== null) {
+      try {
+        const data = JSON.parse(match[1].trim());
+        actions.push({ type: 'create_model', ...data });
+      } catch { /* skip malformed block */ }
+    }
+    if (!actions.length) return;
+    const result = await window.rotexDesktop.queueStudioActions(actions);
+    if (result?.ok) {
+      const names = actions.map(a => a.name || 'Model').join(', ');
+      appendAssistantNote(`[Studio] Queued model creation: ${names}`);
     }
   }
 
@@ -1612,6 +1705,7 @@
           msgs.scrollTop = msgs.scrollHeight;
           await saveChatMessage(activeChatId, text, tbResult.text || '');
           await applyRobloxFileBlocks(tbResult.text || '');
+          await applyRobloxModelBlocks(tbResult.text || '');
         }
       } catch (tbErr) {
         typing.remove();
@@ -1718,6 +1812,7 @@
       // Save to chat
       await saveChatMessage(activeChatId, text, full);
       await applyRobloxFileBlocks(full);
+      await applyRobloxModelBlocks(full);
 
     } catch (err) {
       typing.remove();
