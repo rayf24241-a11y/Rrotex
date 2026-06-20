@@ -503,8 +503,9 @@
         <div class="rx-loading"><span></span><span></span><span></span></div>
       </div>
 
-      <!-- Sidebar footer: token balance + buy -->
-      <div id="rxSidebarFooter" style="padding:10px 12px;border-top:1px solid var(--rx-border);display:flex;flex-direction:column;gap:6px;background:var(--rx-surface);">
+      <!-- Sidebar footer: token balance + profile -->
+      <div id="rxSidebarFooter" style="padding:10px 12px;border-top:1px solid var(--rx-border);display:flex;flex-direction:column;gap:8px;background:var(--rx-surface);">
+        <!-- TexTokens row -->
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--rx-muted);margin-bottom:2px;">TexTokens</div>
@@ -513,6 +514,16 @@
           <button id="rxBuyTokens" type="button" style="padding:7px 12px;background:#4B9DFF;color:#fff;border:none;border-radius:8px;font:700 12px/1 inherit;cursor:pointer;white-space:nowrap;transition:opacity .15s;">
             Buy Tokens
           </button>
+        </div>
+        <!-- Profile row -->
+        <div id="rxProfileRow" style="display:flex;align-items:center;gap:8px;padding:6px 0 0;border-top:1px solid var(--rx-border);cursor:pointer;" title="Account">
+          <div id="rxAvatarBox" style="width:30px;height:30px;border-radius:50%;background:#4B9DFF;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;">
+            <span id="rxAvatarLetter">?</span>
+          </div>
+          <div style="min-width:0;flex:1;">
+            <div id="rxProfileName" style="font-size:12px;font-weight:600;color:var(--rx-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+            <div id="rxProfileEmail" style="font-size:10px;color:var(--rx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+          </div>
         </div>
       </div>
     </aside>
@@ -1168,6 +1179,30 @@
   document.getElementById('rxBuyTokens').addEventListener('click', () => {
     if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/tokens');
     else window.open('/tokens', '_blank');
+  });
+
+  /* ── Sidebar profile row ────────────────────────────────────── */
+  (function loadSidebarProfile() {
+    try {
+      const auth = JSON.parse(localStorage.getItem('rotex_desktop_auth') || '{}');
+      const name = auth.name || auth.email || '';
+      const email = auth.email || '';
+      const letter = (name.trim()[0] || '?').toUpperCase();
+      document.getElementById('rxAvatarLetter').textContent = letter;
+      const nameEl = document.getElementById('rxProfileName');
+      nameEl.textContent = name || 'Not signed in';
+      if (email === 'rayf24241@gmail.com') {
+        const badge = document.createElement('span');
+        badge.textContent = 'DEV';
+        badge.style.cssText = 'margin-left:5px;padding:1px 5px;background:#7c3aed;color:#fff;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:.05em;vertical-align:middle;';
+        nameEl.appendChild(badge);
+      }
+      document.getElementById('rxProfileEmail').textContent = email;
+    } catch {}
+  })();
+  document.getElementById('rxProfileRow').addEventListener('click', () => {
+    if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/account');
+    else window.open('/account', '_blank');
   });
 
   /* ── Start ──────────────────────────────────────────────────── */

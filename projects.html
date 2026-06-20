@@ -372,7 +372,14 @@
       const name    = user.displayName || user.email || 'User';
       const initial = name.charAt(0).toUpperCase();
       document.getElementById('tbAvatar').textContent = initial;
-      document.getElementById('tbEmail').textContent  = user.email || name;
+      const tbEmailEl = document.getElementById('tbEmail');
+      tbEmailEl.textContent = user.email || name;
+      if (user.email === 'rayf24241@gmail.com') {
+        const badge = document.createElement('span');
+        badge.textContent = 'DEV';
+        badge.style.cssText = 'margin-left:6px;padding:1px 6px;background:#7c3aed;color:#fff;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em;vertical-align:middle;';
+        tbEmailEl.appendChild(badge);
+      }
       document.getElementById('welcomeTitle').textContent =
         `Welcome back, ${user.displayName ? user.displayName.split(' ')[0] : 'there'}`;
       loadChats(user.uid);

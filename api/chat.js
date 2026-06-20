@@ -86,9 +86,11 @@ module.exports = async function handler(request, response) {
   const modelId = resolveModelId(model);
   const selected = MODELS[modelId];
   const userId = proPayload?.uid || authResult.uid || ipFromRequest(request) || 'unknown';
+  const userEmail = authResult.email || '';
+  const isDev = userEmail === 'rayf24241@gmail.com';
 
   // Server-side Pro enforcement - locked models reject without a valid pass.
-  if (selected.tier === 'pro' && !isPro) {
+  if (selected.tier === 'pro' && !isPro && !isDev) {
     response.status(402).json({
       error: 'pro_required',
       text: `${selected.name} is a Pro model. Go Pro on rrotex.com to unlock it.`,
@@ -98,10 +100,8 @@ module.exports = async function handler(request, response) {
 
   const ip = ipFromRequest(request);
 
-  // TexToken daily budget for free users (100k/day per IP).
-  // We pre-deduct the estimate; if the request fails the tokens stay deducted
-  // (conservative, prevents abuse via retries).
-  if (!isPro) {
+  // TexToken daily budget for free users (100k/day per IP). Dev account is exempt.
+  if (!isPro && !isDev) {
     const freeKey = userId !== 'unknown' ? `uid:${userId}` : `ip:${ip}`;
     const usedToday = getFreeTokensUsed(freeKey);
     // We don't have the estimate yet, so do a quick pre-check assuming ~2k min cost
@@ -116,7 +116,7 @@ module.exports = async function handler(request, response) {
     request._freeKey = freeKey;
   }
 
-  if (!isPro && selected.freeDailyCap) {
+  if (!isPro && !isDev && selected.freeDailyCap) {
     const used = bumpCounter(proCounters, `${ip}:${modelId}`);
     if (used > selected.freeDailyCap) {
       response.status(429).json({
@@ -201,7 +201,7 @@ module.exports = async function handler(request, response) {
   const estimate = estimateTexTokens(selected, cleanMessages, maxTokens, { agent, superAgent });
 
   // Enforce free daily TexToken budget now that we have an accurate estimate.
-  if (!isPro && request._freeKey) {
+  if (!isPro && !isDev && request._freeKey) {
     const usedToday = getFreeTokensUsed(request._freeKey);
     if (usedToday + estimate.textokens > FREE_DAILY_TEXTOKENS) {
       response.status(402).json({
