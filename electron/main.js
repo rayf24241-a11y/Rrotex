@@ -13,7 +13,7 @@ let aiContext         = null;
 let currentProjectName = '';
 let userAuthToken     = '';
 let userProjectMode   = '';
-const PLUGIN_PORTS    = [7878, 7879, 7880, 7881, 7882, 7883, 7884, 7885, 7886, 7887];
+const PLUGIN_PORTS    = [7878, 7874, 7871, 7870, 7861, 7865, 7822, 7854, 7813, 7816, 7898, 7875];
 
 // ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();

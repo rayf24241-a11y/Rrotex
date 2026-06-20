@@ -2,7 +2,7 @@
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 -- Install: place this file in %LOCALAPPDATA%\Roblox\Plugins\ROTEX.lua
 
-local PORTS = {7878, 7879, 7880, 7881, 7882, 7883, 7884, 7885, 7886, 7887}
+local PORTS = {7878, 7874, 7871, 7870, 7861, 7865, 7822, 7854, 7813, 7816, 7898, 7875}
 local HTTP_PORT = PORTS[1]
 local BASE_URL  = "http://127.0.0.1:" .. HTTP_PORT
 
@@ -268,7 +268,7 @@ local function doConnect()
         end
     else
         setStatus("● ROTEX not running — open the app", C.red)
-        appendLog("[Error] Could not reach ROTEX on ports 7878-7887")
+        appendLog("[Error] Could not reach ROTEX on any fallback port")
     end
 end
 
