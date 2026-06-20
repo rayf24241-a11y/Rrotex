@@ -1030,10 +1030,10 @@
 
   /* ── Model selector ─────────────────────────────────────────── */
   const MODELS = [
-    { id: 'fast',      name: 'Fast',        role: '5× cost',  svg: GROQ_SVG,   pro: false },
-    { id: 'balanced',  name: 'Balanced',    role: '5× cost',  svg: GROQ_SVG,   pro: false },
-    { id: 'smart',     name: 'Smart',       role: '5× cost',  svg: GROQ_SVG,   pro: false },
-    { id: 'pro-smart', name: 'Claude Haiku',role: '10× cost', svg: CLAUDE_SVG, pro: true  },
+    { id: 'fast',      name: 'Fast',        role: 'Cheap',     svg: GROQ_SVG,   pro: false },
+    { id: 'balanced',  name: 'Balanced',    role: 'Cheap',     svg: GROQ_SVG,   pro: false },
+    { id: 'smart',     name: 'Smart',       role: 'Cheap',     svg: GROQ_SVG,   pro: false },
+    { id: 'pro-smart', name: 'Claude Haiku',role: 'Expensive', svg: CLAUDE_SVG, pro: true  },
   ];
 
   let selectedModel = localStorage.getItem('rotex_model') || 'fast';
