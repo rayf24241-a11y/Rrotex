@@ -74,6 +74,7 @@ module.exports = async function handler(request, response) {
     mode = 'chat',
     agent = false,
     projectContext = '',
+    projectMode = '',
     texTokensLeft = null,
     superAgent = false,
   } = request.body || {};
@@ -157,17 +158,21 @@ module.exports = async function handler(request, response) {
   if (isEditor) {
     cleanMessages.unshift({
       role: 'system',
-      content: buildEditorSystemPrompt(selected, agent, projectContext, isPro),
+      content: buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode),
     });
   } else {
     cleanMessages.unshift({
       role: 'system',
       content: [
-        'You are a ROTEX web assistant.',
+        'You are ROTEX AI, the assistant inside the ROTEX desktop and web app for game developers.',
+        buildEngineSection(projectMode),
         'Chat naturally. Never answer with a giant capability list, marketing pitch, or "I am your assistant" intro. If asked what you can do, answer in 1-3 casual sentences.',
         'Do not use bold headings like "Main capabilities" or "Current setup" unless the user specifically asks for a formatted list.',
         `ROTEX model lineup: ${modelGuide}`,
         `Current selected model: ${selected.name}. If the user asks which model is best, compare these ROTEX model names only, not provider names.`,
+        'ROTEX website: rrotex.com. Free plan: 100k TexTokens/day, 1M/month, Fast model free, Balanced and Smart have daily caps, no Claude Haiku. Pro plan: $20/month, 1M TexTokens/day soft limit, 40M/month, all models including Claude Haiku 4.5, agent mode, up to 5 projects. Extra token packs: $2.50 per 1M TexTokens. The desktop app is downloaded at rrotex.com and works on Windows, macOS, and Linux. Users log in with their rrotex.com account in the app. TexTokens are the in-app currency — each model costs a different TexToken rate.',
+        'TexToken rates: Fast (0.2x), Balanced (0.75x), Smart (1x), Pro Smart/Claude Haiku (6x). Agent mode doubles the cost, Super Agent mode quadruples it.',
+        'When the user asks about pricing, plans, token limits, or which model to use, give clear and accurate answers using the ROTEX info above.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can create clear Markdown tables when they help compare choices, pricing, limits, plans, or model abilities.',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
@@ -299,15 +304,29 @@ module.exports = async function handler(request, response) {
 
 module.exports.config = { supportsResponseStreaming: true };
 
-function buildEditorSystemPrompt(selected, agent, projectContext, isPro) {
+function buildEngineSection(projectMode) {
+  const mode = (projectMode || '').trim();
+  if (!mode || mode === 'General') return '';
+  const guides = {
+    Unity: 'ENGINE FOCUS — Unity (C#): You are a Unity expert. Help exclusively with Unity topics: C# scripting, MonoBehaviour lifecycle, GameObjects, components, physics, animations, Animator, NavMesh, Unity UI (Canvas/uGUI/UIToolkit), prefabs, scenes, ScriptableObjects, the Unity Editor, compile errors, and general game dev patterns. If the user asks about something outside Unity or game dev, acknowledge it briefly but redirect them to their Unity project.',
+    'Unity+Blender': 'ENGINE FOCUS — Unity (C#) + Blender: You are an expert in both Unity and Blender. Help with Unity C# scripting, Unity Editor, and Blender Python scripting, modeling, geometry nodes, materials, UV unwrapping, rigging, and rendering — especially for assets going into Unity (FBX export, texture bake, import settings). Stay on these topics.',
+    Blender: 'ENGINE FOCUS — Blender: You are a Blender expert. Help with Blender Python (bpy) scripting, modeling, geometry nodes, shaders/materials (Cycles/EEVEE), UV unwrapping, rigging, animation, rendering, and the Blender Python API. If the user asks about something unrelated to Blender or 3D art, briefly acknowledge but redirect.',
+    Roblox: 'ENGINE FOCUS — Roblox Studio (Luau): You are a Roblox expert. Help exclusively with Roblox game development: Luau scripting, LocalScript vs Script vs ModuleScript, RemoteEvents/RemoteFunctions, Roblox services (Players, DataStoreService, TweenService, RunService, etc.), Roblox Studio, the Roblox API, game monetization with Robux, and general Roblox game patterns. Redirect off-topic questions back to Roblox.',
+    'Roblox+Blender': 'ENGINE FOCUS — Roblox Studio (Luau) + Blender: You are an expert in Roblox and Blender. Help with Roblox Luau scripting, Studio, Roblox APIs, and Blender 3D modeling and Python scripting for assets used in Roblox games (mesh export, textures, import into Studio). Stay on these topics.',
+  };
+  return guides[mode] || `ENGINE FOCUS: You are specialized in ${mode}. Focus your answers on ${mode} topics and game development. Redirect unrelated questions.`;
+}
+
+function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode) {
   const parts = [
-    'You are ROTEX AI, the coding assistant inside the ROTEX code editor (a VS Code-style editor).',
+    'You are ROTEX AI, the coding assistant inside the ROTEX desktop app chat.',
     `You are running as the ${selected.name} model.`,
+    buildEngineSection(projectMode),
     'Be direct and practical. Answer code questions with working code. Keep explanations short and put them after the code.',
     'When showing code changes for a specific file, ALWAYS use a file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. The editor shows the user a diff and an Apply button for each file block.',
     'Never use placeholder comments like "rest of the code stays the same" inside file blocks — file blocks must contain the complete file.',
     'For small inline snippets that are not meant to replace a file, use normal ```lang code fences instead.',
-  ];
+  ].filter(Boolean);
   if (agent) {
     parts.push(
       'AGENT MODE is ON. You may propose changes to multiple files in one reply: output one file block per file that needs to change (created, rewritten, or updated).',
@@ -603,7 +622,7 @@ async function* readSseEvents(bodyStream) {
 
 function buildModelGuide() {
   return Object.values(MODELS)
-    .map((item) => `${item.name}: ${item.blurb}`)
+    .map((item) => `${item.name} (${item.providerName}, ${item.access}, ${item.outputTexTokens * (item.multiplier || 1)}x TexTokens/output token): ${item.blurb}`)
     .join('; ');
 }
 
