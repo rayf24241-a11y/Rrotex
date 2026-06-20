@@ -1,0 +1,4 @@
+downloads/single-exe/**
+downloads/electron-build/**
+downloads/desktop/ROTEX-Desktop-win/**
+build/**

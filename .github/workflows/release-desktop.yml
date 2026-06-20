@@ -1,10 +1,5 @@
 name: Release ROTEX Desktop
 
-# Run this manually from GitHub → Actions → "Release ROTEX Desktop" → Run workflow.
-# Enter the new version (e.g. 2.1.0) and it builds all platforms, publishes the
-# GitHub Release, and generates the latest.yml files that electron-updater uses
-# to deliver in-app updates to existing installs.
-
 on:
   workflow_dispatch:
     inputs:
@@ -12,61 +7,80 @@ on:
         description: 'Release version (e.g. 2.1.0)'
         required: true
         type: string
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
-  # ── Bump version in electron/package.json and commit/tag it ─────────────────
-  bump-version:
+  prepare-release:
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bump version in electron/package.json
+      - name: Read release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            TAG="v${VERSION}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version for manual release
+        if: github.event_name == 'workflow_dispatch'
         run: |
           cd electron
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-            pkg.version = '${{ github.event.inputs.version }}';
+            pkg.version = '${{ steps.meta.outputs.version }}';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
-      - name: Commit version bump
+      - name: Commit and tag manual release
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add electron/package.json
-          git commit -m "chore: release v${{ github.event.inputs.version }}"
+          git commit -m "chore: release ${{ steps.meta.outputs.tag }}"
+          git tag "${{ steps.meta.outputs.tag }}"
           git push
+          git push origin "${{ steps.meta.outputs.tag }}"
 
-      - name: Create and push tag
-        id: tag
-        run: |
-          TAG="v${{ github.event.inputs.version }}"
-          git tag "$TAG"
-          git push origin "$TAG"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
-  # ── Build Windows ────────────────────────────────────────────────────────────
   build-windows:
-    needs: bump-version
+    needs: prepare-release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.bump-version.outputs.tag }}
+          ref: ${{ needs.prepare-release.outputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: electron/package-lock.json
+
+      - name: Ensure package version matches release
+        shell: pwsh
+        run: |
+          $pkg = Get-Content electron/package.json | ConvertFrom-Json
+          $pkg.version = '${{ needs.prepare-release.outputs.version }}'
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content electron/package.json
 
       - name: Install dependencies
         run: npm ci
@@ -79,20 +93,28 @@ jobs:
         run: npx electron-builder --win --publish always
         working-directory: electron
 
-  # ── Build Linux ──────────────────────────────────────────────────────────────
   build-linux:
-    needs: bump-version
+    needs: prepare-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.bump-version.outputs.tag }}
+          ref: ${{ needs.prepare-release.outputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: electron/package-lock.json
+
+      - name: Ensure package version matches release
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('electron/package.json','utf8'));
+            pkg.version = '${{ needs.prepare-release.outputs.version }}';
+            fs.writeFileSync('electron/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
 
       - name: Install dependencies
         run: npm ci
@@ -107,20 +129,28 @@ jobs:
         run: npx electron-builder --linux --publish always
         working-directory: electron
 
-  # ── Build macOS ──────────────────────────────────────────────────────────────
   build-mac:
-    needs: bump-version
+    needs: prepare-release
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.bump-version.outputs.tag }}
+          ref: ${{ needs.prepare-release.outputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: electron/package-lock.json
+
+      - name: Ensure package version matches release
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('electron/package.json','utf8'));
+            pkg.version = '${{ needs.prepare-release.outputs.version }}';
+            fs.writeFileSync('electron/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
 
       - name: Install dependencies
         run: npm ci

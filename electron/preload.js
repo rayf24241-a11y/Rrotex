@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
   // ─── Utils ────────────────────────────────────────────────────────────
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   startAuthServer: () => ipcRenderer.invoke('start-auth-server'),
+  clearDesktopAuth: () => ipcRenderer.invoke('clear-desktop-auth'),
 
   // ─── Studio plugin ────────────────────────────────────────────────────────
   installStudioPlugin: () => ipcRenderer.invoke('install-studio-plugin'),

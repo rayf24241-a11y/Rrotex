@@ -66,16 +66,54 @@ function appAssetPath(relativePath) {
   return path.join(__dirname, '..', relativePath);
 }
 
-async function completeDesktopAuth(data) {
-  if (!data || !data.uid || !mainWindow) return false;
-  if (!data.exp) data.exp = String(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const authJson = JSON.stringify({
+function authBackupPath() {
+  return path.join(app.getPath('userData'), 'rotex-auth.json');
+}
+
+function normalizeDesktopAuth(data) {
+  if (!data || !data.uid) return null;
+  return {
     uid: String(data.uid || ''),
     email: String(data.email || ''),
     name: String(data.name || ''),
-    exp: String(data.exp || ''),
+    exp: String(data.exp || Date.now() + 365 * 24 * 60 * 60 * 1000),
     token: String(data.token || ''),
-  });
+  };
+}
+
+async function writeAuthBackup(data) {
+  const auth = normalizeDesktopAuth(data);
+  if (!auth) return false;
+  await fs.promises.mkdir(path.dirname(authBackupPath()), { recursive: true });
+  await fs.promises.writeFile(authBackupPath(), JSON.stringify(auth, null, 2), 'utf8');
+  return true;
+}
+
+function readAuthBackup() {
+  try {
+    const auth = JSON.parse(fs.readFileSync(authBackupPath(), 'utf8'));
+    if (!auth?.uid || !auth?.token || Number(auth.exp || 0) <= Date.now()) return null;
+    return normalizeDesktopAuth(auth);
+  } catch {
+    return null;
+  }
+}
+
+async function clearAuthBackup() {
+  try {
+    await fs.promises.rm(authBackupPath(), { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function completeDesktopAuth(data) {
+  const auth = normalizeDesktopAuth(data);
+  if (!auth) return false;
+  await writeAuthBackup(auth).catch(() => {});
+  if (!mainWindow) return true;
+  const authJson = JSON.stringify(auth);
   await mainWindow.webContents.executeJavaScript(
     `localStorage.setItem('rotex_desktop_auth', ${JSON.stringify(authJson)});`,
     true
@@ -112,8 +150,27 @@ function createWindow() {
   // Inject long-lived dev pro pass into localStorage on every page load.
   const DEV_PRO_PASS = 'eyJ1aWQiOiJkZXYtcmF5ZjI0MjQxIiwic3ViIjoiZGV2IiwicGxhbiI6InBybyIsImV4cCI6MjA5NzI3NzE1MTMzMH0.jXr6ra4H_g77_311en6AxnxMnYVmODPKzLae6odbi2Q';
   mainWindow.webContents.on('did-finish-load', () => {
+    const auth = readAuthBackup();
+    const authScript = auth
+      ? `try {
+          const saved = ${JSON.stringify(JSON.stringify(auth))};
+          const current = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
+          if (!current || !current.uid || Number(current.exp || 0) <= Date.now()) {
+            localStorage.setItem('rotex_desktop_auth', saved);
+          }
+          if (location.pathname.toLowerCase().endsWith('login.html') && window.rotexDesktop?.navigate) {
+            window.rotexDesktop.navigate('projects');
+          }
+        } catch {
+          localStorage.setItem('rotex_desktop_auth', ${JSON.stringify(JSON.stringify(auth))});
+          if (location.pathname.toLowerCase().endsWith('login.html') && window.rotexDesktop?.navigate) {
+            window.rotexDesktop.navigate('projects');
+          }
+        }`
+      : '';
     mainWindow.webContents.executeJavaScript(
-      `localStorage.setItem('rotex_pro_pass', ${JSON.stringify(DEV_PRO_PASS)})`
+      `${authScript}
+       localStorage.setItem('rotex_pro_pass', ${JSON.stringify(DEV_PRO_PASS)});`
     ).catch(() => {});
   });
 
@@ -144,8 +201,7 @@ function handleDeepLink(url) {
     for (const [k, v] of parsed.searchParams.entries()) {
       data[k] = v;
     }
-    // Add expiry: 1-hour window from now (website also sets exp param if available)
-    if (!data.exp) data.exp = String(Date.now() + 60 * 60 * 1000);
+    if (!data.exp) data.exp = String(Date.now() + 365 * 24 * 60 * 60 * 1000);
     completeDesktopAuth(data);
   } catch {}
 }
@@ -283,6 +339,11 @@ ipcMain.handle('open-external', async (event, url) => {
 });
 
 // ─── IPC: in-app update controls ─────────────────────────────────────────────
+ipcMain.handle('clear-desktop-auth', async () => {
+  await clearAuthBackup();
+  return { ok: true };
+});
+
 ipcMain.handle('update-download', () => {
   if (autoUpdater) autoUpdater.downloadUpdate().catch(() => {});
 });

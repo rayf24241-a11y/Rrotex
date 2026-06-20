@@ -8,6 +8,7 @@
     "build": "electron-builder",
     "build:all": "electron-builder --win --mac --linux",
     "build:win": "electron-builder --win",
+    "build:win:installer": "node scripts/build-win-installer.js",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
   },
@@ -18,7 +19,8 @@
   },
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.0"
+    "electron-builder": "^24.9.0",
+    "rcedit": "^5.0.2"
   },
   "build": {
     "appId": "com.rrotex.editor",
@@ -36,19 +38,45 @@
     "protocols": [
       {
         "name": "ROTEX",
-        "schemes": ["rotex"],
+        "schemes": [
+          "rotex"
+        ],
         "role": "Viewer"
       }
     ],
     "extraResources": [
-      { "from": "../login.html", "to": "login.html" },
-      { "from": "../projects.html", "to": "projects.html" },
-      { "from": "../editor.html", "to": "editor.html" },
-      { "from": "../editor.css", "to": "editor.css" },
-      { "from": "../editor.js", "to": "editor.js" },
-      { "from": "../icon.png", "to": "icon.png" },
-      { "from": "../favicon.ico", "to": "favicon.ico" },
-      { "from": "../plugin/rotex-plugin.lua", "to": "plugin/rotex-plugin.lua" }
+      {
+        "from": "../login.html",
+        "to": "login.html"
+      },
+      {
+        "from": "../projects.html",
+        "to": "projects.html"
+      },
+      {
+        "from": "../editor.html",
+        "to": "editor.html"
+      },
+      {
+        "from": "../editor.css",
+        "to": "editor.css"
+      },
+      {
+        "from": "../editor.js",
+        "to": "editor.js"
+      },
+      {
+        "from": "../icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "../favicon.ico",
+        "to": "favicon.ico"
+      },
+      {
+        "from": "../plugin/rotex-plugin.lua",
+        "to": "plugin/rotex-plugin.lua"
+      }
     ],
     "win": {
       "target": "nsis",

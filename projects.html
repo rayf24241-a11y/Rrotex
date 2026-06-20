@@ -769,6 +769,9 @@
 
     document.getElementById('signOutBtn').addEventListener('click', async () => {
       if (auth) { try { await signOut(auth); } catch {} }
+      if (window.rotexDesktop?.clearDesktopAuth) {
+        try { await window.rotexDesktop.clearDesktopAuth(); } catch {}
+      }
       localStorage.removeItem('rotex_desktop_auth');
       localStorage.removeItem('rotex_pro_pass');
       go('login');

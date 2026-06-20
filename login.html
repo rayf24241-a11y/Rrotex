@@ -326,7 +326,7 @@
           uid:   data.uid,
           email: data.email  || '',
           name:  data.name   || '',
-          exp:   data.exp    || String(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          exp:   data.exp    || String(Date.now() + 365 * 24 * 60 * 60 * 1000),
           token: data.token  || '',
         };
         localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
@@ -371,11 +371,12 @@
 
     async function go(user) {
       const token    = await user.getIdToken().catch(() => '');
+      const authLifetimeDays = isDesktopLogin ? 365 : 7;
       const authData = {
         uid:   user.uid,
         email: user.email        || '',
         name:  user.displayName  || '',
-        exp:   String(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        exp:   String(Date.now() + authLifetimeDays * 24 * 60 * 60 * 1000),
         token
       };
       localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
@@ -400,6 +401,9 @@
               body: JSON.stringify(authData),
             });
             if (!callbackRes.ok) throw new Error('Desktop callback failed');
+            document.getElementById('desktopCallbackTitle').textContent = 'Connected to ROTEX Desktop';
+            document.querySelector('.card p').textContent = 'The app should open your projects now. You can close this tab.';
+            return;
           } catch {
             window.location.href = deepLink;
             document.getElementById('desktopCallbackTitle').textContent = 'Signed in. Return to ROTEX Desktop.';
