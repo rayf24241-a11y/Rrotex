@@ -213,13 +213,20 @@ module.exports = async function handler(request, response) {
     addFreeTokensUsed(request._freeKey, estimate.textokens);
   }
 
+  // Never trust client-provided texTokensLeft for non-Pro users.
+  // Free user budget is already enforced above via freeTokenCounters (server-side).
+  // Passing null disables the client-influenced check inside checkCreditSafety.
+  // Pro users have a verified proPass, so their client value is used to enforce
+  // their own plan limits (the server trusts the pass, not the number).
+  const trustedTexTokensLeft = (isPro && !isDev) ? texTokensLeft : null;
+
   const safety = await checkCreditSafety({
     selected,
     provider: providerCall.provider,
     model: selected.providerName || selected.name,
     userId,
     estimate,
-    texTokensLeft,
+    texTokensLeft: trustedTexTokensLeft,
   });
   if (!safety.ok) {
     logUsage({
