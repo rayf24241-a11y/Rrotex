@@ -1,0 +1,92 @@
+name: Build ROTEX Desktop
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+        working-directory: electron
+      - name: Build Windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run build:win
+        working-directory: electron
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: downloads/desktop/ROTEX-Desktop-win.exe
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+        working-directory: electron
+      - name: Build Linux
+        run: npm run build:linux
+        working-directory: electron
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: downloads/desktop/ROTEX-Desktop-linux.AppImage
+          if-no-files-found: error
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+        working-directory: electron
+      - name: Build macOS
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run build:mac
+        working-directory: electron
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: downloads/desktop/ROTEX-Desktop-mac.dmg
+          if-no-files-found: error
+
+  release:
+    needs: [build-windows, build-linux, build-mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create or update desktop release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-latest
+          name: ROTEX Desktop - Latest Build
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            artifacts/ROTEX-Desktop-win.exe
+            artifacts/ROTEX-Desktop-linux.AppImage
+            artifacts/ROTEX-Desktop-mac.dmg

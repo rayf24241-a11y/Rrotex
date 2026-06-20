@@ -5,3 +5,4 @@ dist/
 *.spec
 .env
 firebase-config.local.js
+.env*
