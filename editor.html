@@ -1364,6 +1364,7 @@
               if (stored?.uid) {
                 applyStoredDesktopUser(stored);
                 await loadChats(stored.uid);
+                syncTokensFromFirestore(stored.uid);
               } else {
                 goPage('login');
               }
@@ -1380,6 +1381,7 @@
     if (stored?.uid) {
       applyStoredDesktopUser(stored);
       await loadChats(stored.uid);
+      syncTokensFromFirestore(stored.uid);
     } else {
       goPage('login');
     }
