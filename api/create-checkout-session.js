@@ -12,7 +12,7 @@ module.exports = async function handler(request, response) {
   const testPriceId   = cleanEnv(process.env.STRIPE_TEST_PRICE_ID);
   const hasTestKeys   = Boolean(testSecretKey && testPriceId);
   const hasLiveKeys   = Boolean(liveSecretKey && livePriceId);
-  const testMode      = !hasLiveKeys && (process.env.STRIPE_MODE === 'test' || hasTestKeys);
+  const testMode      = process.env.STRIPE_MODE === 'test' || (!hasLiveKeys && hasTestKeys);
   const secretKey     = testMode ? testSecretKey : liveSecretKey;
   const priceId       = testMode ? testPriceId   : livePriceId;
 
@@ -26,6 +26,15 @@ module.exports = async function handler(request, response) {
     response.status(200).json({
       configured: false,
       message: `Stripe is not configured. Add ${missingNames} in Vercel.`,
+    });
+    return;
+  }
+
+  // Reject test keys when live mode is expected — prevents accidental test payments
+  if (!testMode && secretKey.startsWith('sk_test_')) {
+    response.status(500).json({
+      configured: false,
+      message: 'STRIPE_SECRET_KEY is a test key. Set a live Stripe key (sk_live_...) in Vercel to charge real payments.',
     });
     return;
   }

@@ -168,12 +168,13 @@
     return { today: todayData, weekTotal, weekModels };
   }
 
-  // ─── Monaco Setup ──────────────────────────────────────────────────
+  // ─── Monaco Setup (optional — chat page has no Monaco loader) ─────
   let monacoReady = false;
   const editorInstances = new Map();
 
-  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-  require(['vs/editor/editor.main'], function () {
+  if (typeof require !== 'undefined') {
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+    require(['vs/editor/editor.main'], function () {
     monaco.editor.defineTheme('rotex-dark', {
       base: 'vs-dark',
       inherit: true,
@@ -200,6 +201,7 @@
     monaco.editor.setTheme('rotex-dark');
     monacoReady = true;
   });
+  }
 
   // ─── Language Detection ────────────────────────────────────────────
   function detectLanguage(filename) {
@@ -261,7 +263,8 @@
   const terminalInput = $('#terminalInput');
 
   // ─── Activity Bar ──────────────────────────────────────────────────
-  $('#activityBar').addEventListener('click', (e) => {
+  const activityBar = $('#activityBar');
+  if (activityBar) activityBar.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-panel]');
     if (!btn) return;
     const panel = btn.dataset.panel;

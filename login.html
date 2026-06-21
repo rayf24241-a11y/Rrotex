@@ -255,6 +255,7 @@
     <div class="footer">ROTEX v2.0.0</div>
   </div>
 
+  <script src="./desktop-auth.js"></script>
   <script type="module">
     import { initializeApp }            from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
     import {
@@ -272,15 +273,12 @@
        DESKTOP APP PATH — skip Firebase entirely, open browser to sign in
        ══════════════════════════════════════════════════════════════════ */
     if (window.rotexDesktop?.isDesktop) {
-      // Check if already signed in via localStorage
-      try {
-        const s = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
-        if (s?.uid && s?.token && Number(s.exp) > Date.now()) {
+      (async () => {
+        const s = await window.rotexDesktopAuth?.ensureRestored?.();
+        if (s?.uid) {
           window.rotexDesktop.navigate('projects');
-        } else if (s?.uid) {
-          localStorage.removeItem('rotex_desktop_auth');
+          return;
         }
-      } catch {}
 
       // Replace card with desktop sign-in UI
       document.querySelector('.card').innerHTML = `
@@ -322,16 +320,23 @@
       // Listen for deep link auth-callback from main.js
       window.rotexDesktop.onAuthCallback(data => {
         if (!data?.uid) return;
-        const authData = {
+        const authData = window.rotexDesktopAuth?.persist({
           uid:   data.uid,
           email: data.email  || '',
           name:  data.name   || '',
           exp:   data.exp    || String(Date.now() + 365 * 24 * 60 * 60 * 1000),
           token: data.token  || '',
+        }) || {
+          uid: data.uid,
+          email: data.email || '',
+          name: data.name || '',
+          exp: data.exp || String(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          token: data.token || '',
         };
         localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
         window.rotexDesktop.navigate('projects');
       });
+      })();
 
     } else {
     /* ══════════════════════════════════════════════════════════════════

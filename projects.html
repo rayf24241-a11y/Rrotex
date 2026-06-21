@@ -491,6 +491,9 @@
     </main>
   </div>
 
+  <script src="./desktop-auth.js"></script>
+  <script src="./rotex-tokens.js"></script>
+  <script src="./rotex-chats.js"></script>
   <script type="module">
     import { initializeApp }  from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
@@ -503,6 +506,20 @@
 
     /* ── Bootstrap ──────────────────────────────────────────────────── */
     async function boot() {
+      setupChatsGridEvents();
+
+      if (window.rotexDesktop?.isDesktop) {
+        const stored = await window.rotexDesktopAuth?.ensureRestored?.();
+        if (!stored?.uid) {
+          go('login');
+          return;
+        }
+        currentUser = { uid: stored.uid, email: stored.email || '', displayName: stored.name || stored.email || 'User' };
+        setup(currentUser);
+        return;
+      }
+
+      window.rotexDesktopAuth?.restore?.();
       try {
         const res  = await fetch('/api/firebase-config');
         const data = await res.json();
@@ -518,40 +535,46 @@
             setup(user);
             return;
           }
-          const stored = storedDesktopUser();
-          if (stored) {
-            currentUser = stored;
-            setup(stored);
-          } else {
-            go('login');
-          }
+          ensureDesktopUser().then(stored => {
+            if (stored) {
+              currentUser = stored;
+              setup(stored);
+            } else {
+              go('login');
+            }
+          });
         });
       } catch { fallbackBoot(); }
     }
 
     function storedDesktopUser() {
-      try {
-        const s = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
-        if (s?.uid && Number(s.exp) > Date.now()) {
-          return { uid: s.uid, email: s.email || '', displayName: s.name || s.email || 'User' };
-        }
-      } catch {}
+      const s = window.rotexDesktopAuth?.restore?.();
+      if (s?.uid) {
+        return { uid: s.uid, email: s.email || '', displayName: s.name || s.email || 'User' };
+      }
       return null;
     }
 
+    async function ensureDesktopUser() {
+      const s = await window.rotexDesktopAuth?.ensureRestored?.();
+      if (!s?.uid) return null;
+      return { uid: s.uid, email: s.email || '', displayName: s.name || s.email || 'User' };
+    }
+
     function fallbackBoot() {
-      const stored = storedDesktopUser();
-      if (stored) {
-        currentUser = stored;
-        setup(stored);
-      } else {
-        go('login');
-      }
+      ensureDesktopUser().then(stored => {
+        if (stored) {
+          currentUser = stored;
+          setup(stored);
+        } else {
+          go('login');
+        }
+      });
     }
 
     function go(page) {
-      if (window.rotexDesktop) window.rotexDesktop.navigate(page);
-      else window.location.href = `/${page}.html`;
+      const files = { login: 'login.html', projects: 'projects.html', editor: 'editor.html' };
+      window.location.href = files[page] || (page + '.html');
     }
 
     /* ── Setup user ─────────────────────────────────────────────────── */
@@ -578,11 +601,15 @@
         try {
           const q    = query(collection(db,'chats'), where('uid','==',uid), orderBy('updatedAt','desc'));
           const snap = await getDocs(q);
-          render(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          const fromFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          let local = [];
+          try { local = JSON.parse(localStorage.getItem('rotex_chats') || '[]'); } catch {}
+          const firestoreIds = new Set(fromFirestore.map(c => c.id));
+          const localOnly = local.filter(c => !firestoreIds.has(c.id));
+          render([...localOnly, ...fromFirestore]);
           return;
         } catch {}
       }
-      // fallback: localStorage
       try { render(JSON.parse(localStorage.getItem('rotex_chats') || '[]')); }
       catch { render([]); }
     }
@@ -599,6 +626,23 @@
       const h = Math.floor(m/60);
       if (h < 24) return `${h}h ago`;
       return `${Math.floor(h/24)}d ago`;
+    }
+
+    function setupChatsGridEvents() {
+      const grid = document.getElementById('chatsGrid');
+      if (!grid || grid._rxGridEvents) return;
+      grid._rxGridEvents = true;
+      grid.addEventListener('click', (e) => {
+        const del = e.target.closest('.cc-del');
+        if (del?.dataset.id) {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteChat(del.dataset.id);
+          return;
+        }
+        const card = e.target.closest('.chat-card');
+        if (card?.dataset.id) openChat(card.dataset.id);
+      });
     }
 
     function render(chats) {
@@ -634,17 +678,16 @@
             </svg>
           </button>
         </div>`).join('');
-
-      g.querySelectorAll('.chat-card').forEach(el => {
-        el.addEventListener('click', e => {
+      g.querySelectorAll('.chat-card').forEach(card => {
+        card.onclick = (e) => {
           if (e.target.closest('.cc-del')) return;
-          openChat(el.dataset.id);
-        });
-      });
-      g.querySelectorAll('.cc-del').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); deleteChat(btn.dataset.id); });
+          const cardId = card.getAttribute('data-id');
+          if (cardId) openChat(cardId);
+        };
       });
     }
+
+    setupChatsGridEvents();
 
     /* ── Engine picker modal ────────────────────────────────────────── */
     let pickedEngine = null;
@@ -714,26 +757,33 @@
       if (!currentUser) currentUser = storedDesktopUser();
       if (!currentUser) return go('login');
       const uid = currentUser.uid;
-      const now = serverTimestamp ? serverTimestamp() : Date.now();
+      const tsNow = Date.now();
       const chatTitle = projectName || 'New Chat';
+      const firestoreData = db && serverTimestamp
+        ? { uid, title: chatTitle, projectMode, projectName: projectName || '', createdAt: serverTimestamp(), updatedAt: serverTimestamp(), model: 'Fast', preview: '', messageCount: 0 }
+        : null;
+      let id = `local_${tsNow}`;
 
-      const data = { uid, title: chatTitle, projectMode, projectName: projectName || '', createdAt: now, updatedAt: now, model: 'Fast', preview: '', messageCount: 0 };
-      let id = `local_${Date.now()}`;
-
-      if (db) {
-        try { const ref = await addDoc(collection(db,'chats'), data); id = ref.id; } catch {}
+      if (db && firestoreData) {
+        try { const ref = await addDoc(collection(db,'chats'), firestoreData); id = ref.id; } catch {}
       }
 
+      const localEntry = {
+        uid, id, title: chatTitle, projectMode, projectName: projectName || '',
+        createdAt: tsNow, updatedAt: tsNow, model: 'Fast', preview: '', messageCount: 0,
+      };
       const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]');
-      local.unshift({ ...data, id, updatedAt: Date.now() });
-      localStorage.setItem('rotex_chats', JSON.stringify(local.slice(0,50)));
+      local.unshift(localEntry);
+      localStorage.setItem('rotex_chats', JSON.stringify(local.slice(0, 50)));
+      if (window.rotexPersistChats) await window.rotexPersistChats(local, id);
+      render(JSON.parse(localStorage.getItem('rotex_chats') || '[]'));
       localStorage.setItem('rotex_active_chat', id);
-      go('editor');
+      window.location.href = 'editor.html';
     }
 
     function openChat(id) {
       localStorage.setItem('rotex_active_chat', id);
-      go('editor');
+      window.location.href = 'editor.html';
     }
 
     function ensureStudioBridgeToken() {
@@ -756,11 +806,16 @@
 
     async function deleteChat(id) {
       if (!id) return;
+      if (window.rotexDeleteChatById) {
+        await window.rotexDeleteChatById(id);
+        return;
+      }
       if (db && !id.startsWith('local_')) {
         try { await deleteDoc(doc(db,'chats',id)); } catch {}
       }
-      const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]');
-      localStorage.setItem('rotex_chats', JSON.stringify(local.filter(c => c.id !== id)));
+      const local = JSON.parse(localStorage.getItem('rotex_chats') || '[]').filter(c => c.id !== id);
+      localStorage.setItem('rotex_chats', JSON.stringify(local));
+      if (window.rotexPersistChats) await window.rotexPersistChats(local, localStorage.getItem('rotex_active_chat'));
       loadChats(currentUser?.uid || '');
     }
 

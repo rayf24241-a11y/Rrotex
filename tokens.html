@@ -392,7 +392,10 @@
           const bal = data.texTokens;
           // update localStorage
           const prev = Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
-          localStorage.setItem('rotex_textokens_balance', String(prev + bal));
+          const next = prev + bal;
+          localStorage.setItem('rotex_textokens_balance', String(next));
+          if (window.rotexTokens) window.rotexTokens.savePurchased(next);
+          else if (window.rotexDesktop?.saveTokensBackup) window.rotexDesktop.saveTokensBackup(next);
           localStorage.setItem(key, '1');
 
           // update Firestore

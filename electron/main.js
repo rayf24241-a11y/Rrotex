@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -28,8 +28,19 @@ let currentProjectName = '';
 let userAuthToken     = '';
 let userProjectMode   = '';
 let studioActionQueue = [];
+let lastHeartbeat     = 0;
+let heartbeatTimer    = null;
+let pluginConnectedSent = false; // true once plugin-connected has been sent after latest server start/disconnect
 const PLUGIN_PORTS    = [7878, 7874, 7871, 7870, 7861, 7865, 7822, 7854, 7813, 7816, 7898, 7875];
-const APP_ICON        = path.join(__dirname, process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+const ROTEX_ICON_PNG  = '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';
+function makeRotexIcon() {
+  try {
+    const icoPath = path.join(__dirname, 'icon.ico');
+    const img = nativeImage.createFromPath(icoPath);
+    if (!img.isEmpty()) return img;
+  } catch (_) {}
+  return nativeImage.createFromBuffer(Buffer.from(ROTEX_ICON_PNG, 'base64'));
+}
 
 // ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -70,6 +81,85 @@ function authBackupPath() {
   return path.join(app.getPath('userData'), 'rotex-auth.json');
 }
 
+function chatsBackupPath() {
+  return path.join(app.getPath('userData'), 'rotex-chats.json');
+}
+
+async function readChatsBackup() {
+  try {
+    const raw = await fs.promises.readFile(chatsBackupPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    const chats = Array.isArray(parsed?.chats) ? parsed.chats.filter((c) => c && c.id) : [];
+    return { chats, activeChat: parsed?.activeChat || null };
+  } catch {
+    return { chats: [], activeChat: null };
+  }
+}
+
+async function writeChatsBackup(chats, activeChat) {
+  const safe = Array.isArray(chats) ? chats.filter((c) => c && c.id) : [];
+  const data = { chats: safe.slice(0, 50), activeChat: activeChat || null };
+  await fs.promises.mkdir(path.dirname(chatsBackupPath()), { recursive: true });
+  await fs.promises.writeFile(chatsBackupPath(), JSON.stringify(data), 'utf8');
+  return data;
+}
+
+function tokensBackupPath() {
+  return path.join(app.getPath('userData'), 'rotex-tokens.json');
+}
+
+async function readTokensBackup() {
+  try {
+    const raw = await fs.promises.readFile(tokensBackupPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    return Math.max(0, Math.floor(Number(parsed?.balance) || 0));
+  } catch {
+    return 0;
+  }
+}
+
+async function writeTokensBackup(balance) {
+  const bal = Math.max(0, Math.floor(Number(balance) || 0));
+  await fs.promises.mkdir(path.dirname(tokensBackupPath()), { recursive: true });
+  await fs.promises.writeFile(tokensBackupPath(), JSON.stringify({ balance: bal }), 'utf8');
+  return bal;
+}
+
+async function injectTokensIntoPage() {
+  if (!mainWindow) return;
+  const fileBal = await readTokensBackup();
+  await mainWindow.webContents.executeJavaScript(
+    `try {
+      const cur = Math.max(0, Number(localStorage.getItem('rotex_textokens_balance') || 0));
+      const best = Math.max(cur, ${fileBal});
+      localStorage.setItem('rotex_textokens_balance', String(best));
+    } catch {}`,
+    true
+  ).catch(() => {});
+  const merged = await mainWindow.webContents.executeJavaScript(
+    `Math.max(0, Number(localStorage.getItem('rotex_textokens_balance') || 0))`,
+    true
+  ).catch(() => fileBal);
+  if (merged > fileBal) await writeTokensBackup(merged);
+}
+
+async function injectChatsIntoPage() {
+  if (!mainWindow) return;
+  const { chats, activeChat } = await readChatsBackup();
+  if (!chats.length && !activeChat) return;
+  const chatsJson = JSON.stringify(chats);
+  const activeJson = JSON.stringify(activeChat || '');
+  await mainWindow.webContents.executeJavaScript(
+    `try {
+      const chats = ${chatsJson};
+      if (chats.length) localStorage.setItem('rotex_chats', JSON.stringify(chats));
+      const active = ${activeJson};
+      if (active) localStorage.setItem('rotex_active_chat', active);
+    } catch {}`,
+    true
+  ).catch(() => {});
+}
+
 function normalizeDesktopAuth(data) {
   if (!data || !data.uid) return null;
   return {
@@ -92,7 +182,10 @@ async function writeAuthBackup(data) {
 function readAuthBackup() {
   try {
     const auth = JSON.parse(fs.readFileSync(authBackupPath(), 'utf8'));
-    if (!auth?.uid || !auth?.token || Number(auth.exp || 0) <= Date.now()) return null;
+    if (!auth?.uid) return null;
+    if (Number(auth.exp || 0) <= Date.now()) {
+      auth.exp = String(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    }
     return normalizeDesktopAuth(auth);
   } catch {
     return null;
@@ -115,22 +208,28 @@ async function completeDesktopAuth(data) {
   if (!mainWindow) return true;
   const authJson = JSON.stringify(auth);
   await mainWindow.webContents.executeJavaScript(
-    `localStorage.setItem('rotex_desktop_auth', ${JSON.stringify(authJson)});`,
+    `try {
+      const auth = ${JSON.stringify(auth)};
+      localStorage.setItem('rotex_desktop_auth', JSON.stringify(auth));
+      localStorage.setItem('rotex_desktop_auth_mirror', JSON.stringify(auth));
+      if (window.rotexDesktopAuth?.persist) window.rotexDesktopAuth.persist(auth);
+    } catch {}`,
     true
   ).catch(() => {});
-  await mainWindow.loadFile(appAssetPath('projects.html'));
+  await mainWindow.loadFile(appAssetPath('editor.html'));
   mainWindow.focus();
   return true;
 }
 
 function createWindow() {
+  const appIcon = makeRotexIcon();
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
     title: 'ROTEX',
-    icon: APP_ICON,
+    icon: appIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -140,8 +239,12 @@ function createWindow() {
     titleBarStyle: 'default',
   });
 
-  // Always start at login — login.html auto-redirects if already authenticated.
-  mainWindow.loadFile(appAssetPath('login.html'));
+  mainWindow.setIcon(appIcon);
+  mainWindow.webContents.once('did-finish-load', () => mainWindow && mainWindow.setIcon(appIcon));
+
+  // Start directly in editor so the loading-screen gate (update + plugin check) shows immediately.
+  const startupAuth = readAuthBackup();
+  mainWindow.loadFile(appAssetPath(startupAuth?.uid ? 'editor.html' : 'login.html'));
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -151,27 +254,35 @@ function createWindow() {
   const DEV_PRO_PASS = 'eyJ1aWQiOiJkZXYtcmF5ZjI0MjQxIiwic3ViIjoiZGV2IiwicGxhbiI6InBybyIsImV4cCI6MjA5NzI3NzE1MTMzMH0.jXr6ra4H_g77_311en6AxnxMnYVmODPKzLae6odbi2Q';
   mainWindow.webContents.on('did-finish-load', () => {
     const auth = readAuthBackup();
-    const authScript = auth
+    if (auth) {
+      auth.exp = String(Date.now() + 365 * 24 * 60 * 60 * 1000);
+      writeAuthBackup(auth).catch(() => {});
+    }
+
+    const authJson = auth ? JSON.stringify(auth) : '';
+    const injectScript = auth
       ? `try {
-          const saved = ${JSON.stringify(JSON.stringify(auth))};
-          const current = JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null');
-          if (!current || !current.uid || Number(current.exp || 0) <= Date.now()) {
-            localStorage.setItem('rotex_desktop_auth', saved);
-          }
+          const auth = ${authJson};
+          localStorage.setItem('rotex_desktop_auth', JSON.stringify(auth));
+          localStorage.setItem('rotex_desktop_auth_mirror', JSON.stringify(auth));
+          if (window.rotexDesktopAuth?.persist) window.rotexDesktopAuth.persist(auth);
           if (location.pathname.toLowerCase().endsWith('login.html') && window.rotexDesktop?.navigate) {
-            window.rotexDesktop.navigate('projects');
+            window.rotexDesktop.navigate('editor');
           }
-        } catch {
-          localStorage.setItem('rotex_desktop_auth', ${JSON.stringify(JSON.stringify(auth))});
-          if (location.pathname.toLowerCase().endsWith('login.html') && window.rotexDesktop?.navigate) {
-            window.rotexDesktop.navigate('projects');
+        } catch {}`
+      : `try {
+          const raw = localStorage.getItem('rotex_desktop_auth') || localStorage.getItem('rotex_desktop_auth_mirror');
+          if (raw && window.rotexDesktop?.persistDesktopAuth) {
+            window.rotexDesktop.persistDesktopAuth(JSON.parse(raw));
           }
-        }`
-      : '';
+        } catch {}`;
+
     mainWindow.webContents.executeJavaScript(
-      `${authScript}
+      `${injectScript}
        localStorage.setItem('rotex_pro_pass', ${JSON.stringify(DEV_PRO_PASS)});`
     ).catch(() => {});
+    injectChatsIntoPage().catch(() => {});
+    injectTokensIntoPage().catch(() => {});
   });
 
   // Flush any deep link that arrived before the window was ready (macOS)
@@ -221,11 +332,15 @@ app.whenReady().then(() => {
     autoUpdater.on('update-available', (info) => {
       if (mainWindow) mainWindow.webContents.send('rotex-update-available', info);
     });
-
+    autoUpdater.on('update-not-available', () => {
+      if (mainWindow) mainWindow.webContents.send('rotex-update-not-available');
+    });
+    autoUpdater.on('error', () => {
+      if (mainWindow) mainWindow.webContents.send('rotex-update-error');
+    });
     autoUpdater.on('download-progress', (progress) => {
       if (mainWindow) mainWindow.webContents.send('rotex-update-progress', progress);
     });
-
     autoUpdater.on('update-downloaded', () => {
       if (mainWindow) mainWindow.webContents.send('rotex-update-ready');
     });
@@ -344,11 +459,53 @@ ipcMain.handle('clear-desktop-auth', async () => {
   return { ok: true };
 });
 
+ipcMain.handle('persist-desktop-auth', async (_event, data) => {
+  const ok = await writeAuthBackup(data);
+  return { ok };
+});
+
+ipcMain.handle('get-auth-backup', () => readAuthBackup());
+
+ipcMain.handle('get-chats-backup', () => readChatsBackup());
+ipcMain.handle('save-chats-backup', async (_, chats, activeChat) => writeChatsBackup(chats, activeChat));
+ipcMain.handle('get-tokens-backup', () => readTokensBackup());
+ipcMain.handle('save-tokens-backup', async (_, balance) => writeTokensBackup(balance));
+
 ipcMain.handle('update-download', () => {
   if (autoUpdater) autoUpdater.downloadUpdate().catch(() => {});
 });
 ipcMain.handle('update-install', () => {
   if (autoUpdater) autoUpdater.quitAndInstall(false, true);
+});
+ipcMain.handle('check-for-updates', () => {
+  if (autoUpdater) autoUpdater.checkForUpdates().catch(() => {
+    if (mainWindow) mainWindow.webContents.send('rotex-update-error');
+  });
+});
+ipcMain.handle('get-version', () => app.getVersion());
+ipcMain.handle('capture-screen', async () => {
+  try {
+    const { desktopCapturer } = require('electron');
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
+    if (!sources.length) return { ok: false };
+    return { ok: true, dataUrl: sources[0].thumbnail.toDataURL() };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('start-rojo', () => {
+  if (rojoProcess) { if (mainWindow) mainWindow.webContents.send('rojo-status', 'running'); return { ok: true }; }
+  try {
+    rojoProcess = spawn('rojo', ['serve'], { shell: true, stdio: 'ignore', detached: false });
+    rojoProcess.on('close', () => {
+      rojoProcess = null;
+      if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
+    });
+    rojoProcess.on('error', () => {
+      rojoProcess = null;
+      if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
+    });
+    if (mainWindow) mainWindow.webContents.send('rojo-status', 'running');
+    return { ok: true };
+  } catch { return { ok: false, error: 'Rojo not found — install from rojo.space' }; }
 });
 
 ipcMain.handle('queue-studio-actions', async (event, actions) => {
@@ -368,33 +525,76 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
 
   if (pluginServer) return pluginServerPort || 7878; // reuse existing server, just update token
 
-  pluginServer = http.createServer((req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Content-Type', 'application/json');
+  const sendJSON = (res, statusOrBody, maybeBody) => {
+    const status = maybeBody !== undefined ? statusOrBody : 200;
+    const body   = JSON.stringify(maybeBody !== undefined ? maybeBody : statusOrBody);
+    res.writeHead(status, {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(body);
+  };
 
-    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+  pluginServer = http.createServer((req, res) => {
+    res.on('error', () => {});
+    req.on('error', () => {});
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' });
+      res.end();
+      return;
+    }
 
     const url = new URL(req.url, `http://127.0.0.1:${pluginServerPort || 7878}`);
     const reqToken = url.searchParams.get('token') || '';
 
-    // /ping — always 200 so the plugin can distinguish "not running" from "wrong token"
+    // /ping — accept any connection, send back token so plugin can auto-authenticate
     if (url.pathname === '/ping' && req.method === 'GET') {
-      if (reqToken === pluginToken) {
-        res.end(JSON.stringify({ ok: true, project: currentProjectName }));
-        const source = url.searchParams.get('source') || 'studio';
-        if (mainWindow) {
-          mainWindow.webContents.send(source === 'browser' ? 'browser-connected' : 'plugin-connected');
-        }
-      } else {
-        res.end(JSON.stringify({ ok: false, error: 'bad token', token: pluginToken }));
+      sendJSON(res, { ok: true, project: currentProjectName, token: pluginToken });
+      const source = url.searchParams.get('source') || 'studio';
+      if (mainWindow) {
+        mainWindow.webContents.send(source === 'browser' ? 'browser-connected' : 'plugin-connected');
+      }
+      pluginConnectedSent = true;
+      lastHeartbeat = Date.now();
+      if (!heartbeatTimer) {
+        heartbeatTimer = setInterval(() => {
+          if (Date.now() - lastHeartbeat > 30000) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+            pluginConnectedSent = false;
+            if (mainWindow) mainWindow.webContents.send('plugin-disconnected');
+          }
+        }, 3000);
       }
       return;
     }
 
+    if (url.pathname === '/heartbeat' && req.method === 'POST') {
+      if (reqToken === pluginToken) {
+        lastHeartbeat = Date.now();
+        // Fire plugin-connected on first heartbeat after startup or reconnect
+        if (!pluginConnectedSent && mainWindow) {
+          pluginConnectedSent = true;
+          mainWindow.webContents.send('plugin-connected');
+          if (!heartbeatTimer) {
+            heartbeatTimer = setInterval(() => {
+              if (Date.now() - lastHeartbeat > 30000) {
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = null;
+                pluginConnectedSent = false;
+                if (mainWindow) mainWindow.webContents.send('plugin-disconnected');
+              }
+            }, 3000);
+          }
+        }
+      }
+      sendJSON(res, { ok: true });
+      return;
+    }
+
     if (reqToken !== pluginToken) {
-      res.writeHead(401); res.end(JSON.stringify({ ok: false, error: 'bad token' })); return;
+      sendJSON(res, 401, { ok: false, error: 'bad token' }); return;
     }
 
     if (url.pathname === '/rojo/start' && req.method === 'POST') {
@@ -406,14 +606,14 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
         });
         if (mainWindow) mainWindow.webContents.send('rojo-status', 'running');
       }
-      res.end(JSON.stringify({ ok: true }));
+      sendJSON(res, { ok: true });
       return;
     }
 
     if (url.pathname === '/rojo/stop' && req.method === 'POST') {
       if (rojoProcess) { rojoProcess.kill(); rojoProcess = null; }
       if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
-      res.end(JSON.stringify({ ok: true }));
+      sendJSON(res, { ok: true });
       return;
     }
 
@@ -423,14 +623,14 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
       req.on('end', () => {
         try { aiContext = JSON.parse(body); } catch {}
         if (mainWindow) mainWindow.webContents.send('plugin-context', aiContext);
-        res.end(JSON.stringify({ ok: true }));
+        sendJSON(res, { ok: true });
       });
       return;
     }
 
     if (url.pathname === '/studio/actions' && req.method === 'GET') {
       const action = studioActionQueue.shift() || null;
-      res.end(JSON.stringify({ ok: true, action }));
+      sendJSON(res, { ok: true, action });
       return;
     }
 
@@ -442,7 +642,7 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
           const result = JSON.parse(body || '{}');
           if (mainWindow) mainWindow.webContents.send('plugin-context', { studioResult: result });
         } catch {}
-        res.end(JSON.stringify({ ok: true }));
+        sendJSON(res, { ok: true });
       });
       return;
     }
@@ -480,21 +680,23 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
               res.end(data);
             });
           });
-          apiReq.on('error', err => {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: err.message }));
-          });
+          apiReq.on('error', err => sendJSON(res, 500, { error: err.message }));
           apiReq.write(postData);
           apiReq.end();
         } catch (err) {
-          res.writeHead(400);
-          res.end(JSON.stringify({ error: err.message }));
+          sendJSON(res, 400, { error: err.message });
         }
       });
       return;
     }
 
-    res.writeHead(404); res.end(JSON.stringify({ ok: false, error: 'not found' }));
+    sendJSON(res, 404, { ok: false, error: 'not found' });
+  });
+
+  pluginServer.keepAliveTimeout = 2000;
+  pluginServer.headersTimeout = 8000;
+  pluginServer.on('connection', socket => {
+    socket.setNoDelay(true);
   });
 
   return new Promise(resolve => {
@@ -526,62 +728,89 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
 });
 
 // ─── IPC: TexBrain 0.5-β (single Ollama call, engine-aware) ──────────────────
+let _texbrainModel = null; // cached so /api/tags is only called once per session
+
 ipcMain.handle('texbrain-call', async (event, messages, projectMode) => {
   const http = require('http');
   const OLLAMA_PORT = 11434;
 
-  // Auto-detect best installed model
-  let model = 'llama3.2';
-  try {
-    const tags = await new Promise((resolve, reject) => {
-      http.get(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`, res => {
-        let d = '';
-        res.on('data', c => { d += c; });
-        res.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } });
-      }).on('error', reject);
-    });
-    const names = (tags.models || []).map(m => m.name);
-    const preferred = ['llama3.2:3b', 'llama3.2', 'llama3:8b', 'llama3', 'mistral', 'phi3', 'gemma3'];
-    const found = preferred.find(p => names.some(n => n.startsWith(p)));
-    if (found) model = found;
-    else if (names.length > 0) model = names[0];
-  } catch {
-    return { error: 'Ollama is not running. Download it from ollama.ai, then run: ollama pull llama3.2' };
+  // Auto-detect best installed model (cached after first call)
+  if (!_texbrainModel) {
+    try {
+      const tags = await new Promise((resolve, reject) => {
+        http.get(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`, res => {
+          let d = '';
+          res.on('data', c => { d += c; });
+          res.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } });
+        }).on('error', reject);
+      });
+      const names = (tags.models || []).map(m => m.name);
+      const preferred = ['llama3.2:3b', 'llama3.2', 'llama3:8b', 'llama3', 'mistral', 'phi3', 'gemma3'];
+      const found = preferred.find(p => names.some(n => n.startsWith(p)));
+      _texbrainModel = found || names[0] || 'llama3.2';
+    } catch {
+      return { error: 'Ollama is not running. Download it from ollama.ai, then run: ollama pull llama3.2' };
+    }
   }
+  const model = _texbrainModel;
 
   // Engine-specific focus
   const engineGuides = {
-    Roblox:         'You only help with Roblox game development: Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, Roblox services (Players, DataStoreService, TweenService, RunService, etc.), Roblox Studio, and the Roblox API. Do not help with anything outside Roblox.',
-    Unity:          'You only help with Unity game development: C# scripting, MonoBehaviour lifecycle, Unity APIs, GameObjects, physics, animations, and the Unity Editor.',
-    Blender:        'You only help with Blender 3D: Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering.',
-    'Roblox+Blender': 'You only help with Roblox game development (Luau) and Blender 3D (bpy) for creating assets used in Roblox games.',
-    'Unity+Blender':  'You only help with Unity (C#) and Blender 3D (bpy) for creating assets used in Unity projects.',
+    Roblox:           'Your specialty is Roblox game development: Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, DataStoreService, TweenService, RunService, and Roblox Studio. For casual or off-topic messages, respond naturally and briefly, then offer to help with the game.',
+    Unity:            'Your specialty is Unity game development: C# scripting, MonoBehaviour lifecycle, Unity APIs, GameObjects, physics, animations, and the Unity Editor. For casual or off-topic messages, respond naturally and briefly.',
+    Blender:          'Your specialty is Blender 3D: Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering. For casual or off-topic messages, respond naturally and briefly.',
+    'Roblox+Blender': 'Your specialty is Roblox game development (Luau) and Blender 3D (bpy) for creating assets used in Roblox games. For casual or off-topic messages, respond naturally and briefly.',
+    'Unity+Blender':  'Your specialty is Unity (C#) and Blender 3D (bpy) for creating assets used in Unity projects. For casual or off-topic messages, respond naturally and briefly.',
   };
   const engine = (projectMode || 'Roblox').trim();
   const engineFocus = engineGuides[engine] || engineGuides['Roblox'];
 
   const systemPrompt = [
-    'You are TexBrain 0.5-β, the free local AI model inside the ROTEX app for game developers.',
+    'You are TexBrain 0.5-β, a free local AI model inside the ROTEX app for game developers. You run entirely on-device via Ollama — no internet, no TexTokens spent.',
     engineFocus,
-    'ROTEX model ranking (best → worst): Pro Smart (Claude Haiku, best) > Smart (Llama 70B) > Balanced (Qwen3 32B) > Fast (Llama 8B) > TexBrain (you — free, local, least powerful). If asked which model is best, say Pro Smart. Be honest that you are the lowest-ranked model.',
+    'You cannot see or process images. If asked to look at an image, tell the user to switch to a model with vision support (Claude Haiku).',
     'Be concise and direct. Answer with working code using Markdown fenced code blocks. Do not go off-topic or hallucinate APIs that do not exist.',
   ].join('\n');
 
+  const ollamaCall = (msgs) => new Promise((resolve, reject) => {
+    const postData = JSON.stringify({ model, stream: false, messages: msgs });
+    const req = http.request(
+      { hostname: '127.0.0.1', port: OLLAMA_PORT, path: '/api/chat', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
+      r => { let d = ''; r.on('data', c => { d += c; }); r.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } }); }
+    );
+    req.on('error', reject);
+    req.setTimeout(120000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.write(postData);
+    req.end();
+  });
+
   try {
-    // Limit history to last 6 messages to keep responses fast
-    const history = messages.slice(-6);
-    const res = await new Promise((resolve, reject) => {
-      const postData = JSON.stringify({ model, stream: false, messages: [{ role: 'system', content: systemPrompt }, ...history] });
-      const req = http.request(
-        { hostname: '127.0.0.1', port: OLLAMA_PORT, path: '/api/chat', method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
-        r => { let d = ''; r.on('data', c => { d += c; }); r.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } }); }
-      );
-      req.on('error', reject);
-      req.setTimeout(120000, () => { req.destroy(); reject(new Error('timeout')); });
-      req.write(postData);
-      req.end();
-    });
+    const history = messages.slice(-6).map(m => ({
+      role: m.role,
+      content: Array.isArray(m.content)
+        ? m.content.filter(p => p.type === 'text').map(p => p.text).join('\n')
+        : m.content,
+    }));
+
+    // Task 1: clarifier — expand the last user message into a precise task description
+    const lastUser = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
+    let clarified = lastUser;
+    try {
+      const clarifyRes = await ollamaCall([
+        { role: 'system', content: `You are a code task clarifier for a ${engine} developer. In 1-3 sentences, restate the user's request as a precise, unambiguous technical task. Do not answer it — only restate it clearly. Output only the restated task.` },
+        { role: 'user', content: lastUser },
+      ]);
+      clarified = clarifyRes.message?.content?.trim() || lastUser;
+    } catch { /* fallback: use original */ }
+
+    // Task 2: worker — generate the actual response
+    const workerHistory = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(0, -1),
+      { role: 'user', content: clarified },
+    ];
+    const res = await ollamaCall(workerHistory);
     return { text: res.message?.content || '(no response from local model)', model };
   } catch (err) {
     if (err.message.includes('ECONNREFUSED')) {

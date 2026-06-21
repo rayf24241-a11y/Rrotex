@@ -15,8 +15,8 @@ const MODELS = {
     route: 'groq-only',
     groqModel: process.env.GROQ_FAST_MODEL || 'llama-3.1-8b-instant',
     blurb: 'Fast Groq model for quick fixes and short answers.',
-    maxTokens: 512,
-    proMaxTokens: 1024,
+    maxTokens: 2048,
+    proMaxTokens: 4096,
   },
   balanced: {
     name: 'Balanced',

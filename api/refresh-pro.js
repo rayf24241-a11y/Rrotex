@@ -19,11 +19,16 @@ module.exports = async function handler(request, response) {
 
   const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
   const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
-  const testMode = !liveSecretKey && (process.env.STRIPE_MODE === 'test' || Boolean(testSecretKey));
+  const testMode = process.env.STRIPE_MODE === 'test' || (!liveSecretKey && Boolean(testSecretKey));
   const secretKey = testMode ? testSecretKey : liveSecretKey;
 
   if (!secretKey) {
     response.status(200).json({ refreshed: false, message: 'Stripe is not configured.' });
+    return;
+  }
+
+  if (!testMode && secretKey.startsWith('sk_test_')) {
+    response.status(500).json({ refreshed: false, message: 'Stripe is using a test key — cannot verify real subscriptions. Set STRIPE_SECRET_KEY to a live key (sk_live_...).' });
     return;
   }
 
