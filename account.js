@@ -70,6 +70,7 @@ async function init() {
         await loadCreditBalance(user);
         await handleCheckoutReturn(user);
         await handleCreditCheckoutReturn(user);
+        maybeShowDesktopConnect(user);
       } else {
         creditBalance = readLocalCredits();
         renderCredits();
@@ -206,6 +207,7 @@ async function handleCheckoutReturn(user) {
       localStorage.setItem('rotex_pro_pass', data.proPass);
       setCheckoutMessage('Pro is active on this account.');
       history.replaceState('', document.title, '/account#pro');
+      maybeShowDesktopConnect(currentUser);
     } else {
       setCheckoutMessage(data.message || 'Checkout could not be verified yet.', true);
     }
@@ -327,6 +329,34 @@ function formatTokens(value) {
   }
   return amount.toLocaleString();
 }
+
+async function maybeShowDesktopConnect(user) {
+  const proPass = localStorage.getItem('rotex_pro_pass') || '';
+  if (!proPass || !user) return;
+  const btn = document.getElementById('connectDesktopBtn');
+  if (btn) btn.style.display = '';
+}
+
+document.getElementById('connectDesktopBtn')?.addEventListener('click', async () => {
+  const proPass = localStorage.getItem('rotex_pro_pass') || '';
+  if (!currentUser || !proPass) return;
+  const msg = document.getElementById('connectDesktopMsg');
+  try {
+    const token = await currentUser.getIdToken().catch(() => '');
+    const params = new URLSearchParams({
+      uid:    currentUser.uid,
+      email:  currentUser.email || '',
+      name:   currentUser.displayName || '',
+      exp:    String(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      token,
+      proPass,
+    });
+    window.location.href = `rotex://auth?${params.toString()}`;
+    if (msg) msg.textContent = 'Opening ROTEX Desktop…';
+  } catch {
+    if (msg) msg.textContent = 'Could not open desktop app.';
+  }
+});
 
 function setAuthMessage(text, error = false) {
   authMessage.textContent = text;

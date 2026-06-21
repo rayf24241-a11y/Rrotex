@@ -1178,7 +1178,7 @@
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
   import {
     getFirestore, collection, query, where, orderBy,
-    getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, Timestamp
+    getDoc, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, Timestamp
   } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
   let db = null, auth = null, currentUser = null;
@@ -1356,6 +1356,7 @@
               document.getElementById('rxUserAvatar').textContent = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
               document.getElementById('rxProfileName').textContent = (user.displayName || user.email || 'Account').split(' ')[0];
               await loadChats(user.uid);
+              syncTokensFromFirestore(user.uid);
             } else {
               const stored = window.rotexDesktopAuth?.restore?.() || (() => {
                 try { return JSON.parse(localStorage.getItem('rotex_desktop_auth') || 'null'); } catch { return null; }
@@ -1426,6 +1427,21 @@
     } catch { /* network failure — silently keep the existing pass */ }
   }
   maybeRefreshProPass();
+
+  /* ── Sync purchased TexToken balance from Firestore ─────────── */
+  async function syncTokensFromFirestore(uid) {
+    if (!db || !uid) return;
+    try {
+      const snap = await getDoc(doc(db, 'users', uid, 'billing', 'textokens'));
+      if (!snap.exists()) return;
+      const cloudBal = Math.max(0, Math.floor(Number(snap.data()?.balance || 0)));
+      const localBal = Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
+      if (cloudBal > localBal) {
+        localStorage.setItem('rotex_textokens_balance', String(cloudBal));
+        if (window.rotexTokens) window.rotexTokens.refreshBalanceDisplay();
+      }
+    } catch {}
+  }
 
   /* ── Load chats ─────────────────────────────────────────────── */
   async function loadChats(uid) {

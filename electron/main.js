@@ -206,13 +206,15 @@ async function completeDesktopAuth(data) {
   if (!auth) return false;
   await writeAuthBackup(auth).catch(() => {});
   if (!mainWindow) return true;
-  const authJson = JSON.stringify(auth);
+  const proPass = String(data.proPass || '');
+  const proPassLine = proPass ? `localStorage.setItem('rotex_pro_pass', ${JSON.stringify(proPass)});` : '';
   await mainWindow.webContents.executeJavaScript(
     `try {
       const auth = ${JSON.stringify(auth)};
       localStorage.setItem('rotex_desktop_auth', JSON.stringify(auth));
       localStorage.setItem('rotex_desktop_auth_mirror', JSON.stringify(auth));
       if (window.rotexDesktopAuth?.persist) window.rotexDesktopAuth.persist(auth);
+      ${proPassLine}
     } catch {}`,
     true
   ).catch(() => {});
