@@ -189,6 +189,16 @@ async function emailAuth(mode) {
   }
 }
 
+function notifyDesktop(payload) {
+  const port = new URLSearchParams(window.location.search).get('desktop_callback');
+  if (!port) return;
+  fetch(`http://127.0.0.1:${port}/purchase`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}
+
 async function handleCheckoutReturn(user) {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id');
@@ -206,6 +216,7 @@ async function handleCheckoutReturn(user) {
       localStorage.setItem('rotex_pro_pass', data.proPass);
       setCheckoutMessage('Pro is active on this account.');
       history.replaceState('', document.title, '/account#pro');
+      notifyDesktop({ proPass: data.proPass });
     } else {
       setCheckoutMessage(data.message || 'Checkout could not be verified yet.', true);
     }
@@ -242,6 +253,7 @@ async function handleCreditCheckoutReturn(user) {
     localStorage.setItem(appliedKey, '1');
     setCreditMessage(`Added ${formatTokens(data.texTokens)} TexTokens.`);
     history.replaceState('', document.title, '/account');
+    notifyDesktop({ balance: creditBalance });
   } catch {
     setCreditMessage('Could not verify credit checkout. Refresh and try again.', true);
   }

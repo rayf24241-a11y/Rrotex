@@ -2626,15 +2626,25 @@
     }
   });
 
+  async function openWithPurchaseCallback(baseUrl) {
+    if (window.rotexDesktop?.startPurchaseServer) {
+      try {
+        const port = await window.rotexDesktop.startPurchaseServer();
+        window.rotexDesktop.openExternal(`${baseUrl}?desktop_callback=${port}`);
+        return;
+      } catch {}
+    }
+    if (window.rotexDesktop) window.rotexDesktop.openExternal(baseUrl);
+    else window.open(baseUrl, '_blank');
+  }
+
   document.getElementById('rxTexTokensRow').addEventListener('click', (e) => {
     if (e.target.closest('#rxBuyTokens')) return;
-    if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/tokens');
-    else window.open('/tokens', '_blank');
+    openWithPurchaseCallback('https://www.rrotex.com/tokens');
   });
 
   document.getElementById('rxBuyTokens').addEventListener('click', () => {
-    if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/tokens');
-    else window.open('/tokens', '_blank');
+    openWithPurchaseCallback('https://www.rrotex.com/tokens');
   });
 
   document.getElementById('rxDocsBtn').addEventListener('click', () => {

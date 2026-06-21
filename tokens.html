@@ -413,6 +413,9 @@
           const label    = (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M';
           showSuccess(`${label} TexTokens added!`, 'Your balance has been updated.');
           history.replaceState('', document.title, '/tokens');
+          // Notify desktop app if opened via callback port
+          const cbPort = new URLSearchParams(window.location.search).get('desktop_callback');
+          if (cbPort) fetch(`http://127.0.0.1:${cbPort}/purchase`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balance: next }) }).catch(() => {});
         } catch {
           setMsg('Could not verify purchase. Refresh and try again.', 'error');
         }

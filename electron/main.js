@@ -867,6 +867,57 @@ ipcMain.handle('check-studio-plugin', async () => {
   }
 });
 
+// ─── IPC: Purchase callback server ───────────────────────────────────────────
+let purchaseServer = null;
+ipcMain.handle('start-purchase-server', () => {
+  return new Promise((resolve, reject) => {
+    if (purchaseServer) { purchaseServer.close(); purchaseServer = null; }
+
+    const server = http.createServer((req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Allow-Private-Network', 'true');
+
+      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+      if (req.method === 'POST' && req.url === '/purchase') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+            server.close();
+            purchaseServer = null;
+            if (!mainWindow) return;
+            const balance  = Number(data.balance  || 0);
+            const proPass  = String(data.proPass  || '');
+            const balanceLine = balance > 0 ? `localStorage.setItem('rotex_textokens_balance', ${JSON.stringify(String(balance))});` : '';
+            const proPassLine = proPass ? `localStorage.setItem('rotex_pro_pass', ${JSON.stringify(proPass)});` : '';
+            mainWindow.webContents.executeJavaScript(
+              `try { ${balanceLine} ${proPassLine} if(window.rotexTokens) window.rotexTokens.refreshBalanceDisplay(); } catch {}`,
+              true
+            ).catch(() => {});
+          } catch { res.writeHead(400); res.end('Bad request'); }
+        });
+        return;
+      }
+      res.writeHead(404); res.end();
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      purchaseServer = server;
+      resolve(port);
+      setTimeout(() => { server.close(); purchaseServer = null; }, 10 * 60 * 1000);
+    });
+
+    server.on('error', reject);
+  });
+});
+
 // ─── IPC: Local auth callback server ─────────────────────────────────────────
 ipcMain.handle('start-auth-server', () => {
   return new Promise((resolve, reject) => {

@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
   // ─── Utils ────────────────────────────────────────────────────────────
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   startAuthServer: () => ipcRenderer.invoke('start-auth-server'),
+  startPurchaseServer: () => ipcRenderer.invoke('start-purchase-server'),
   clearDesktopAuth: () => ipcRenderer.invoke('clear-desktop-auth'),
   persistDesktopAuth: (data) => ipcRenderer.invoke('persist-desktop-auth', data),
   getAuthBackup: () => ipcRenderer.invoke('get-auth-backup'),
