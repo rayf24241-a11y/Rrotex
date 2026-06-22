@@ -1077,12 +1077,7 @@
             <small id="rxSelectedRole" style="font-size:11px;color:var(--rx-muted);margin-left:auto;">Cheap</small>
           </button>
 
-          <select class="ai-mode-select" id="rxProjectMode" style="background:var(--rx-panel);border:1px solid var(--rx-border);border-radius:7px;color:var(--rx-text);font:inherit;font-size:12px;min-height:30px;padding:0 8px;cursor:pointer;">
-            <option value="Roblox">Roblox</option>
-            <option value="Unity" disabled>Unity (Coming Soon)</option>
-            <option value="Roblox+Blender">Roblox+Blender</option>
-            <option value="Blender" disabled>Blender (Coming Soon)</option>
-          </select>
+          <input type="hidden" id="rxProjectMode" value="Roblox">
 
           <button class="agent-toggle danger" id="rxStopBtn" type="button">Stop</button>
           <span class="ai-cost-preview" id="rxCostPreview" style="color:var(--rx-quiet);font-size:11px;"></span>
