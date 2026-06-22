@@ -767,7 +767,8 @@ ipcMain.handle('texbrain-call', async (event, messages, projectMode) => {
     'You are TexBrain 0.5-β, a free local AI model inside the ROTEX app for game developers. You run entirely on-device via Ollama — no internet, no TexTokens spent.',
     engineFocus,
     'You cannot see or process images. If asked to look at an image, tell the user to switch to a model with vision support (Claude Haiku).',
-    'Be concise and direct. Answer with working code using Markdown fenced code blocks. Do not go off-topic or hallucinate APIs that do not exist.',
+    'Be concise and direct. Answer with working code. Do not go off-topic or hallucinate APIs that do not exist.',
+    'When writing Roblox Lua scripts, ALWAYS use file blocks so ROTEX can apply them directly to Roblox Studio. Format: start a fenced code block with ```file:ServiceName/path/ScriptName.lua (on its own line), put the complete Lua code inside, then close with ```. Example:\n```file:ServerScriptService/DashSystem.lua\n-- code here\n```\nUse service names as the root: ServerScriptService, ReplicatedStorage, StarterPlayer/StarterPlayerScripts, StarterGui, Workspace, ServerStorage, StarterPack. Write the COMPLETE file contents — no placeholders.',
   ].join('\n');
 
   const ollamaCall = (msgs) => new Promise((resolve, reject) => {

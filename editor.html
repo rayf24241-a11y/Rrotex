@@ -2117,7 +2117,9 @@
   async function applyRobloxFileBlocks(markdown) {
     const files = studioFileBlocks(markdown);
     if (!files.length) return;
-    if (!window.rotexDesktop?.queueStudioActions || !_studioConnected) {
+    const pluginDot = document.getElementById('rxPluginDot');
+    const isConnected = _studioConnected || (pluginDot && pluginDot.className.includes('connected'));
+    if (!window.rotexDesktop?.queueStudioActions || !isConnected) {
       appendAssistantNote(`[${files.length} file block${files.length > 1 ? 's' : ''} ready — connect the Studio plugin to apply: ${files.map(f => f.path).join(', ')}]`);
       return;
     }
