@@ -297,13 +297,15 @@ local function applyStudioFile(file)
 	end
 	local scriptName = cleanName(parts[#parts])
 	local source = file.content or ""
+	local action = "Created"
 	local existing = parent:FindFirstChild(scriptName)
 	if existing and existing:IsA("LuaSourceContainer") then
-		existing.Source = source; return true, "Updated " .. file.path
+		existing:Destroy()
+		action = "Updated"
 	end
 	local obj = Instance.new(scriptClassFor(parts[#parts], source))
 	obj.Name, obj.Source, obj.Parent = scriptName, source, parent
-	return true, "Created " .. file.path
+	return true, action .. " " .. file.path
 end
 
 local function handleCreateModel(action)

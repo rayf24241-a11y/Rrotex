@@ -1089,6 +1089,11 @@ a:hover { text-decoration: underline; }
 }
 .ai-msg-assistant strong { font-weight: 700; }
 .ai-msg-assistant em { font-style: italic; opacity: 0.9; }
+.rx-apply-wrap { display:flex; align-items:center; gap:6px; margin:-2px 0 8px; flex-wrap:wrap; }
+.rx-apply-input { background:rgba(255,255,255,0.06); border:1px solid var(--rx-border); border-radius:6px; color:var(--rx-text); font:12px/1 'Consolas','Fira Code','Courier New',monospace; padding:5px 8px; flex:1; min-width:120px; outline:none; }
+.rx-apply-input:focus { border-color:rgba(255,255,255,0.25); }
+.rx-apply-btn { background:rgba(75,157,255,0.15); border:1px solid rgba(75,157,255,0.3); border-radius:6px; color:#4B9DFF; cursor:pointer; font:600 11px/1 inherit; padding:5px 10px; white-space:nowrap; flex-shrink:0; }
+.rx-apply-btn:hover { background:rgba(75,157,255,0.25); }
 
 /* Typing indicator */
 .ai-msg-typing {

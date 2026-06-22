@@ -2129,6 +2129,65 @@
     }
   }
 
+  function guessLuaPath(code) {
+    const s = (code || '').toLowerCase();
+    if (/localplayer|userinputservice|contextactionservice|playergui|startergui\.setcore/.test(s))
+      return 'StarterPlayer/StarterPlayerScripts/LocalScript.client.lua';
+    if (/^\s*local\s+\w+\s*=\s*\{\}/.test(s) && /\breturn\b/.test(s))
+      return 'ReplicatedStorage/Module.module.lua';
+    return 'ServerScriptService/Script.server.lua';
+  }
+
+  function attachLuaApplyButtons(container, markdown) {
+    const pluginDot = document.getElementById('rxPluginDot');
+    const isConnected = _studioConnected || (pluginDot && pluginDot.className.includes('connected'));
+    if (!window.rotexDesktop?.queueStudioActions || !isConnected) return;
+
+    // Extract raw lua/luau blocks (skip file: blocks — those are handled separately)
+    const rawBlocks = [];
+    const re = /```(lua|luau)\r?\n([\s\S]*?)```/gi;
+    let m;
+    while ((m = re.exec(markdown)) !== null) rawBlocks.push(m[2]);
+    if (!rawBlocks.length) return;
+
+    // Match them to rendered <pre> elements with lua/luau lang label
+    const luaPres = Array.from(container.querySelectorAll('pre.rx-md-pre')).filter(pre => {
+      const lang = pre.querySelector('.rx-md-lang');
+      return lang && /^(lua|luau)$/i.test(lang.textContent.trim());
+    });
+
+    luaPres.forEach((pre, idx) => {
+      const rawCode = rawBlocks[idx] || '';
+      const defaultPath = guessLuaPath(rawCode);
+      const wrap = document.createElement('div');
+      wrap.className = 'rx-apply-wrap';
+      const inp = document.createElement('input');
+      inp.className = 'rx-apply-input';
+      inp.type = 'text';
+      inp.value = defaultPath;
+      inp.placeholder = 'Service/path/Script.lua';
+      const btn = document.createElement('button');
+      btn.className = 'rx-apply-btn';
+      btn.type = 'button';
+      btn.textContent = 'Apply to Studio';
+      btn.addEventListener('click', async () => {
+        const path = inp.value.trim();
+        if (!path) return;
+        btn.disabled = true;
+        btn.textContent = 'Applying…';
+        const result = await window.rotexDesktop.queueStudioActions([{ type: 'apply_files', files: [{ path, content: rawCode }] }]);
+        if (result?.ok) {
+          wrap.innerHTML = `<span style="font-size:12px;color:var(--rx-muted);">[Studio: applying ${path}...]</span>`;
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Apply to Studio';
+        }
+      });
+      wrap.append(inp, btn);
+      pre.after(wrap);
+    });
+  }
+
   async function applyRobloxModelBlocks(markdown) {
     if (!window.rotexDesktop?.queueStudioActions || !_studioConnected) return;
     const regex = /```roblox-model\r?\n([\s\S]*?)```/g;
@@ -2548,6 +2607,7 @@
           await saveChatMessage(activeChatId, text, tbResult.text || '');
           await applyRobloxFileBlocks(tbResult.text || '');
           await applyRobloxModelBlocks(tbResult.text || '');
+          attachLuaApplyButtons(assistantEl, tbResult.text || '');
         }
       } catch (tbErr) {
         task1.stop(); task2.stop();
@@ -2651,6 +2711,7 @@
       // Deduct TexTokens: free daily allowance first, then purchased balance
       full = sanitizeAiText(full);
       streamDiv.innerHTML = renderMarkdown(full);
+      attachLuaApplyButtons(streamDiv, full);
 
       if (full) {
         const rates = { texbrain: 0, fast: 0.16, balanced: 1.18, smart: 1.58, 'pro-smart': 16 };
