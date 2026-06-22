@@ -7,6 +7,7 @@
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" href="/icon.png" />
   <link rel="apple-touch-icon" href="/icon.png" />
+  <script src="./dev-guard.js"></script>
   <style>
     :root {
       --bg:      #0D0F17;
@@ -117,8 +118,6 @@
   <div class="nav-section">AI Models</div>
   <a href="#models">Model Overview</a>
   <a href="#benchmark">Benchmark</a>
-  <a href="#texbrain">TexBrain 0.5-β</a>
-  <a href="#groq-limits">Groq Rate Limits</a>
 
   <div class="nav-section">Plans & Tokens</div>
   <a href="#textokens">TexTokens</a>
@@ -182,8 +181,8 @@
         <p>Groq Llama 3.3 70B. Best free-tier model for complex debugging, architecture planning, and detailed explanations.</p>
       </div>
       <div class="model-card">
-        <h4>Pro Smart <span class="badge badge-pro">PRO</span></h4>
-        <p>Claude Haiku 4.5. The highest quality model. Best code, best reasoning. Requires a Pro plan.</p>
+        <h4>Claude Haiku <span class="badge badge-free">FREE</span></h4>
+        <p>Claude Haiku 4.5. The highest quality model. Best code, best reasoning. Available to everyone and costs more TexTokens.</p>
       </div>
       <div class="model-card" style="grid-column:1/-1">
         <h4>TexBrain 0.5-β <span class="badge badge-local">LOCAL · FREE</span></h4>
@@ -279,7 +278,7 @@
               <div class="model-cell">
                 <div class="model-dot" style="background:#D97706"></div>
                 <div>
-                  <div class="model-name">Pro Smart</div>
+                  <div class="model-name">Claude Haiku</div>
                   <div class="model-sub">Claude Haiku 4.5</div>
                 </div>
               </div>
@@ -294,58 +293,6 @@
       </table>
     </div>
     <p style="font-size:12px;"><strong>Code</strong> — Luau scripting, APIs, bugs. &nbsp;<strong>Modeling</strong> — 3D logic, mesh math, Studio hierarchy. &nbsp;<strong>Animating</strong> — AnimationController, TweenService, rigging. &nbsp;<strong>Audio</strong> — SoundService, music, mixing logic. &nbsp;<strong>Smarts</strong> — Reasoning, planning, complex queries.</p>
-  </section>
-
-  <!-- ══ TexBrain ══ -->
-  <section id="texbrain">
-    <h2>TexBrain 0.5-β</h2>
-    <p>TexBrain is ROTEX's local AI model — 100% free, runs on your PC, no rate limits, no TexTokens charged. It requires <strong>Ollama</strong> installed on your machine.</p>
-
-    <h3>Setup</h3>
-    <ol style="color:var(--muted);padding-left:20px;line-height:2;">
-      <li>Download <strong>Ollama</strong> from <code>ollama.ai</code> and install it.</li>
-      <li>Open a terminal and run: <code>ollama pull llama3.2</code></li>
-      <li>In ROTEX, open the model picker and select <strong>TexBrain 0.5-β</strong>.</li>
-    </ol>
-
-    <div class="box box-note">
-      <div class="box-icon">ℹ️</div>
-      <p>TexBrain is <strong>desktop-only</strong>. It is not available in the web version. Ollama must be running in the background for it to work.</p>
-    </div>
-
-    <h3>How it works</h3>
-    <p>TexBrain uses a two-agent pipeline under the hood:</p>
-    <ol style="color:var(--muted);padding-left:20px;line-height:2;">
-      <li><strong>Clarifier agent</strong> — reads your message and expands it into a precise, detailed task description so nothing is missed.</li>
-      <li><strong>Worker agent</strong> — receives the expanded task plus full conversation history, then generates the final response.</li>
-    </ol>
-    <p>This two-step approach produces higher-quality results from local models compared to a single direct call.</p>
-
-    <h3>Recommended models</h3>
-    <p>ROTEX auto-detects which Ollama model to use. Best picks (in order):</p>
-    <pre><code>ollama pull llama3.2        # Recommended — fast, good quality
-ollama pull llama3          # Alternative
-ollama pull mistral         # Good coding skills
-ollama pull phi3            # Lightweight if RAM is limited</code></pre>
-  </section>
-
-  <!-- ══ Groq Rate Limits ══ -->
-  <section id="groq-limits">
-    <h2>Groq Rate Limits</h2>
-    <div class="refill-banner">
-      <div class="refill-icon">⏱️</div>
-      <div class="refill-text">
-        <h4>Groq resets every 24 hours at midnight UTC</h4>
-        <p>Groq's free tier has a <strong>daily token limit</strong> that resets at midnight UTC. Per-minute limits reset every 60 seconds. If you hit a rate limit, wait ~1 minute and try again — or switch to <strong>TexBrain 0.5-β</strong> (completely unlimited, runs locally) while you wait.</p>
-      </div>
-    </div>
-    <p>Tips to reduce Groq token usage:</p>
-    <ul style="color:var(--muted);padding-left:20px;line-height:2;">
-      <li>Use <strong>Fast</strong> for simple questions — it burns the fewest tokens.</li>
-      <li>Keep messages short and specific — fewer input tokens = faster refill.</li>
-      <li>Switch to <strong>TexBrain 0.5-β</strong> for unlimited free usage.</li>
-      <li>Upgrade to <strong>Pro</strong> for Claude Haiku which has generous limits.</li>
-    </ul>
   </section>
 
   <!-- ══ TexTokens ══ -->
@@ -370,7 +317,7 @@ ollama pull phi3            # Lightweight if RAM is limited</code></pre>
         <div class="sub">TexTokens per output token</div>
       </div>
       <div class="token-card">
-        <h4>Pro Smart</h4>
+        <h4>Claude Haiku</h4>
         <div class="amount">16x</div>
         <div class="sub">TexTokens per output token</div>
       </div>
@@ -389,11 +336,11 @@ ollama pull phi3            # Lightweight if RAM is limited</code></pre>
     <div class="model-cards">
       <div class="model-card">
         <h4>Free</h4>
-        <p>150,000 TexTokens per day · 1M per month. Access to Fast, Balanced (limited), Smart (limited). No Claude Haiku. No agent mode. One account per person — multi-accounts are detected and blocked.</p>
+        <p>150,000 TexTokens per day · 1M per month. Access to Fast, Balanced (limited), Smart (limited), and Claude Haiku. No agent mode. One account per person — multi-accounts are detected and blocked.</p>
       </div>
       <div class="model-card" style="border-color:rgba(255,214,10,0.4);">
         <h4 style="color:var(--yellow)">Pro — $20/mo</h4>
-        <p>40M TexTokens per month. All models including Claude Haiku. Agent mode + Super Agent. Up to 5 projects. Extra packs available for $2.50/1M TT.</p>
+        <p>40M TexTokens per month. More budget for all models including Claude Haiku. Agent mode + Super Agent. Up to 5 projects. Extra packs available for $2.50/1M TT.</p>
       </div>
     </div>
   </section>

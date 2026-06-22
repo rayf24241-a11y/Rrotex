@@ -9,6 +9,7 @@
   <link rel="icon" type="image/png" href="/icon.png" />
   <link rel="apple-touch-icon" href="/icon.png" />
   <link rel="stylesheet" href="./editor.css" />
+  <script src="./dev-guard.js"></script>
   <style>
     /* ═══════════════════════════════════════════════════════
        NEW ROTEX SHELL  —  Yellow + Blue theme, no file tree
@@ -841,8 +842,16 @@
         <div style="width:44px;height:44px;background:var(--rx-yellow);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#0D0F17;letter-spacing:-0.5px;box-shadow:0 0 20px var(--rx-yellow-d);">RX</div>
         <div>
           <div style="font-size:20px;font-weight:800;letter-spacing:.04em;">ROTEX</div>
-          <div id="rxLSVersion" style="font-size:11px;color:var(--rx-muted);margin-top:1px;">v1.0.0</div>
+          <div id="rxLSVersion" style="font-size:11px;color:var(--rx-muted);margin-top:1px;">v1.03.4</div>
         </div>
+      </div>
+
+      <div id="rxStartTut" style="margin:-14px 0 18px;padding:12px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--rx-border);border-radius:10px;color:var(--rx-muted);font-size:11px;line-height:1.7;">
+        <div style="color:var(--rx-text);font-weight:800;font-size:12px;margin-bottom:6px;">First launch setup</div>
+        <div><span style="color:var(--rx-yellow);font-weight:800;">1.</span> ROTEX installs the Roblox Studio plugin automatically.</div>
+        <div><span style="color:var(--rx-yellow);font-weight:800;">2.</span> Open Roblox Studio and load any place.</div>
+        <div><span style="color:var(--rx-yellow);font-weight:800;">3.</span> Enable HTTP Requests in Game Settings > Security.</div>
+        <div><span style="color:var(--rx-yellow);font-weight:800;">4.</span> In Studio, open the ROTEX plugin and click Connect to ROTEX.</div>
       </div>
 
       <!-- Row 1: Updates -->
@@ -1318,8 +1327,10 @@
         goPage('login');
         return;
       }
+      await initFirebaseClient();
       applyStoredDesktopUser(stored);
       await loadChats(stored.uid);
+      await syncTokensFromFirestore(stored.uid, { force: true });
       registerStudioEvents();
       return;
     }
@@ -1332,12 +1343,7 @@
     }
 
     try {
-      const res  = await fetch('/api/firebase-config');
-      const data = await res.json();
-      if (data.configured) {
-        const app = initializeApp(data.firebaseConfig);
-        auth = getAuth(app);
-        db   = getFirestore(app);
+      if (await initFirebaseClient()) {
         await new Promise((resolve) => {
           let bootDone = false;
           onAuthStateChanged(auth, async (user) => {
@@ -1347,6 +1353,7 @@
                 document.getElementById('rxUserAvatar').textContent = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
                 document.getElementById('rxProfileName').textContent = (user.displayName || user.email || 'Account').split(' ')[0];
                 await loadChats(user.uid);
+                await syncTokensFromFirestore(user.uid, { force: true });
               }
               return;
             }
@@ -1392,17 +1399,34 @@
     window.location.href = files[page] || (page + '.html');
   }
 
+  async function initFirebaseClient() {
+    if (db && auth) return true;
+    try {
+      const base = window.rotexDesktop ? 'https://rrotex.com' : '';
+      const res  = await fetch(`${base}/api/firebase-config`);
+      const data = await res.json();
+      if (!data.configured) return false;
+      const app = initializeApp(data.firebaseConfig);
+      auth = getAuth(app);
+      db   = getFirestore(app);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /* ── Pro pass refresh ───────────────────────────────────────── */
   // Called once on boot. Silently renews the signed pass if it's within
   // 14 days of expiry, and removes it if the subscription was cancelled.
-  async function maybeRefreshProPass() {
+  async function maybeRefreshProPass(force = false) {
     const pass = localStorage.getItem('rotex_pro_pass');
-    if (!pass) return;
+    if (!pass) { updateSidebarPlan(); return; }
     try {
       const parts = pass.split('.');
-      if (parts.length < 2) { localStorage.removeItem('rotex_pro_pass'); return; }
+      if (parts.length < 2) { localStorage.removeItem('rotex_pro_pass'); updateSidebarPlan(); return; }
       const payload = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
-      const daysLeft = (Number(payload.exp) - Date.now()) / 86400000;
+      const daysLeft = force ? 0 : (Number(payload.exp) - Date.now()) / 86400000;
+      updateSidebarPlan();
       if (daysLeft > 14) return; // plenty of time left — no need to call the server yet
     } catch { return; }
 
@@ -1416,7 +1440,7 @@
       const data = await r.json().catch(() => ({}));
       if (data.refreshed && data.proPass) {
         localStorage.setItem('rotex_pro_pass', data.proPass);
-      } else if (data.cancelled) {
+      } else if (data.cancelled || r.status === 401) {
         localStorage.removeItem('rotex_pro_pass');
         // Show a non-blocking toast so the user knows their Pro expired
         const t = document.createElement('div');
@@ -1425,21 +1449,49 @@
         document.body.appendChild(t);
         setTimeout(() => t.remove(), 8000);
       }
+      updateSidebarPlan();
       // else: server error or network issue — keep existing pass, don't log the user out
     } catch { /* network failure — silently keep the existing pass */ }
   }
   maybeRefreshProPass();
 
   /* ── Sync purchased TexToken balance from Firestore ─────────── */
-  async function syncTokensFromFirestore(uid) {
+  async function syncTokensFromFirestore(uid, options = {}) {
+    try {
+      const stored = JSON.parse(localStorage.getItem('rotex_desktop_auth') || '{}');
+      const token = stored.uid === uid ? String(stored.token || '') : '';
+      if (token) {
+        const base = window.rotexDesktop ? 'https://rrotex.com' : '';
+        const res = await fetch(`${base}/api/billing-sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid,
+            authToken: token,
+            localBalance: localStorage.getItem('rotex_textokens_balance') || 0,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.ok) {
+          const balance = Math.max(0, Math.floor(Number(data.balance) || 0));
+          if (window.rotexTokens) window.rotexTokens.savePurchased(balance);
+          else localStorage.setItem('rotex_textokens_balance', String(balance));
+          return;
+        }
+      }
+    } catch {}
+
+    if (!db) await initFirebaseClient();
     if (!db || !uid) return;
     try {
       const snap = await getDoc(doc(db, 'users', uid, 'billing', 'textokens'));
       if (!snap.exists()) return;
       const cloudBal = Math.max(0, Math.floor(Number(snap.data()?.balance || 0)));
       const localBal = Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
-      if (cloudBal > localBal) {
-        localStorage.setItem('rotex_textokens_balance', String(cloudBal));
+      const best = Math.max(cloudBal, localBal);
+      if (best !== localBal || options.force) {
+        if (window.rotexTokens) window.rotexTokens.savePurchased(best);
+        else localStorage.setItem('rotex_textokens_balance', String(best));
         if (window.rotexTokens) window.rotexTokens.refreshBalanceDisplay();
       }
     } catch {}
@@ -1873,6 +1925,27 @@
     </div>`;
   }
 
+  let _studioPluginInstallPromise = null;
+  async function ensureStudioPluginInstalled() {
+    if (!window.rotexDesktop?.checkStudioPlugin || !window.rotexDesktop?.installStudioPlugin) {
+      return { ok: false, installed: false, error: 'Desktop plugin installer is not available.' };
+    }
+    if (_studioPluginInstallPromise) return _studioPluginInstallPromise;
+    _studioPluginInstallPromise = (async () => {
+      const checked = await window.rotexDesktop.checkStudioPlugin().catch(() => null);
+      if (checked?.installed) return checked;
+      const installed = await window.rotexDesktop.installStudioPlugin().catch((err) => ({
+        ok: false,
+        installed: false,
+        error: err?.message || 'Install failed',
+      }));
+      return installed;
+    })();
+    const result = await _studioPluginInstallPromise;
+    _studioPluginInstallPromise = null;
+    return result;
+  }
+
   function setupBrowserPanel(token, projectName) {
     const copyBtn = document.getElementById('rxCopyToken');
     if (!copyBtn) return;
@@ -1916,6 +1989,24 @@
       }).catch(() => {});
     }
 
+    if (window.rotexDesktop?.installStudioPlugin) {
+      installBtn.textContent = 'Installing...';
+      installBtn.disabled = true;
+      ensureStudioPluginInstalled().then(result => {
+        if (result?.ok || result?.installed) {
+          markPluginInstalled();
+          if (result?.path) installBtn.title = `Installed to ${result.path}`;
+        } else {
+          installBtn.textContent = 'Failed - retry';
+          installBtn.disabled = false;
+          if (result?.error) installBtn.title = result.error;
+        }
+      }).catch(() => {
+        installBtn.textContent = 'Failed - retry';
+        installBtn.disabled = false;
+      });
+    }
+
     if (_pluginInstalled) {
       installBtn.textContent = '✓ Installed';
       installBtn.classList.add('done');
@@ -1928,7 +2019,7 @@
       installBtn.textContent = 'Installing...';
       installBtn.disabled = true;
       const [result] = await Promise.all([
-        window.rotexDesktop.installStudioPlugin(),
+        ensureStudioPluginInstalled(),
         new Promise(r => setTimeout(r, 1200)),
       ]);
       if (result?.ok) {
@@ -1957,27 +2048,86 @@
     msgs.appendChild(div);
   }
 
+  // ── Auto-compact: trim old messages every 60 s when history grows long ──
+  const COMPACT_THRESHOLD = 20; // compact when chat has more than this many messages
+  const COMPACT_KEEP      = 14; // keep this many messages after compacting
+  setInterval(() => {
+    const chat = allChats.find(c => c.id === activeChatId);
+    if (!chat || !chat.messages || chat.messages.length <= COMPACT_THRESHOLD) return;
+    const msgsEl = document.getElementById('rxAiMessages');
+    if (!msgsEl) return;
+
+    // Show countdown note
+    let seconds = 3;
+    const noteEl = document.createElement('div');
+    noteEl.className = 'ai-msg ai-msg-system';
+    noteEl.textContent = `compacting conversation (${seconds} seconds)`;
+    msgsEl.appendChild(noteEl);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+
+    const tick = setInterval(() => {
+      seconds--;
+      if (seconds <= 0) {
+        clearInterval(tick);
+        noteEl.remove();
+
+        // Trim data
+        const trimCount = chat.messages.length - COMPACT_KEEP;
+        chat.messages = chat.messages.slice(trimCount);
+
+        // Persist
+        const local = readLocalChats();
+        const idx = local.findIndex(c => c.id === activeChatId);
+        if (idx >= 0) { local[idx].messages = chat.messages; writeLocalChats(local); }
+
+        // Trim DOM — remove non-system message bubbles beyond the keep limit
+        const allBubbles = Array.from(msgsEl.querySelectorAll('.ai-msg:not(.ai-msg-system)'));
+        const dropCount = allBubbles.length - COMPACT_KEEP;
+        for (let i = 0; i < dropCount; i++) allBubbles[i].remove();
+      } else {
+        noteEl.textContent = `compacting conversation (${seconds} seconds)`;
+      }
+    }, 1000);
+  }, 60000);
+
   function studioFileBlocks(markdown) {
     const blocks = [];
     const re = /```file:([^\n\r]+)[\r\n]+([\s\S]*?)```/g;
     let match;
     while ((match = re.exec(markdown || ''))) {
-      const filePath = (match[1] || '').trim();
+      const filePath = normalizeStudioFilePath((match[1] || '').trim());
       const content = match[2] || '';
-      if (/\.lua$/i.test(filePath) && /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterGui|Workspace|ServerStorage|StarterPack)\//i.test(filePath)) {
+      if (/\.lua$/i.test(filePath) && /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterGui|Workspace|ServerStorage|StarterPack|ReplicatedFirst)\//i.test(filePath)) {
+        blocks.push({ path: filePath, content });
+      }
+    }
+    const looseRe = /```file:((?:ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack|ReplicatedFirst)\/\S+?\.lua)[ \t]+([\s\S]*?)```/gi;
+    while ((match = looseRe.exec(markdown || ''))) {
+      const filePath = normalizeStudioFilePath((match[1] || '').trim());
+      const content = (match[2] || '').trimStart();
+      if (content && !blocks.some(block => block.path.toLowerCase() === filePath.toLowerCase())) {
         blocks.push({ path: filePath, content });
       }
     }
     return blocks;
   }
 
+  function normalizeStudioFilePath(filePath) {
+    return String(filePath || '')
+      .replace(/^StarterPlayerScripts\//i, 'StarterPlayer/StarterPlayerScripts/')
+      .replace(/^StarterCharacterScripts\//i, 'StarterPlayer/StarterCharacterScripts/');
+  }
+
   async function applyRobloxFileBlocks(markdown) {
-    if (!window.rotexDesktop?.queueStudioActions || !_studioConnected) return;
     const files = studioFileBlocks(markdown);
     if (!files.length) return;
+    if (!window.rotexDesktop?.queueStudioActions || !_studioConnected) {
+      appendAssistantNote(`[${files.length} file block${files.length > 1 ? 's' : ''} ready — connect the Studio plugin to apply: ${files.map(f => f.path).join(', ')}]`);
+      return;
+    }
     const result = await window.rotexDesktop.queueStudioActions([{ type: 'apply_files', files }]);
     if (result?.ok) {
-      appendAssistantNote(`[Studio apply queued: ${files.map(f => f.path).join(', ')}]`);
+      appendAssistantNote(`[Studio: applying ${files.map(f => f.path).join(', ')}...]`);
     }
   }
 
@@ -2034,7 +2184,8 @@
     chat.messages.forEach(m => {
       const div = document.createElement('div');
       div.className = `ai-msg ${m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant'}`;
-      div.textContent = m.content;
+      if (m.role === 'assistant') div.innerHTML = renderMarkdown(m.content);
+      else div.textContent = m.content;
       msgs.appendChild(div);
     });
     msgs.scrollTop = msgs.scrollHeight;
@@ -2119,6 +2270,110 @@
     }
   });
 
+  function makeAiTask(label) {
+    const el = document.createElement('div');
+    el.className = 'rx-tb-task';
+    const cube = document.createElement('div');
+    cube.className = 'rx-tb-cube';
+    const lbl = document.createElement('span');
+    lbl.className = 'rx-tb-task-label';
+    lbl.textContent = label;
+    const timer = document.createElement('span');
+    timer.className = 'rx-tb-task-time';
+    timer.textContent = '0:00';
+    el.append(cube, lbl, timer);
+    let secs = 0;
+    const iv = setInterval(() => {
+      secs++;
+      timer.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    }, 1000);
+    el.markDone = () => { clearInterval(iv); el.classList.add('done'); };
+    el.stop = () => clearInterval(iv);
+    return el;
+  }
+
+  function startCloudTaskProgress(anchorEl, msgs) {
+    const wrap = document.createElement('div');
+    wrap.className = 'rx-tb-tasks';
+    const tasks = [
+      makeAiTask('reading task...'),
+      makeAiTask('thinking what to do to task...'),
+      makeAiTask('working on task...'),
+    ];
+    wrap.append(tasks[0]);
+    anchorEl.after(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+    const timers = [
+      setTimeout(() => { tasks[0].markDone(); wrap.append(tasks[1]); msgs.scrollTop = msgs.scrollHeight; }, 1200),
+      setTimeout(() => { tasks[1].markDone(); wrap.append(tasks[2]); msgs.scrollTop = msgs.scrollHeight; }, 2600),
+    ];
+    return {
+      finish() {
+        timers.forEach(clearTimeout);
+        tasks.forEach(task => {
+          if (!wrap.contains(task)) wrap.append(task);
+          task.markDone();
+        });
+        setTimeout(() => wrap.remove(), 350);
+      },
+      remove() {
+        timers.forEach(clearTimeout);
+        tasks.forEach(task => task.stop());
+        wrap.remove();
+      },
+    };
+  }
+
+  function sanitizeAiText(text) {
+    return String(text || '')
+      .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
+      .replace(/<analysis>[\s\S]*?(?:<\/analysis>|$)/gi, '')
+      .replace(/<\/?(think|analysis)>/gi, '')
+      .trim();
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function fmtInline(s) {
+    const parts = s.split(/(`[^`\n]+`)/g);
+    return parts.map((p, i) => {
+      if (i % 2 === 1) return `<code class="rx-md-ic">${escHtml(p.slice(1, -1))}</code>`;
+      // Split into lines first, apply per-line transforms, then join
+      const lines = p.split('\n');
+      return lines.map(line => {
+        // Bullet list item
+        const bulletMatch = line.match(/^[ \t]*[-*•] (.+)/);
+        if (bulletMatch) {
+          let inner = escHtml(bulletMatch[1]);
+          inner = inner.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+          inner = inner.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+          return `<div class="rx-md-li">${inner}</div>`;
+        }
+        let h = escHtml(line);
+        h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        h = h.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+        return h;
+      }).join('<br>');
+    }).join('');
+  }
+
+  function renderMarkdown(raw) {
+    const text = sanitizeAiText(String(raw || ''));
+    let out = '', i = 0;
+    const codeRe = /```([^\n`]*)\n([\s\S]*?)```/g;
+    let m;
+    while ((m = codeRe.exec(text)) !== null) {
+      if (m.index > i) out += fmtInline(text.slice(i, m.index));
+      const lang = escHtml((m[1] || '').trim());
+      out += `<pre class="rx-md-pre">${lang ? `<span class="rx-md-lang">${lang}</span>` : ''}${escHtml(m[2] || '')}</pre>`;
+      i = m.index + m[0].length;
+    }
+    out += fmtInline(text.slice(i));
+    return out;
+  }
+
   rxComposer.addEventListener('submit', async e => {
     e.preventDefault();
     const text = rxInput.value.trim();
@@ -2156,6 +2411,12 @@
     const mode   = document.getElementById('rxProjectMode')?.value || 'Roblox';
     const isAgent = currentMode === 'agent' || currentMode === 'supreme' || currentMode === 'plan';
     const API_BASE = window.rotexDesktop ? 'https://rrotex.com' : '';
+    const activeChat = allChats.find(c => c.id === activeChatId);
+    const projectFacts = [
+      activeChat?.projectName ? `Project name: ${activeChat.projectName}.` : '',
+      activeChat?.title ? `Chat/project title: ${activeChat.title}.` : '',
+      mode ? `Selected engine mode: ${mode}.` : '',
+    ].filter(Boolean).join(' ');
 
     // Build plugin connection context for the AI
     const pluginDot  = document.getElementById('rxPluginDot');
@@ -2167,8 +2428,9 @@
           : 'Studio plugin: NOT CONNECTED — token shown but Studio has not connected yet.')
       : '';
 
+    const projectCtx = [projectFacts, pluginCtx].filter(Boolean).join(' ');
+
     // Build message history from the current chat
-    const activeChat = allChats.find(c => c.id === activeChatId);
     const history = (activeChat?.messages || []).slice(-24).map(m => ({ role: m.role, content: m.content }));
     if (_pendingScreenshot) {
       const b64 = _pendingScreenshot.replace(/^data:image\/\w+;base64,/, '');
@@ -2223,8 +2485,8 @@
 
       const taskWrap = document.createElement('div');
       taskWrap.className = 'rx-tb-tasks';
-      const task1 = makeTask('Clarifying request…');
-      const task2 = makeTask('Generating response…');
+      const task1 = makeTask('reading task...');
+      const task2 = makeTask('working on task...');
       taskWrap.append(task1);
       typing.after(taskWrap);
       msgs.scrollTop = msgs.scrollHeight;
@@ -2261,7 +2523,7 @@
         } else {
           const assistantEl = document.createElement('div');
           assistantEl.className = 'ai-msg ai-msg-assistant';
-          assistantEl.textContent = tbResult.text || '(empty response)';
+          assistantEl.innerHTML = renderMarkdown(tbResult.text || '(empty response)');
           msgs.appendChild(assistantEl);
           msgs.scrollTop = msgs.scrollHeight;
           await saveChatMessage(activeChatId, text, tbResult.text || '');
@@ -2282,7 +2544,9 @@
       return;
     }
 
+    let cloudTasks = null;
     try {
+      cloudTasks = startCloudTaskProgress(typing, msgs);
       const texTokensLeft = window.rotexTokens ? window.rotexTokens.getTotalAvailable() : 150000;
 
       const res = await fetch(`${API_BASE}/api/chat`, {
@@ -2293,7 +2557,7 @@
           model: selectedModel,
           mode: 'editor',
           projectMode: mode,
-          projectContext: pluginCtx,
+          projectContext: projectCtx,
           agent: isAgent,
           proPass: localStorage.getItem('rotex_pro_pass') || '',
           texTokensLeft,
@@ -2302,6 +2566,7 @@
       });
 
       typing.remove();
+      if (cloudTasks) { cloudTasks.finish(); cloudTasks = null; }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -2356,7 +2621,7 @@
           try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
           if (payload.d) {
             full += payload.d;
-            streamDiv.textContent = full;
+            streamDiv.textContent = sanitizeAiText(full);
             msgs.scrollTop = msgs.scrollHeight;
           }
           if (payload.error) streamError = payload.text || 'servers are down';
@@ -2365,8 +2630,11 @@
       assistantEl.classList.remove('ai-msg-streaming');
 
       // Deduct TexTokens: free daily allowance first, then purchased balance
+      full = sanitizeAiText(full);
+      streamDiv.innerHTML = renderMarkdown(full);
+
       if (full) {
-        const rates = { texbrain: 0, fast: 0.16, balanced: 1.18, smart: 1.58, 'pro-smart': 5 };
+        const rates = { texbrain: 0, fast: 0.16, balanced: 1.18, smart: 1.58, 'pro-smart': 16 };
         const rate = rates[selectedModel] ?? 0.16;
         if (rate > 0) {
           const deduct = Math.ceil((full.length / 4) * rate);
@@ -2409,6 +2677,7 @@
       await applyRobloxModelBlocks(full);
 
     } catch (err) {
+      if (cloudTasks) cloudTasks.remove();
       typing.remove();
       const errEl = document.createElement('div');
       errEl.className = 'ai-msg ai-msg-assistant';
@@ -2484,10 +2753,10 @@
   /* ── Model selector ─────────────────────────────────────────── */
   const MODELS = [
     { id: 'texbrain',  name: 'TexBrain 0.5-β',   role: 'free',  subtitle: 'slow',  svg: TEXBRAIN_SVG, pro: false, localOnly: true,  vision: false },
-    { id: 'fast',      name: 'Fast',              role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false, vision: false },
-    { id: 'balanced',  name: 'Balanced',          role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false, vision: false },
-    { id: 'smart',     name: 'Smart',             role: 'Cheap',      svg: GROQ_SVG,     pro: false, localOnly: false, vision: false },
-    { id: 'pro-smart', name: 'Claude Haiku',      role: 'Expensive',  svg: CLAUDE_SVG,   pro: true,  localOnly: false, vision: true  },
+    { id: 'fast',      name: 'Fast',              role: 'Quick',      svg: GROQ_SVG,     pro: false, localOnly: false, vision: false },
+    { id: 'balanced',  name: 'Balanced',          role: 'Coder',      svg: GROQ_SVG,     pro: false, localOnly: false, vision: false },
+    { id: 'smart',     name: 'Smart',             role: 'Strong',     svg: GROQ_SVG,     pro: false, localOnly: false, vision: false },
+    { id: 'pro-smart', name: 'Claude Haiku',      role: 'Premium',    svg: CLAUDE_SVG,   pro: false, localOnly: false, vision: true  },
   ];
 
   function applyModelVision(modelId) {
@@ -2626,6 +2895,55 @@
     }
   });
 
+  function currentBillingUid() {
+    if (currentUser?.uid) return currentUser.uid;
+    try {
+      const auth = JSON.parse(localStorage.getItem('rotex_desktop_auth') || '{}');
+      return auth.uid || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function hasActiveProPass() {
+    const pass = localStorage.getItem('rotex_pro_pass') || '';
+    try {
+      const payload = JSON.parse(atob(pass.split('.', 2)[0].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.plan === 'pro' && Number(payload.exp) > Date.now();
+    } catch {
+      return false;
+    }
+  }
+
+  function updateSidebarPlan() {
+    const nameEl = document.getElementById('rxSidebarUserName');
+    if (!nameEl) return;
+    let planEl = document.getElementById('rxSidebarPlan');
+    if (!planEl) {
+      planEl = document.createElement('div');
+      planEl.id = 'rxSidebarPlan';
+      planEl.style.cssText = 'font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      nameEl.insertAdjacentElement('afterend', planEl);
+    }
+    const pro = hasActiveProPass();
+    planEl.textContent = pro ? 'Pro' : 'Free';
+    planEl.style.color = pro ? 'var(--rx-yellow)' : 'var(--rx-muted)';
+  }
+  window.updateSidebarPlan = updateSidebarPlan;
+
+  async function refreshBillingFromCloud() {
+    const uid = currentBillingUid();
+    if (uid) await syncTokensFromFirestore(uid, { force: true });
+    await maybeRefreshProPass(true);
+    updateSidebarPlan();
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshBillingFromCloud();
+  });
+  window.addEventListener('focus', refreshBillingFromCloud);
+  setInterval(refreshBillingFromCloud, 120000);
+
   async function openWithPurchaseCallback(baseUrl) {
     if (window.rotexDesktop?.startPurchaseServer) {
       try {
@@ -2640,6 +2958,7 @@
 
   document.getElementById('rxTexTokensRow').addEventListener('click', (e) => {
     if (e.target.closest('#rxBuyTokens')) return;
+    refreshBillingFromCloud();
     openWithPurchaseCallback('https://www.rrotex.com/tokens');
   });
 
@@ -2669,10 +2988,11 @@
       nameEl.textContent = name || 'Not signed in';
 
       document.getElementById('rxSidebarUserEmail').textContent = email;
+      updateSidebarPlan();
     } catch {}
   })();
   document.getElementById('rxProfileRow').addEventListener('click', () => {
-    if (window.rotexDesktop) window.rotexDesktop.openExternal('https://www.rrotex.com/account');
+    if (window.rotexDesktop) openWithPurchaseCallback('https://www.rrotex.com/account');
     else window.open('/account', '_blank');
   });
 
@@ -2690,7 +3010,8 @@
 
       let _updateDone = false;
       let _pluginConnected = false;
-      let _ver = '1.0.0';
+      let _ver = '1.3.4';
+      function displayVersion(ver) { return ver === '1.3.4' ? '1.03.4' : ver; }
 
       function lsIcon(n, state) {
         const el = document.getElementById('rxLSI' + n);
@@ -2744,8 +3065,8 @@
       });
 
       // ── Now fetch version (await is safe — plugin handler already registered) ──
-      _ver = await window.rotexDesktop.getVersion().catch(() => '1.0.0');
-      document.getElementById('rxLSVersion').textContent = 'v' + _ver;
+      _ver = await window.rotexDesktop.getVersion().catch(() => '1.3.4');
+      document.getElementById('rxLSVersion').textContent = 'v' + displayVersion(_ver);
 
       // ── Update event listeners ───────────────────────────────────
       window.rotexDesktop.onUpdateAvailable(info => {
@@ -2764,7 +3085,7 @@
         lsSub(1, '');
         setTimeout(() => window.rotexDesktop.installUpdate(), 1500);
       });
-      window.rotexDesktop.onUpdateNotAvailable(() => markUpdateDone('Up to date', 'v' + _ver));
+      window.rotexDesktop.onUpdateNotAvailable(() => markUpdateDone('Up to date', 'v' + displayVersion(_ver)));
       window.rotexDesktop.onUpdateError(() => markUpdateFail());
 
       document.getElementById('rxLSRetry').addEventListener('click', () => {
@@ -2777,7 +3098,7 @@
 
       window.rotexDesktop.checkForUpdates();
       // Safety timeout — if no update event fires in 6s, assume up-to-date
-      setTimeout(() => { if (!_updateDone) markUpdateDone('Up to date', 'v' + _ver); }, 6000);
+      setTimeout(() => { if (!_updateDone) markUpdateDone('Up to date', 'v' + displayVersion(_ver)); }, 6000);
 
       // ── Studio plugin install check ──────────────────────────────
       lsSub(2, 'Checking installation…');
@@ -2786,10 +3107,28 @@
         if (r?.installed) {
           lsSub(2, 'Plugin found — open Studio and click Connect to ROTEX');
         } else {
-          lsIcon(2, 'fail');
-          lsLabel(2, 'Plugin not installed');
-          lsSub(2, 'Install it first, then open Studio and connect');
-          document.getElementById('rxLSInstall').style.display = '';
+          lsLabel(2, 'Installing Studio plugin');
+          lsSub(2, 'Step 1: installing ROTEX into Roblox Studio...');
+          ensureStudioPluginInstalled().then(result => {
+            if (_pluginConnected) return;
+            if (result?.ok || result?.installed) {
+              lsIcon(2, 'â‹¯');
+              lsLabel(2, 'Plugin installed');
+              lsSub(2, 'Step 2: open Studio and click Connect to ROTEX');
+              document.getElementById('rxLSInstall').style.display = 'none';
+            } else {
+              lsIcon(2, 'fail');
+              lsLabel(2, 'Plugin install failed');
+              lsSub(2, result?.error || 'Click retry to install it, then open Studio and connect');
+              document.getElementById('rxLSInstall').style.display = '';
+            }
+          }).catch(() => {
+            if (_pluginConnected) return;
+            lsIcon(2, 'fail');
+            lsLabel(2, 'Plugin install failed');
+            lsSub(2, 'Click retry to install it, then open Studio and connect');
+            document.getElementById('rxLSInstall').style.display = '';
+          });
         }
       }).catch(() => {
         if (!_pluginConnected) lsSub(2, 'Open Studio and click Connect to ROTEX');
@@ -2798,7 +3137,7 @@
       document.getElementById('rxLSInstall').addEventListener('click', async () => {
         const btn = document.getElementById('rxLSInstall');
         btn.textContent = 'Installing…'; btn.disabled = true;
-        const r = await window.rotexDesktop.installStudioPlugin();
+        const r = await ensureStudioPluginInstalled();
         if (r?.ok) {
           btn.style.display = 'none';
           lsIcon(2, '⋯'); lsLabel(2, 'Plugin installed');

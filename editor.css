@@ -1047,6 +1047,49 @@ a:hover { text-decoration: underline; }
   width: 100%;
 }
 
+/* Rendered markdown inside assistant bubbles */
+.ai-msg-assistant pre.rx-md-pre {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 6px 0;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: 'Consolas','Fira Code','Courier New',monospace;
+  white-space: pre;
+}
+.ai-msg-assistant .rx-md-lang {
+  display: block;
+  font-size: 10px;
+  color: var(--quiet);
+  margin-bottom: 6px;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.ai-msg-assistant code.rx-md-ic {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Consolas','Fira Code','Courier New',monospace;
+}
+.ai-msg-assistant .rx-md-li {
+  display: block;
+  padding-left: 14px;
+  position: relative;
+  margin: 2px 0;
+}
+.ai-msg-assistant .rx-md-li::before {
+  content: '•';
+  position: absolute;
+  left: 4px;
+}
+.ai-msg-assistant strong { font-weight: 700; }
+.ai-msg-assistant em { font-style: italic; opacity: 0.9; }
+
 /* Typing indicator */
 .ai-msg-typing {
   background: rgba(255, 255, 255, 0.04);

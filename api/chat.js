@@ -62,7 +62,7 @@ function isMultiAccount(ip, uid, email) {
   uidSet.add(uid);
   return uidSet.size > 1; // two or more accounts on the same IP today
 }
-const GROQ_BUSY_TEXT = 'This AI is being used too much. Please use a different AI and go to this one later.';
+const GROQ_BUSY_TEXT = 'That model is busy right now. Try Smart, Claude Haiku, or TexBrain while it cools down.';
 const OPENROUTER_OUT_TEXT = 'ai is being used to much! please purchase pro to bypass this!';
 
 function _today() { return new Date().toISOString().slice(0, 10); }
@@ -249,13 +249,14 @@ module.exports = async function handler(request, response) {
         'You are ROTEX AI, the assistant inside the ROTEX desktop and web app for game developers. ROTEX is primarily used for Roblox game development.',
         buildEngineSection(projectMode || 'Roblox'),
         'Keep all replies short and direct. Answer the actual question — no intros, no "Great question!", no capability lists, no marketing. 2-4 sentences max for simple questions.',
+        'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
         'Never start a response with "Certainly", "Sure", "Of course", "Absolutely", or similar filler.',
         'Use Markdown in your responses: **bold** for emphasis, `code` for inline code, fenced code blocks for multi-line code.',
-        'When asked what models are available or to list the models, output EXACTLY these four lines and nothing else — no intro, no outro:\n**Fast** (Groq Llama 3.1 8B Instant, Free, 0.16x TexTokens/output token) — Cheap\n**Balanced** (Groq Qwen3 32B, Free limited, 1.18x TexTokens/output token) — Normal\n**Smart** (Groq Llama 3.3 70B Versatile, Free small test, 1.58x TexTokens/output token) — Normal\n**Pro Smart** (Claude Haiku 4.5, Pro only, 16x TexTokens/output token) — Expensive',
+        'When asked what models are available or to list the models, output EXACTLY these four lines and nothing else — no intro, no outro:\n**Fast** (Groq Llama 3.1 8B Instant, Free, 0.16x TexTokens/output token) — Cheap\n**Balanced** (Groq Qwen3 32B, Free limited, 1.18x TexTokens/output token) — Normal\n**Smart** (Groq Llama 3.3 70B Versatile, Free small test, 1.58x TexTokens/output token) — Normal\n**Claude Haiku** (Claude Haiku 4.5, Free, 16x TexTokens/output token) — Expensive',
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
-        `ROTEX model ranking, best to worst: 1st Pro Smart (Claude Haiku 4.5, Pro only) → 2nd Smart (Llama 3.3 70B) → 3rd Balanced (Qwen3 32B) → 4th Fast (Llama 3.1 8B). If asked which is best: Pro Smart. If asked which is worst or least powerful: Fast. Never claim to be the best unless you are Pro Smart.`,
+        `ROTEX model ranking, best to worst: 1st Claude Haiku (Claude Haiku 4.5) → 2nd Smart (Llama 3.3 70B) → 3rd Balanced (Qwen3 32B) → 4th Fast (Llama 3.1 8B). If asked which is best: Claude Haiku. If asked which is worst or least powerful: Fast.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person (multi-account detected and blocked), Fast free, Balanced/Smart have daily limits, no Claude Haiku. Pro: $20/month, 40M TexTokens/month, all models, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens. TexToken rates — Fast: 0.2x, Balanced: 0.75x, Smart: 1x, Pro Smart: 6x. Agent mode 2x cost, Super Agent 4x.',
+        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person (multi-account detected and blocked), all models including Claude Haiku, with heavier models costing more TexTokens. Pro: $20/month, 40M TexTokens/month, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens. TexToken rates — Fast: 0.16x output, Balanced: 1.18x output, Smart: 1.58x output, Claude Haiku: 16x output. Agent mode 2x cost, Super Agent 4x.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
@@ -414,7 +415,7 @@ SCRIPT TYPES:
 
 KEY SERVICES (always get via game:GetService):
 - Players — player added/removed, character spawning, UserId
-- DataStoreService — persistent player data (GlobalDataStore, OrderedDataStore); always pcall saves/loads; use UpdateAsync over SetAsync for safety
+- DataStoreService — persistent player data (GlobalDataStore, OrderedDataStore); always pcall saves/loads; use UpdateAsync over SetAsync for safety. NOTE: DataStoreService is DISABLED in Roblox Studio by default. To test DataStore code in Studio, the user must go to Game Settings > Security > Enable Studio Access to API Services. Always mention this when writing DataStore code.
 - ReplicatedStorage — shared instances and RemoteEvents/RemoteFunctions
 - ServerScriptService — server Scripts
 - TweenService — smooth animations on any property; use TweenInfo with EasingStyle/Direction
@@ -451,6 +452,8 @@ end)
 \`\`\`
 
 ROBLOX-SPECIFIC GOTCHAS:
+- Never invent Roblox APIs, services, events, or properties. If you need a custom RemoteEvent/BindableEvent, create it in the file block before using it. Do not use fake members like ReplicatedStorage.OnGameStart unless the project context shows that exact instance already exists.
+- There is no general "game start" event in ReplicatedStorage. For server startup, code runs when the Script starts. For players joining, use Players.PlayerAdded. For character spawn, use player.CharacterAdded.
 - WaitForChild() when accessing instances that may not exist yet (especially cross-script)
 - Touched events fire many times per second — use a debounce table
 - Character is loaded async: player.CharacterAdded:Wait() or CharacterAppearanceLoaded
@@ -687,12 +690,17 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'You are ROTEX AI, the coding assistant inside the ROTEX desktop app chat.',
     `You are running as the **${selected.name}** model (${selected.providerName}).`,
     buildEngineSection(projectMode || 'Roblox'),
-    'Be direct and practical. Answer code questions with working code. Keep explanations short and put them after the code.',
+    'Be direct and practical. Answer code questions with working code. Keep explanations short.',
+    'Format responses clearly: use bullet points for multiple items, numbered steps for sequences, and headers for multi-topic answers. Avoid unbroken walls of text.',
+    'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
+    'Before writing code, internally verify every Roblox API, service, event, and property is real and exists. Never invent members. Output only verified, working code.',
     'When showing code changes for a specific file, ALWAYS use a file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. The editor shows the user a diff and an Apply button for each file block.',
+    'The file block header must contain ONLY the path. Put the code on the next line. Correct:\n```file:ServerScriptService/Example.lua\nprint("hello")\n```\nWrong: ```file:ServerScriptService/Example.lua print("hello")```.',
     'Never use placeholder comments like "rest of the code stays the same" inside file blocks — file blocks must contain the complete file.',
     'For small inline snippets that are not meant to replace a file, use normal ```lang code fences instead.',
     'If PROJECT CONTEXT says the Roblox Studio plugin is CONNECTED, treat Studio as connected even if older chat messages suggest otherwise.',
     'When Roblox Studio is connected and the user asks you to make/create/add/fix something in Roblox, output Roblox Lua in ```file:ServiceName/path/ScriptName.lua blocks using services such as ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. Do not tell the user to paste the code manually; ROTEX will apply supported file blocks to Studio.',
+    'For client scripts under StarterPlayerScripts, use paths like ```file:StarterPlayer/StarterPlayerScripts/FirstPersonCamera.client.lua, not ```file:StarterPlayerScripts/FirstPersonCamera.client.lua.',
     'To create 3D models/parts in Studio, use a ```roblox-model block with JSON. Example:\n```roblox-model\n{"name":"Castle","parent":"Workspace","parts":[{"name":"Base","size":[20,1,20],"position":[0,0,0],"color":[128,128,128],"material":"SmoothPlastic","anchored":true},{"name":"Wall","size":[20,10,1],"position":[0,5,-10],"color":[110,110,110],"material":"SmoothPlastic","anchored":true}]}\n```\nROTEX sends this to Studio which creates the real 3D objects. Each part can have: name, size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder), anchored, transparency, cancollide, scripts[{name,source}]. The model can also have a top-level "scripts" array for scripts attached to the Model itself.',
     'The PROJECT CONTEXT below contains the full source of all scripts in the user\'s game (auto-scanned when Studio connected). Read them to understand the existing codebase before suggesting changes. When modifying existing scripts, reference the exact script path from the context and output a file block for it.',
   ].filter(Boolean);
@@ -746,7 +754,8 @@ function resolveProviderCall(selected) {
 
 async function completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages, context) {
   const errors = [];
-  for (const attempt of providerCall.attempts) {
+  for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
+    const attempt = providerCall.attempts[attemptIndex];
     try {
       if (attempt.provider === 'anthropic') {
         const anthropicRequest = {
@@ -793,6 +802,10 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         continue;
       }
       if (attempt.provider === 'groq' && (insufficientCreditsError(error) || groqBusyError(error))) {
+        if (attemptIndex < providerCall.attempts.length - 1) {
+          errors.push(`${attempt.provider}: ${error?.message || error}`);
+          continue;
+        }
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
       }
       if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
@@ -829,7 +842,8 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
   sseWrite(response, { model: selected.name });
 
   const errors = [];
-  for (const attempt of providerCall.attempts) {
+  for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
+    const attempt = providerCall.attempts[attemptIndex];
     try {
       if (attempt.provider === 'anthropic') {
         await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, maxTokens);
@@ -861,6 +875,10 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         continue;
       }
       if (attempt.provider === 'groq' && (insufficientCreditsError(error) || groqBusyError(error))) {
+        if (attemptIndex < providerCall.attempts.length - 1) {
+          errors.push(`${attempt.provider}: ${error?.message || error}`);
+          continue;
+        }
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
       }
       if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
@@ -1123,7 +1141,7 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
 
   const data = await providerResponse.json();
   return {
-    text: data.choices?.[0]?.message?.content || 'No response text returned.',
+    text: sanitizeAssistantText(data.choices?.[0]?.message?.content || 'No response text returned.'),
     usage: {
       inputTokens: data.usage?.prompt_tokens || 0,
       outputTokens: data.usage?.completion_tokens || 0,
@@ -1206,12 +1224,20 @@ async function callAnthropic({ apiKey, model, messages, attachments = [], temper
     ? data.content.map((part) => part.text || '').join('').trim()
     : 'No response text returned.';
   return {
-    text,
+    text: sanitizeAssistantText(text),
     usage: {
       inputTokens: data.usage?.input_tokens || 0,
       outputTokens: data.usage?.output_tokens || 0,
     },
   };
+}
+
+function sanitizeAssistantText(text) {
+  return String(text || '')
+    .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
+    .replace(/<analysis>[\s\S]*?(?:<\/analysis>|$)/gi, '')
+    .replace(/<\/?(think|analysis)>/gi, '')
+    .trim();
 }
 
 function logProviderUsage(result, selected, context, status) {
