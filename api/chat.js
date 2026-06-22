@@ -252,11 +252,11 @@ module.exports = async function handler(request, response) {
         'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
         'Never start a response with "Certainly", "Sure", "Of course", "Absolutely", or similar filler.',
         'Use Markdown in your responses: **bold** for emphasis, `code` for inline code, fenced code blocks for multi-line code.',
-        'When asked what models are available or to list the models, output EXACTLY these four lines and nothing else — no intro, no outro:\n**Fast** (Groq Llama 3.1 8B Instant, Free, 0.16x TexTokens/output token) — Cheap\n**Balanced** (Groq Qwen3 32B, Free limited, 1.18x TexTokens/output token) — Normal\n**Smart** (Groq Llama 3.3 70B Versatile, Free small test, 1.58x TexTokens/output token) — Normal\n**Claude Haiku** (Claude Haiku 4.5, Free, 16x TexTokens/output token) — Expensive',
+        'When asked what models are available or to list the models, output EXACTLY these three lines and nothing else — no intro, no outro:\n**TexBrain thinking-β** (gpt-oss-120b · Cohere · Qwen3 Coder, Free, 0.3x TexTokens/output token) — Cheap\n**Claude Haiku** (Claude Haiku 4.5, Free, 5x TexTokens/output token) — Expensive',
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
-        `ROTEX model ranking, best to worst: 1st Claude Haiku (Claude Haiku 4.5) → 2nd Smart (Llama 3.3 70B) → 3rd Balanced (Qwen3 32B) → 4th Fast (Llama 3.1 8B). If asked which is best: Claude Haiku. If asked which is worst or least powerful: Fast.`,
+        `ROTEX model ranking: 1st Claude Haiku (best quality) → 2nd TexBrain thinking-β (cheap, multi-model). If asked which is best: Claude Haiku. If asked which is cheapest: TexBrain thinking-β.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person (multi-account detected and blocked), all models including Claude Haiku, with heavier models costing more TexTokens. Pro: $20/month, 40M TexTokens/month, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens. TexToken rates — Fast: 0.16x output, Balanced: 1.18x output, Smart: 1.58x output, Claude Haiku: 16x output. Agent mode 2x cost, Super Agent 4x.',
+        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person. Pro: $20/month, 40M TexTokens/month, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
@@ -278,7 +278,7 @@ module.exports = async function handler(request, response) {
     });
   }
 
-  const providerCall = resolveProviderCall(selected, hasImages);
+  const providerCall = resolveProviderCall(selected, cleanMessages);
   if (!providerCall) {
     response.status(500).json({
       error: 'backend_unavailable',
@@ -726,18 +726,29 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
   return parts.join('\n');
 }
 
-function resolveProviderCall(selected) {
+function pickTbThinkingModel(selected, cleanMessages) {
+  const lastUser = [...cleanMessages].reverse().find(m => m.role === 'user');
+  const raw = lastUser?.content || '';
+  const txt = (Array.isArray(raw) ? raw.filter(p => p.type === 'text').map(p => p.text).join(' ') : String(raw)).toLowerCase();
+  const isCode = /\b(write|create|make|add|build|implement|script|function|generate code|program|give me|roblox)\b/.test(txt);
+  const isTest = /\b(test|check|debug|review|error|bug|broken|validate|analyze|fix|why|what.?s wrong|doesn.?t work)\b/.test(txt);
+  if (isCode) return selected.codeModel;
+  if (isTest) return selected.testModel;
+  return selected.chatModel;
+}
+
+function resolveProviderCall(selected, cleanMessages) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-  const groqKey = process.env.GROQ_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const attempts = [];
 
-  if (selected.route === 'groq-only' && groqKey) {
+  if (selected.route === 'tb-thinking' && openRouterKey) {
+    const model = pickTbThinkingModel(selected, cleanMessages || []);
     attempts.push({
-      provider: 'groq',
-      providerModel: selected.groqModel,
-      apiKey: groqKey,
-      baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+      provider: 'openrouter',
+      providerModel: model,
+      apiKey: openRouterKey,
+      baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
     });
   }
 
