@@ -64,11 +64,25 @@ module.exports = async function handler(request, response) {
     return;
   }
 
+  const subscriptionId = session.subscription || '';
+  if (subscriptionId) {
+    const subResponse = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      { headers: { Authorization: `Bearer ${secretKey}` } },
+    );
+    const subscription = await subResponse.json().catch(() => ({}));
+    const subActive = subscription.status === 'active' || subscription.status === 'trialing';
+    if (!subResponse.ok || !subActive) {
+      response.status(403).json({ verified: false, message: 'Pro subscription is not active yet.' });
+      return;
+    }
+  }
+
   // Signed pass proves Pro status to /api/chat without a database.
   // 35 days covers the billing month; the app refreshes it via /api/refresh-pro.
   const proPass = signProPass({
     uid,
-    sub: session.subscription || '',
+    sub: subscriptionId,
     plan: 'pro',
     exp: Date.now() + 35 * 24 * 60 * 60 * 1000,
   });
@@ -76,7 +90,7 @@ module.exports = async function handler(request, response) {
   response.status(200).json({
     verified: true,
     pro: true,
-    subscriptionId: session.subscription || '',
+    subscriptionId,
     proPass,
   });
 };

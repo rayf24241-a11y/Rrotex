@@ -49,7 +49,7 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const active = subscription.status === 'active' || subscription.status === 'trialing' || subscription.status === 'past_due';
+  const active = subscription.status === 'active' || subscription.status === 'trialing';
   if (!active) {
     response.status(403).json({ refreshed: false, cancelled: true, message: 'This Pro subscription is no longer active.' });
     return;

@@ -115,15 +115,32 @@ checkoutButton.addEventListener('click', async () => {
     setCheckoutMessage('Log in or sign up before buying Pro.', true);
     return;
   }
+  if (hasActiveProPass()) {
+    setCheckoutMessage('You already have Pro.');
+    renderPlan();
+    return;
+  }
   checkoutButton.disabled = true;
   setCheckoutMessage('Opening Stripe...');
   try {
+    const authToken = await currentUser.getIdToken().catch(() => '');
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '' }),
+      body: JSON.stringify({
+        uid: currentUser.uid,
+        email: currentUser.email || '',
+        authToken,
+        desktopCallback: new URLSearchParams(window.location.search).get('desktop_callback') || '',
+        proPass: localStorage.getItem('rotex_pro_pass') || '',
+      }),
     });
     const data = await response.json();
+    if (data.alreadyPro) {
+      setCheckoutMessage(data.message || 'You already have Pro.');
+      renderPlan();
+      return;
+    }
     if (data.url) {
       window.location.href = data.url;
       return;
@@ -132,7 +149,7 @@ checkoutButton.addEventListener('click', async () => {
   } catch {
     setCheckoutMessage('Could not reach Stripe checkout. Try again.', true);
   } finally {
-    checkoutButton.disabled = false;
+    renderPlan();
   }
 });
 
@@ -151,10 +168,18 @@ creditCheckoutButton.addEventListener('click', async () => {
   creditCheckoutButton.disabled = true;
   setCreditMessage('Opening Stripe...');
   try {
+    const authToken = await currentUser.getIdToken().catch(() => '');
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', kind: 'credits', dollars }),
+      body: JSON.stringify({
+        uid: currentUser.uid,
+        email: currentUser.email || '',
+        authToken,
+        kind: 'credits',
+        dollars,
+        desktopCallback: new URLSearchParams(window.location.search).get('desktop_callback') || '',
+      }),
     });
     const data = await response.json();
     if (data.url) {
@@ -189,8 +214,7 @@ async function emailAuth(mode) {
   }
 }
 
-function notifyDesktop(payload) {
-  const port = new URLSearchParams(window.location.search).get('desktop_callback');
+function notifyDesktop(payload, port = new URLSearchParams(window.location.search).get('desktop_callback')) {
   if (!port) return;
   fetch(`http://127.0.0.1:${port}/purchase`, {
     method: 'POST',
@@ -202,6 +226,7 @@ function notifyDesktop(payload) {
 async function handleCheckoutReturn(user) {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id');
+  const desktopCallback = params.get('desktop_callback');
   if (params.get('checkout') !== 'success' || !sessionId) return;
 
   setCheckoutMessage('Verifying Pro...');
@@ -215,8 +240,8 @@ async function handleCheckoutReturn(user) {
     if (data.verified && data.proPass) {
       localStorage.setItem('rotex_pro_pass', data.proPass);
       setCheckoutMessage('Pro is active on this account.');
+      notifyDesktop({ proPass: data.proPass }, desktopCallback);
       history.replaceState('', document.title, '/account#pro');
-      notifyDesktop({ proPass: data.proPass });
     } else {
       setCheckoutMessage(data.message || 'Checkout could not be verified yet.', true);
     }
@@ -228,11 +253,14 @@ async function handleCheckoutReturn(user) {
 async function handleCreditCheckoutReturn(user) {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id');
+  const desktopCallback = params.get('desktop_callback');
   if (params.get('credits') !== 'success' || !sessionId) return;
 
   const appliedKey = `rotex_credit_session_${sessionId}`;
   if (localStorage.getItem(appliedKey)) {
     setCreditMessage('Those TexTokens were already added.');
+    await syncCreditBalanceToCloud(user, sessionId);
+    notifyDesktop({ balance: creditBalance }, desktopCallback);
     history.replaceState('', document.title, '/account#credits');
     return;
   }
@@ -252,8 +280,8 @@ async function handleCreditCheckoutReturn(user) {
     await addCredits(user, data.texTokens, sessionId);
     localStorage.setItem(appliedKey, '1');
     setCreditMessage(`Added ${formatTokens(data.texTokens)} TexTokens.`);
+    notifyDesktop({ balance: creditBalance }, desktopCallback);
     history.replaceState('', document.title, '/account');
-    notifyDesktop({ balance: creditBalance });
   } catch {
     setCreditMessage('Could not verify credit checkout. Refresh and try again.', true);
   }
@@ -295,6 +323,18 @@ async function addCredits(user, amount, sessionId) {
   }
 }
 
+async function syncCreditBalanceToCloud(user, sessionId = '') {
+  if (!db || !user) return;
+  try {
+    const ref = doc(db, 'users', user.uid, 'billing', 'textokens');
+    await setDoc(ref, {
+      balance: creditBalance,
+      updatedAt: serverTimestamp(),
+      lastStripeSession: sessionId || null,
+    }, { merge: true });
+  } catch {}
+}
+
 function normalizedCreditDollars() {
   const dollars = Math.floor(Number(creditAmount.value));
   if (!Number.isFinite(dollars) || dollars < 5 || dollars > 500) return 0;
@@ -314,13 +354,22 @@ function renderCredits() {
 
 function renderPlan() {
   if (!currentPlan) return;
+  const pro = hasActiveProPass();
+  currentPlan.textContent = pro ? 'Pro' : 'Free';
+  if (checkoutButton) {
+    checkoutButton.disabled = pro;
+    checkoutButton.textContent = pro ? 'Pro Active' : 'Upgrade to Pro';
+  }
+}
+
+function hasActiveProPass() {
   const pass = localStorage.getItem('rotex_pro_pass') || '';
-  let pro = false;
   try {
     const payload = JSON.parse(atob(pass.split('.', 2)[0].replace(/-/g, '+').replace(/_/g, '/')));
-    pro = payload.plan === 'pro' && Number(payload.exp) > Date.now();
-  } catch { /* no active pass */ }
-  currentPlan.textContent = pro ? 'Pro' : 'Free';
+    return payload.plan === 'pro' && Number(payload.exp) > Date.now();
+  } catch {
+    return false;
+  }
 }
 
 function readLocalCredits() {

@@ -10,6 +10,7 @@
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="apple-touch-icon" href="/icon.png" />
     <link rel="manifest" href="./site.webmanifest" />
+    <script src="./dev-guard.js"></script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       :root {
@@ -349,13 +350,15 @@
         if (!currentUser) return;
         const dollars = getDollars();
         if (!dollars) { setMsg('Choose a whole dollar amount between $5 and $500.', 'error'); return; }
+        const desktopCallback = new URLSearchParams(window.location.search).get('desktop_callback') || '';
         buyBtn.disabled = true;
         setMsg('Opening Stripe...');
         try {
+          const authToken = await currentUser.getIdToken().catch(() => '');
           const res  = await fetch('/api/create-checkout-session', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', kind: 'credits', dollars }),
+            body:    JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', authToken, kind: 'credits', dollars, desktopCallback }),
           });
           const data = await res.json();
           if (data.url) { window.location.href = data.url; return; }
@@ -370,10 +373,14 @@
       async function handleReturn(user) {
         const params    = new URLSearchParams(window.location.search);
         const sessionId = params.get('session_id');
+        const cbPort    = params.get('desktop_callback');
         if (params.get('credits') !== 'success' || !sessionId) return;
 
         const key = `rotex_credit_session_${sessionId}`;
         if (localStorage.getItem(key)) {
+          const currentBalance = Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
+          await syncBalanceToCloud(user, currentBalance, sessionId);
+          if (cbPort) notifyDesktop(cbPort, { balance: currentBalance });
           showSuccess('TexTokens already applied', 'Your balance is up to date.');
           history.replaceState('', document.title, '/tokens');
           return;
@@ -412,13 +419,30 @@
           const millions = bal / 1_000_000;
           const label    = (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M';
           showSuccess(`${label} TexTokens added!`, 'Your balance has been updated.');
+          if (cbPort) notifyDesktop(cbPort, { balance: next });
           history.replaceState('', document.title, '/tokens');
-          // Notify desktop app if opened via callback port
-          const cbPort = new URLSearchParams(window.location.search).get('desktop_callback');
-          if (cbPort) fetch(`http://127.0.0.1:${cbPort}/purchase`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balance: next }) }).catch(() => {});
         } catch {
           setMsg('Could not verify purchase. Refresh and try again.', 'error');
         }
+      }
+
+      function notifyDesktop(port, payload) {
+        fetch(`http://127.0.0.1:${port}/purchase`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      }
+
+      async function syncBalanceToCloud(user, balance, sessionId) {
+        if (!db || !user) return;
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'billing', 'textokens'), {
+            balance: Math.max(0, Math.floor(Number(balance) || 0)),
+            updatedAt: serverTimestamp(),
+            lastStripeSession: sessionId,
+          }, { merge: true });
+        } catch {}
       }
 
       function showSuccess(title, sub) {

@@ -15,16 +15,16 @@ Model catalog:
 
 - `api/_lib/catalog.js` is the single source of truth for chat routing, public model names, tiers, and per-message credit costs.
 - `/api/models` returns the public catalog for clients.
-- Only four cloud models are enabled: Fast, Balanced, Smart, and Pro Smart.
-- Fast, Balanced, and Smart use Groq only. If Groq is busy, users see `This AI is being used too much. Please use a different AI and go to this one later.`
-- Pro Smart uses Anthropic first. If Anthropic runs out of credits, ROTEX emails you and switches that request to OpenRouter.
+- Only four cloud models are enabled: Fast, Balanced, Smart, and Claude Haiku.
+- Fast, Balanced, and Smart use Groq first with configured OpenRouter fallbacks. If every route is busy, users see a short retry/switch-model message.
+- Claude Haiku uses Anthropic first. If Anthropic runs out of credits, ROTEX emails you and switches that request to OpenRouter.
 - If OpenRouter also runs out, users see `ai is being used to much! please purchase pro to bypass this!`
-- Pro unlocks Claude Haiku 4.5 through the Pro Smart model.
+- Claude Haiku 4.5 is available to everyone through the Claude Haiku model.
 
 Model access:
 
-- Free: Fast, Balanced with limits, Smart with small limits, no Claude Haiku.
-- Pro: all Groq models, Claude Haiku, Agent mode, Super Agent mode, 5 connected projects, better memory, priority speed, more file edits, more computer mode, Pro badge, and early access features.
+- Free: Fast, Balanced with limits, Smart with small limits, and Claude Haiku.
+- Pro: more TexToken budget for all models, Agent mode, Super Agent mode, 5 connected projects, better memory, priority speed, more file edits, more computer mode, Pro badge, and early access features.
 
 TexToken rates:
 
@@ -32,7 +32,7 @@ TexToken rates:
 - Fast: input `0.05`, output `0.08`, user multiplier `0.2x`
 - Balanced: input `0.29`, output `0.59`, user multiplier `0.75x`
 - Smart: input `0.59`, output `0.79`, user multiplier `1x`
-- Pro Smart / Claude Haiku: input `1`, output `5`, user multiplier `6x`
+- Claude Haiku: input `3.2x`, output `16x`, about `100x` Fast output cost
 
 ## Firebase Auth
 

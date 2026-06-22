@@ -511,30 +511,34 @@ task.spawn(function()
 		if not action then continue end
 
 		local msgs, success = {}, true
+		local function addMsg(value)
+			table.insert(msgs, tostring(value or "ok"))
+		end
 
 		if action.type == "apply_files" and type(action.files) == "table" then
 			ChangeHistoryService:SetWaypoint("ROTEX ApplyFiles")
 			for _, file in ipairs(action.files) do
-				local ok2, msg = pcall(applyStudioFile, file)
-				table.insert(msgs, ok2 and (msg or "ok") or ("Failed: " .. tostring(file and file.path or "?")))
+				local callOk, fileOk, msg = pcall(applyStudioFile, file)
+				success = success and callOk and fileOk
+				addMsg(callOk and (msg or (fileOk and "ok" or "Failed: " .. tostring(file and file.path or "?"))) or ("Failed: " .. tostring(file and file.path or "?")))
 			end
 			ChangeHistoryService:SetWaypoint("ROTEX ApplyFiles Done")
 
 		elseif action.type == "create_model" then
 			local ok2, msg = pcall(handleCreateModel, action)
-			success = ok2; table.insert(msgs, msg or tostring(ok2))
+			success = ok2; addMsg(msg or ok2)
 
 		elseif action.type == "set_property" then
 			local ok2, msg = handleSetProperty(action)
-			success = ok2; table.insert(msgs, msg)
+			success = ok2; addMsg(msg or ok2)
 
 		elseif action.type == "delete_instance" then
 			local ok2, msg = handleDeleteInstance(action)
-			success = ok2; table.insert(msgs, msg)
+			success = ok2; addMsg(msg or ok2)
 
 		elseif action.type == "select_instances" then
 			local ok2, msg = handleSelectInstances(action)
-			success = ok2; table.insert(msgs, msg)
+			success = ok2; addMsg(msg or ok2)
 
 		elseif action.type == "send_context" then
 			task.spawn(function()

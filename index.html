@@ -18,6 +18,7 @@
     <link rel="apple-touch-icon" href="/icon.png" />
     <link rel="manifest" href="./site.webmanifest" />
     <link rel="stylesheet" href="./landing.css" />
+    <script src="./dev-guard.js"></script>
   </head>
   <body>
     <nav class="nav">
@@ -74,7 +75,7 @@
           <div class="feature-card"><div class="feature-icon">D</div><h3>Daily usage</h3><p>Track today's TexToken spend before you start another desktop app task.</p></div>
           <div class="feature-card"><div class="feature-icon">M</div><h3>Monthly usage</h3><p>Watch your monthly plan usage and reset timing from the dashboard.</p></div>
           <div class="feature-card"><div class="feature-icon">P</div><h3>Current plan</h3><p>Free and Pro plan status stay visible with your account.</p></div>
-          <div class="feature-card"><div class="feature-icon">PRO</div><h3>Pro status</h3><p>Check your plan, priority access, and Pro Smart availability.</p></div>
+          <div class="feature-card"><div class="feature-icon">PRO</div><h3>Pro status</h3><p>Check your plan, priority access, and larger TexToken budget.</p></div>
           <div class="feature-card"><div class="feature-icon">$</div><h3>Download and billing</h3><p>Download the desktop app, manage Pro, and buy extra TexToken packs.</p></div>
         </div>
       </div>
@@ -158,10 +159,10 @@
             <p>1x user charge. Free users can test it with small limits.</p>
           </div>
           <div class="model-card">
-            <div class="model-tag tex">PRO</div>
-            <h3>Pro Smart</h3>
+            <div class="model-tag tex">HAIKU</div>
+            <h3>Claude Haiku</h3>
             <p class="model-role">Claude Haiku 4.5</p>
-            <p>6x user charge. Pro only. Best quality model.</p>
+            <p>Highest quality model. Available to everyone and costs more TexTokens.</p>
           </div>
         </div>
       </div>
@@ -178,8 +179,7 @@
             <ul>
               <li>100k TexTokens per day</li>
               <li>1M TexTokens per month max</li>
-              <li>Fast, Balanced with limits, and Smart with small limits</li>
-              <li>No Claude Haiku</li>
+              <li>Fast, Balanced with limits, Smart with small limits, and Claude Haiku</li>
               <li>1 small Agent task per day</li>
               <li>1 connected project</li>
               <li>Basic memory and basic file editing</li>
@@ -193,8 +193,8 @@
             <ul>
               <li>40M TexTokens per month</li>
               <li>1M TexTokens per day soft limit</li>
-              <li>All Groq models</li>
-              <li>Claude Haiku 4.5 access (best quality model)</li>
+              <li>Higher monthly TexToken budget for all models</li>
+              <li>Claude Haiku 4.5 included, same as Free, with more budget to use it</li>
               <li>Agent mode and Super Agent mode</li>
               <li>5 connected projects, better memory, priority speed, more file edits, more computer mode, Pro badge, and early access features</li>
             </ul>
@@ -210,7 +210,24 @@
           <div class="model-card">
             <div class="model-tag rod">COST</div>
             <h3>Model TexToken costs</h3>
-            <p>Fast Groq 0.2x, Balanced Groq 0.75x, Smart Groq 1x, Claude Haiku 6x.</p>
+            <div style="overflow-x:auto;margin-top:10px;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--muted);">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--text);">Name</th>
+                    <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--text);">Input</th>
+                    <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--text);">Output</th>
+                    <th style="text-align:left;padding:8px;border-bottom:1px solid var(--border);color:var(--text);">TexToken cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td style="padding:8px;border-bottom:1px solid var(--border);">Fast</td><td style="padding:8px;border-bottom:1px solid var(--border);">0.10x</td><td style="padding:8px;border-bottom:1px solid var(--border);">0.16x</td><td style="padding:8px;border-bottom:1px solid var(--border);">Cheapest</td></tr>
+                  <tr><td style="padding:8px;border-bottom:1px solid var(--border);">Balanced</td><td style="padding:8px;border-bottom:1px solid var(--border);">0.58x</td><td style="padding:8px;border-bottom:1px solid var(--border);">1.18x</td><td style="padding:8px;border-bottom:1px solid var(--border);">7.4x Fast output</td></tr>
+                  <tr><td style="padding:8px;border-bottom:1px solid var(--border);">Smart</td><td style="padding:8px;border-bottom:1px solid var(--border);">1.18x</td><td style="padding:8px;border-bottom:1px solid var(--border);">1.58x</td><td style="padding:8px;border-bottom:1px solid var(--border);">9.9x Fast output</td></tr>
+                  <tr><td style="padding:8px;">Claude Haiku</td><td style="padding:8px;">3.2x</td><td style="padding:8px;">16x</td><td style="padding:8px;">100x Fast output</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
           <div class="model-card">
             <div class="model-tag tex">TASKS</div>

@@ -247,13 +247,12 @@ function createWindow() {
   // Start directly in editor so the loading-screen gate (update + plugin check) shows immediately.
   const startupAuth = readAuthBackup();
   mainWindow.loadFile(appAssetPath(startupAuth?.uid ? 'editor.html' : 'login.html'));
+  installStudioPluginFile().catch(() => {});
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  // Inject long-lived dev pro pass into localStorage on every page load.
-  const DEV_PRO_PASS = 'eyJ1aWQiOiJkZXYtcmF5ZjI0MjQxIiwic3ViIjoiZGV2IiwicGxhbiI6InBybyIsImV4cCI6MjA5NzI3NzE1MTMzMH0.jXr6ra4H_g77_311en6AxnxMnYVmODPKzLae6odbi2Q';
   mainWindow.webContents.on('did-finish-load', () => {
     const auth = readAuthBackup();
     if (auth) {
@@ -279,10 +278,7 @@ function createWindow() {
           }
         } catch {}`;
 
-    mainWindow.webContents.executeJavaScript(
-      `${injectScript}
-       localStorage.setItem('rotex_pro_pass', ${JSON.stringify(DEV_PRO_PASS)});`
-    ).catch(() => {});
+    mainWindow.webContents.executeJavaScript(injectScript).catch(() => {});
     injectChatsIntoPage().catch(() => {});
     injectTokensIntoPage().catch(() => {});
   });
@@ -844,17 +840,23 @@ async function findStudioPluginSource() {
   return null;
 }
 
-ipcMain.handle('install-studio-plugin', async () => {
+async function installStudioPluginFile() {
   const dest = studioPluginPath();
   try {
     const src = await findStudioPluginSource();
     if (!src) throw new Error('ROTEX Roblox plugin source was not found in this app build.');
     await fs.promises.mkdir(path.dirname(dest), { recursive: true });
     await fs.promises.copyFile(src, dest);
+    const stat = await fs.promises.stat(dest);
+    if (!stat.isFile()) throw new Error('Plugin copy finished, but the installed file was not found.');
     return { ok: true, installed: true, path: dest };
   } catch (err) {
     return { ok: false, installed: false, error: err.message, path: dest };
   }
+}
+
+ipcMain.handle('install-studio-plugin', async () => {
+  return installStudioPluginFile();
 });
 
 ipcMain.handle('check-studio-plugin', async () => {
@@ -894,10 +896,10 @@ ipcMain.handle('start-purchase-server', () => {
             if (!mainWindow) return;
             const balance  = Number(data.balance  || 0);
             const proPass  = String(data.proPass  || '');
-            const balanceLine = balance > 0 ? `localStorage.setItem('rotex_textokens_balance', ${JSON.stringify(String(balance))});` : '';
+            const balanceLine = balance > 0 ? `if(window.rotexTokens) window.rotexTokens.savePurchased(${JSON.stringify(String(balance))}); else localStorage.setItem('rotex_textokens_balance', ${JSON.stringify(String(balance))});` : '';
             const proPassLine = proPass ? `localStorage.setItem('rotex_pro_pass', ${JSON.stringify(proPass)});` : '';
             mainWindow.webContents.executeJavaScript(
-              `try { ${balanceLine} ${proPassLine} if(window.rotexTokens) window.rotexTokens.refreshBalanceDisplay(); } catch {}`,
+              `try { ${balanceLine} ${proPassLine} if(window.rotexTokens) window.rotexTokens.refreshBalanceDisplay(); if(window.updateSidebarPlan) window.updateSidebarPlan(); } catch {}`,
               true
             ).catch(() => {});
           } catch { res.writeHead(400); res.end('Bad request'); }
