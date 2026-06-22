@@ -1728,6 +1728,7 @@
   let _pluginToken = localStorage.getItem('rotex_plugin_token') || '';
   let _pluginInstalled = false;
   let _studioConnected = false;
+  let _lastChatText = '';
   let _browserConnected = false;
   let _rojoStatus = 'stopped';
   let _studioEventsReady = false;
@@ -2444,8 +2445,15 @@
     let m;
     while ((m = codeRe.exec(text)) !== null) {
       if (m.index > i) out += fmtInline(text.slice(i, m.index));
-      const lang = escHtml((m[1] || '').trim());
-      out += `<pre class="rx-md-pre">${lang ? `<span class="rx-md-lang">${lang}</span>` : ''}${escHtml(m[2] || '')}</pre>`;
+      const rawLang = (m[1] || '').trim();
+      const code = escHtml(m[2] || '');
+      if (rawLang.toLowerCase().startsWith('file:')) {
+        const filePath = escHtml(rawLang.slice(5));
+        out += `<details class="rx-file-block"><summary class="rx-file-hdr">&#128196; ${filePath}</summary><pre class="rx-md-pre rx-file-code">${code}</pre></details>`;
+      } else {
+        const lang = escHtml(rawLang);
+        out += `<pre class="rx-md-pre">${lang ? `<span class="rx-md-lang">${lang}</span>` : ''}${code}</pre>`;
+      }
       i = m.index + m[0].length;
     }
     out += fmtInline(text.slice(i));
@@ -2457,6 +2465,7 @@
     const text = rxInput.value.trim();
     if (!text) return;
     if (rxInput.disabled) return;
+    _lastChatText = text;
     rxInput.value = '';
     rxInput.style.height = 'auto';
 
@@ -2652,7 +2661,7 @@
         const errEl = document.createElement('div');
         errEl.className = 'ai-msg ai-msg-assistant';
         errEl.style.cssText = 'color:var(--rx-red);display:flex;flex-direction:column;gap:8px;';
-        if (err.error === 'no_textokens' || err.error === 'rate_limited') {
+        if (err.error === 'no_textokens') {
           const now = new Date();
           const midnight = new Date(now); midnight.setHours(24, 0, 0, 0);
           const ms = midnight - now;
@@ -2665,6 +2674,14 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button onclick="document.getElementById('rxModelButton').click()" style="padding:7px 14px;background:rgba(255,255,255,0.08);border:1px solid var(--rx-border);border-radius:8px;color:var(--rx-text);font:600 12px/1 inherit;cursor:pointer;">Switch Model</button>
               <a href="https://www.rrotex.com/tokens" target="_blank" style="display:inline-flex;align-items:center;padding:7px 14px;background:#4B9DFF;color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">Buy TexTokens →</a>
+            </div>`;
+        } else if (err.error === 'rate_limited' || err.error === 'groq_busy') {
+          errEl.innerHTML = `
+            <span style="font-weight:600;">This model is getting too many requests right now.</span>
+            <span style="font-size:13px;color:var(--rx-muted);">Switch to a different model or wait a moment and try again.</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button onclick="document.getElementById('rxModelButton').click()" style="padding:7px 14px;background:rgba(255,255,255,0.08);border:1px solid var(--rx-border);border-radius:8px;color:var(--rx-text);font:600 12px/1 inherit;cursor:pointer;">Switch Model</button>
+              <button onclick="(function(el){const inp=document.getElementById('rxAiInput');if(!inp||!_lastChatText)return;el.closest('.ai-msg').remove();inp.value=_lastChatText;document.getElementById('rxComposer').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))})(this)" style="padding:7px 14px;background:rgba(255,255,255,0.08);border:1px solid var(--rx-border);border-radius:8px;color:var(--rx-text);font:600 12px/1 inherit;cursor:pointer;">Retry</button>
             </div>`;
         } else if (err.error === 'multi_account') {
           errEl.innerHTML = `<span style="font-weight:700;">Multiple accounts detected.</span><span style="font-size:12px;color:var(--rx-muted);">${err.text || 'Only one free account per person is allowed.'}</span><a href="https://www.rrotex.com/pro" target="_blank" style="display:inline-block;padding:8px 16px;background:var(--rx-yellow);color:#0D0F17;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;width:fit-content;">Upgrade to Pro →</a>`;

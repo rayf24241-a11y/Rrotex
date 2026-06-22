@@ -1089,6 +1089,11 @@ a:hover { text-decoration: underline; }
 }
 .ai-msg-assistant strong { font-weight: 700; }
 .ai-msg-assistant em { font-style: italic; opacity: 0.9; }
+.rx-file-block { border:1px solid rgba(255,255,255,0.1); border-radius:8px; margin:6px 0; overflow:hidden; }
+.rx-file-hdr { padding:8px 12px; font-size:12px; font-family:'Consolas','Fira Code','Courier New',monospace; cursor:pointer; list-style:none; display:flex; align-items:center; gap:7px; background:rgba(255,255,255,0.04); color:var(--rx-muted); user-select:none; }
+.rx-file-hdr::-webkit-details-marker { display:none; }
+.rx-file-block[open] .rx-file-hdr { border-bottom:1px solid rgba(255,255,255,0.08); color:var(--rx-text); }
+.rx-file-code { margin:0 !important; border-radius:0 !important; border:none !important; }
 .rx-apply-wrap { display:flex; align-items:center; gap:6px; margin:-2px 0 8px; flex-wrap:wrap; }
 .rx-apply-input { background:rgba(255,255,255,0.06); border:1px solid var(--rx-border); border-radius:6px; color:var(--rx-text); font:12px/1 'Consolas','Fira Code','Courier New',monospace; padding:5px 8px; flex:1; min-width:120px; outline:none; }
 .rx-apply-input:focus { border-color:rgba(255,255,255,0.25); }

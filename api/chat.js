@@ -696,6 +696,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     `You are running as the **${selected.name}** model (${selected.providerName}).`,
     buildEngineSection(projectMode || 'Roblox'),
     'Output only what is needed. No preamble ("Sure!", "Here\'s how...", "Let me help you..."), no closing filler ("Let me know if you need anything else", "Hope this helps!"). Start with the answer — code first, one short explanation line after only if the code alone is not enough.',
+    'Do NOT generate code for greetings, casual conversation, or questions that do not ask for code. If the user says "hi", "thanks", or asks a question, respond conversationally without any code blocks.',
     'Write COMPLETE, RUNNABLE code every time. File blocks must contain the full file — no placeholders, no "-- your logic here", no "-- rest of code", no "...", no truncation. Every function must be fully implemented.',
     'Format responses clearly: use bullet points for multiple items, numbered steps for sequences. Avoid walls of text. Keep explanations tight — one sentence per point.',
     'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
