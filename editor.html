@@ -639,6 +639,7 @@
     }
     .rx-tb-task-label { font-weight:600; color:var(--rx-text); }
     .rx-tb-task-time  { margin-left:auto; font-size:11px; opacity:0.55; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .rx-tb-msg { font-size:13px; color:var(--rx-text); padding:2px 4px; opacity:0.8; }
 
     /* ── Chat rename ─── */
     .rx-chat-rename {
@@ -2270,6 +2271,19 @@
     }
   });
 
+  const _taskMsgs = {
+    start: ['ok working on it!', 'on it!', 'let me check that out', 'alright, on it'],
+    mid:   ['ok done! almost there', 'got it! now onto the next part', 'nice! almost ready', 'ok! working on the response now'],
+    last:  ['ok done! lemme do the last thing', 'almost! one more step', 'got it! finishing up', 'ok! last thing'],
+  };
+  const _pickMsg = pool => pool[Math.floor(Math.random() * pool.length)];
+  function makeTaskMsg(text) {
+    const el = document.createElement('div');
+    el.className = 'rx-tb-msg';
+    el.textContent = text;
+    return el;
+  }
+
   function makeAiTask(label) {
     const el = document.createElement('div');
     el.className = 'rx-tb-task';
@@ -2300,12 +2314,20 @@
       makeAiTask('thinking what to do to task...'),
       makeAiTask('working on task...'),
     ];
-    wrap.append(tasks[0]);
+    wrap.append(makeTaskMsg(_pickMsg(_taskMsgs.start)), tasks[0]);
     anchorEl.after(wrap);
     msgs.scrollTop = msgs.scrollHeight;
     const timers = [
-      setTimeout(() => { tasks[0].markDone(); wrap.append(tasks[1]); msgs.scrollTop = msgs.scrollHeight; }, 1200),
-      setTimeout(() => { tasks[1].markDone(); wrap.append(tasks[2]); msgs.scrollTop = msgs.scrollHeight; }, 2600),
+      setTimeout(() => {
+        tasks[0].markDone();
+        wrap.append(makeTaskMsg(_pickMsg(_taskMsgs.mid)), tasks[1]);
+        msgs.scrollTop = msgs.scrollHeight;
+      }, 1200),
+      setTimeout(() => {
+        tasks[1].markDone();
+        wrap.append(makeTaskMsg(_pickMsg(_taskMsgs.last)), tasks[2]);
+        msgs.scrollTop = msgs.scrollHeight;
+      }, 2600),
     ];
     return {
       finish() {
@@ -2487,7 +2509,7 @@
       taskWrap.className = 'rx-tb-tasks';
       const task1 = makeTask('reading task...');
       const task2 = makeTask('working on task...');
-      taskWrap.append(task1);
+      taskWrap.append(makeTaskMsg(_pickMsg(_taskMsgs.start)), task1);
       typing.after(taskWrap);
       msgs.scrollTop = msgs.scrollHeight;
 
@@ -2498,7 +2520,7 @@
         // Show task2 after a short delay to reflect the 2-phase pipeline visually.
         const task2Timer = setTimeout(() => {
           task1.markDone();
-          taskWrap.append(task2);
+          taskWrap.append(makeTaskMsg(_pickMsg(_taskMsgs.last)), task2);
           msgs.scrollTop = msgs.scrollHeight;
         }, 1800);
 
