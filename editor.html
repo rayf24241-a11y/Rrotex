@@ -154,7 +154,7 @@
         <div style="width:44px;height:44px;background:var(--rx-yellow);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#0D0F17;letter-spacing:-0.5px;box-shadow:0 0 20px var(--rx-yellow-d);">RX</div>
         <div>
           <div style="font-size:20px;font-weight:800;letter-spacing:.04em;">ROTEX</div>
-        <div id="rxLSVersion" style="font-size:11px;color:var(--rx-muted);margin-top:1px;">v1.5.9</div>
+        <div id="rxLSVersion" style="font-size:11px;color:var(--rx-muted);margin-top:1px;">v1.5.10</div>
         </div>
       </div>
 
@@ -1255,10 +1255,7 @@
     let _chatAbort = null;
     const _chatHistory = [];
     let _studioWarnedAt = 0;
-
-    function _escHtml(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
+    let _activeChatId = localStorage.getItem('rotex_active_chat') || null;
 
     function _rxAddMsg(role, content) {
       const msgs = document.getElementById('rxAiMessages');
@@ -1273,6 +1270,42 @@
       return div;
     }
 
+    function _ensureChat(firstMsg) {
+      if (_activeChatId) return _activeChatId;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      _activeChatId = id;
+      localStorage.setItem('rotex_active_chat', id);
+      const projMode = document.getElementById('rxProjectMode')?.value || 'Roblox';
+      const chat = {
+        id, uid: currentUser?.uid || 'local',
+        title: firstMsg.slice(0, 50), projectMode: projMode,
+        projectName: '', createdAt: Date.now(), updatedAt: Date.now(),
+        model: selectedModel, messages: [], preview: '',
+      };
+      const existing = window.rotexReadChats?.() || [];
+      const chats = [chat, ...existing.filter(c => c.id !== id)];
+      window.rotexPersistChats?.(chats, id);
+      window.rotexRefreshChatLists?.(chats, id);
+      const bar = document.getElementById('rxActiveChatBar');
+      const label = document.getElementById('rxActiveChatLabel');
+      if (bar) bar.style.display = 'block';
+      if (label) label.textContent = firstMsg.slice(0, 40) || 'Chat';
+      return id;
+    }
+
+    function _saveMessages() {
+      if (!_activeChatId) return;
+      const chats = window.rotexReadChats?.() || [];
+      const idx = chats.findIndex(c => c.id === _activeChatId);
+      if (idx < 0) return;
+      chats[idx].messages = _chatHistory.slice(-50).map(m => ({ role: m.role, content: m.content }));
+      chats[idx].updatedAt = Date.now();
+      const lastAssist = _chatHistory.filter(m => m.role === 'assistant').slice(-1)[0];
+      if (lastAssist) chats[idx].preview = lastAssist.content.slice(0, 80);
+      window.rotexPersistChats?.(chats, _activeChatId);
+      window.rotexRefreshChatLists?.(chats, _activeChatId);
+    }
+
     document.getElementById('rxAiComposer')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const inp = document.getElementById('rxAiInput');
@@ -1280,10 +1313,10 @@
       if (!text || _chatBusy) return;
 
       if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+      _ensureChat(text);
       _rxAddMsg('user', text);
       _chatHistory.push({ role: 'user', content: text });
 
-      // Inline Studio warning (at most once per 30 s)
       const studioOk = Boolean(window.__rotexStudioConnected);
       if (!studioOk && Date.now() - _studioWarnedAt > 30000) {
         _studioWarnedAt = Date.now();
@@ -1294,8 +1327,9 @@
       if (bubble) bubble.style.opacity = '0.5';
 
       const proPass = localStorage.getItem('rotex_pro_pass') || '';
-      const texTok  = window.rotexTokens?.getRemaining?.() ?? 999999;
+      const texTok  = window.rotexTokens?.getTotalAvailable?.() ?? 999999;
       const projMode = document.getElementById('rxProjectMode')?.value || 'Roblox';
+      const authToken = currentUser?.token || '';
 
       _chatBusy = true;
       _chatAbort = new AbortController();
@@ -1305,6 +1339,7 @@
           headers: { 'Content-Type': 'application/json' },
           signal: _chatAbort.signal,
           body: JSON.stringify({
+            authToken,
             model: selectedModel || 'texbrain-thinking',
             messages: _chatHistory.slice(-14),
             mode: 'editor',
@@ -1322,6 +1357,7 @@
           const err = await resp.json().catch(() => ({}));
           if (bubble) { bubble.textContent = err.text || 'Could not reach ROTEX servers.'; bubble.style.opacity = ''; }
           _chatHistory.push({ role: 'assistant', content: err.text || 'Error' });
+          _saveMessages();
           return;
         }
 
@@ -1329,7 +1365,7 @@
         const dec = new TextDecoder();
         let buf = '', full = '';
         if (bubble) { bubble.textContent = ''; bubble.style.opacity = ''; }
-        while (true) {
+        outer: while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buf += dec.decode(value, { stream: true });
@@ -1343,11 +1379,15 @@
               full += p.d;
               if (bubble) { bubble.textContent = full; document.getElementById('rxAiMessages').scrollTop = 999999; }
             }
-            if (p.error) { full = p.text || 'Error from server.'; break; }
+            if (p.error) { full = p.text || 'Error from server.'; break outer; }
+            if (p.done) break outer;
           }
         }
         if (bubble) bubble.textContent = full || 'No response.';
-        if (full) _chatHistory.push({ role: 'assistant', content: full });
+        if (full) {
+          _chatHistory.push({ role: 'assistant', content: full });
+          _saveMessages();
+        }
       } catch (err) {
         if (bubble) bubble.textContent = err?.name === 'AbortError' ? 'Stopped.' : 'Could not reach ROTEX servers.';
         if (bubble) bubble.style.opacity = '';
@@ -1373,6 +1413,30 @@
       if (_chatAbort) _chatAbort.abort();
       _chatBusy = false;
     });
+
+    document.getElementById('rxNewChat')?.addEventListener('click', () => {
+      if (_chatBusy) return;
+      _chatHistory.length = 0;
+      _activeChatId = null;
+      localStorage.removeItem('rotex_active_chat');
+      const msgs = document.getElementById('rxAiMessages');
+      if (msgs) msgs.innerHTML = '<div class="ai-welcome-msg" id="rxWelcomeMsg"><p><strong>ROTEX AI</strong></p><p>What are you working on? I can write code, debug, explain, refactor, and plan.</p></div>';
+      const bar = document.getElementById('rxActiveChatBar');
+      if (bar) bar.style.display = 'none';
+      document.querySelectorAll('.rx-chat-item').forEach(el => el.classList.remove('active'));
+      document.getElementById('rxAiInput')?.focus();
+    });
+
+    // When a stored chat is opened via sidebar, sync _chatHistory and _activeChatId
+    window.__rotexSwitchChat = (id) => {
+      const chats = window.rotexReadChats?.() || [];
+      const chat = chats.find(c => c.id === id);
+      _activeChatId = id;
+      _chatHistory.length = 0;
+      if (chat?.messages?.length) {
+        _chatHistory.push(...chat.messages.slice(-50));
+      }
+    };
   }
 
   /* ── Start (stubs so legacy boot() call doesn't throw) ─────────────── */
