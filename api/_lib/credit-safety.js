@@ -34,7 +34,7 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
 async function checkCreditSafety({ selected, provider, model, userId, estimate, texTokensLeft, isPro = false }) {
   const balance = providerBalanceUsd();
   const outText = isPro
-    ? "You've used your 40M monthly TexTokens. They reset next month, or add a pack at rrotex.com/tokens."
+    ? "You've used your 1M TexTokens daily limit. Come back tomorrow, or buy more at rrotex.com/tokens."
     : 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.';
   if (texTokensLeft != null && Number.isFinite(Number(texTokensLeft)) && Number(texTokensLeft) <= 0) {
     return {
