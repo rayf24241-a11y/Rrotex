@@ -15,24 +15,22 @@ Model catalog:
 
 - `api/_lib/catalog.js` is the single source of truth for chat routing, public model names, tiers, and per-message credit costs.
 - `/api/models` returns the public catalog for clients.
-- Only four cloud models are enabled: Fast, Balanced, Smart, and Claude Haiku.
-- Fast, Balanced, and Smart use Groq first with configured OpenRouter fallbacks. If every route is busy, users see a short retry/switch-model message.
+- Two cloud models are enabled: TexBrain Thinking-beta and Claude Haiku.
+- TexBrain Thinking-beta is the merged chat/code/test model. It uses one configured OpenRouter model instead of exposing separate chat, code, and test sub-models.
 - Claude Haiku uses Anthropic first. If Anthropic runs out of credits, ROTEX emails you and switches that request to OpenRouter.
 - If OpenRouter also runs out, users see `ai is being used to much! please purchase pro to bypass this!`
 - Claude Haiku 4.5 is available to everyone through the Claude Haiku model.
 
 Model access:
 
-- Free: Fast, Balanced with limits, Smart with small limits, and Claude Haiku.
+- Free: TexBrain Thinking-beta and Claude Haiku.
 - Pro: more TexToken budget for all models, Agent mode, Super Agent mode, 5 connected projects, better memory, priority speed, more file edits, more computer mode, Pro badge, and early access features.
 
 TexToken rates:
 
 - `$1 = 1M TexTokens`
-- Fast: input `0.05`, output `0.08`, user multiplier `0.2x`
-- Balanced: input `0.29`, output `0.59`, user multiplier `0.75x`
-- Smart: input `0.59`, output `0.79`, user multiplier `1x`
-- Claude Haiku: input `3.2x`, output `16x`, about `100x` Fast output cost
+- TexBrain Thinking-beta: input `0.2x`, output `0.6x`
+- Claude Haiku: input `3.2x`, output `16x`, about `26.7x` TexBrain output cost
 
 ## Firebase Auth
 

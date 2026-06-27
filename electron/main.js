@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -10,8 +10,8 @@ let autoUpdater = null;
 if (app.isPackaged) {
   try {
     autoUpdater = require('electron-updater').autoUpdater;
-    autoUpdater.autoDownload = false;        // never download without user action
-    autoUpdater.autoInstallOnAppQuit = false; // never silently install on quit
+    autoUpdater.autoDownload = true;         // download in background as soon as update is found
+    autoUpdater.autoInstallOnAppQuit = true; // install automatically when the user closes the app
     autoUpdater.logger = null;               // suppress console noise
   } catch {
     autoUpdater = null;
@@ -22,7 +22,6 @@ let authServer        = null;
 let pluginServer      = null;
 let pluginServerPort  = null;
 let pluginToken       = null;
-let rojoProcess       = null;
 let aiContext         = null;
 let currentProjectName = '';
 let userAuthToken     = '';
@@ -31,7 +30,8 @@ let studioActionQueue = [];
 let lastHeartbeat     = 0;
 let heartbeatTimer    = null;
 let pluginConnectedSent = false; // true once plugin-connected has been sent after latest server start/disconnect
-const PLUGIN_PORTS    = [7878, 7874, 7871, 7870, 7861, 7865, 7822, 7854, 7813, 7816, 7898, 7875];
+const PLUGIN_HEARTBEAT_TIMEOUT_MS = 2500;
+const PLUGIN_PORTS    = [7878, 7874, 7871, 7870, 7861];
 const ROTEX_ICON_PNG  = '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';
 function makeRotexIcon() {
   try {
@@ -70,6 +70,15 @@ app.on('open-url', (event, url) => {
 });
 
 let mainWindow;
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.setSkipTaskbar(false);
+  mainWindow.moveTop();
+  mainWindow.focus();
+}
 
 function appAssetPath(relativePath) {
   const packagedPath = path.join(process.resourcesPath || '', relativePath);
@@ -168,7 +177,19 @@ function normalizeDesktopAuth(data) {
     name: String(data.name || ''),
     exp: String(data.exp || Date.now() + 365 * 24 * 60 * 60 * 1000),
     token: String(data.token || ''),
+    refreshToken: String(data.refreshToken || ''),
   };
+}
+
+function authTokenLooksExpired(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length < 2) return true;
+    const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    return Number(payload.exp || 0) * 1000 <= Date.now() + 60000;
+  } catch {
+    return true;
+  }
 }
 
 async function writeAuthBackup(data) {
@@ -183,13 +204,19 @@ function readAuthBackup() {
   try {
     const auth = JSON.parse(fs.readFileSync(authBackupPath(), 'utf8'));
     if (!auth?.uid) return null;
-    if (Number(auth.exp || 0) <= Date.now()) {
-      auth.exp = String(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    if (!auth.refreshToken && authTokenLooksExpired(auth.token)) {
+      return null;
     }
     return normalizeDesktopAuth(auth);
   } catch {
     return null;
   }
+}
+
+function ensurePluginTokenValue() {
+  if (pluginToken && String(pluginToken).trim()) return String(pluginToken).trim();
+  pluginToken = Math.random().toString(16).slice(2, 10).toUpperCase() + Math.random().toString(16).slice(2, 10).toUpperCase();
+  return pluginToken;
 }
 
 async function clearAuthBackup() {
@@ -219,7 +246,7 @@ async function completeDesktopAuth(data) {
     true
   ).catch(() => {});
   await mainWindow.loadFile(appAssetPath('editor.html'));
-  mainWindow.focus();
+  showMainWindow();
   return true;
 }
 
@@ -243,14 +270,40 @@ function createWindow() {
 
   mainWindow.setIcon(appIcon);
   mainWindow.webContents.once('did-finish-load', () => mainWindow && mainWindow.setIcon(appIcon));
+  mainWindow.once('ready-to-show', showMainWindow);
+  mainWindow.on('show', () => mainWindow && mainWindow.setSkipTaskbar(false));
 
   // Start directly in editor so the loading-screen gate (update + plugin check) shows immediately.
   const startupAuth = readAuthBackup();
   mainWindow.loadFile(appAssetPath(startupAuth?.uid ? 'editor.html' : 'login.html'));
   installStudioPluginFile().catch(() => {});
+  startPluginServerInternal(ensurePluginTokenValue(), '', '', 'Roblox').catch(() => {});
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Block all devtools keyboard shortcuts
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const { control, meta, shift, key } = input;
+    const mod = control || meta;
+    if (
+      key === 'F12' ||
+      (mod && shift && ['I', 'J', 'C', 'i', 'j', 'c'].includes(key)) ||
+      (mod && key === 'u') || (mod && key === 'U')
+    ) {
+      event.preventDefault();
+    }
+  });
+
+  // Failsafe: immediately close devtools if somehow opened
+  mainWindow.webContents.on('devtools-opened', () => {
+    mainWindow.webContents.closeDevTools();
+  });
+
+  // Prevent navigation to external URLs
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault();
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -272,15 +325,14 @@ function createWindow() {
           }
         } catch {}`
       : `try {
-          const raw = localStorage.getItem('rotex_desktop_auth') || localStorage.getItem('rotex_desktop_auth_mirror');
-          if (raw && window.rotexDesktop?.persistDesktopAuth) {
-            window.rotexDesktop.persistDesktopAuth(JSON.parse(raw));
-          }
+          localStorage.removeItem('rotex_desktop_auth');
+          localStorage.removeItem('rotex_desktop_auth_mirror');
         } catch {}`;
 
     mainWindow.webContents.executeJavaScript(injectScript).catch(() => {});
     injectChatsIntoPage().catch(() => {});
     injectTokensIntoPage().catch(() => {});
+    showMainWindow();
   });
 
   // Flush any deep link that arrived before the window was ready (macOS)
@@ -296,10 +348,7 @@ function createWindow() {
 app.on('second-instance', (event, argv) => {
   const url = argv.find((arg) => arg.startsWith('rotex://'));
   if (url) handleDeepLink(url);
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
+  showMainWindow();
 });
 
 function handleDeepLink(url) {
@@ -316,12 +365,16 @@ function handleDeepLink(url) {
 }
 
 app.commandLine.appendSwitch('disable-cache');
+
+// Remove the default menu bar (which exposes View → Toggle Developer Tools)
+Menu.setApplicationMenu(null);
+
 app.whenReady().then(() => {
   createWindow();
 
   // Check for updates 8 seconds after launch so the window is settled.
-  // autoDownload is false, so nothing happens automatically — the renderer
-  // decides what to do when it receives 'update-available'.
+  // autoDownload is true — download starts automatically in the background.
+  // autoInstallOnAppQuit is true — installs silently when the user closes the app.
   if (autoUpdater) {
     setTimeout(() => {
       autoUpdater.checkForUpdates().catch(() => {});
@@ -484,28 +537,19 @@ ipcMain.handle('get-version', () => app.getVersion());
 ipcMain.handle('capture-screen', async () => {
   try {
     const { desktopCapturer } = require('electron');
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
-    if (!sources.length) return { ok: false };
-    return { ok: true, dataUrl: sources[0].thumbnail.toDataURL() };
+    // Prefer the Roblox Studio window so we capture the user's game, not ROTEX itself.
+    const wins = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 1920, height: 1080 } });
+    const studio = wins.find((w) => /roblox studio/i.test(w.name))
+      || wins.find((w) => /roblox/i.test(w.name) && !/rotex/i.test(w.name));
+    if (studio && studio.thumbnail && !studio.thumbnail.isEmpty()) {
+      return { ok: true, dataUrl: studio.thumbnail.toDataURL(), source: 'studio' };
+    }
+    // Fallback: full primary screen.
+    const screens = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
+    if (!screens.length) return { ok: false };
+    return { ok: true, dataUrl: screens[0].thumbnail.toDataURL(), source: 'screen' };
   } catch (e) { return { ok: false, error: e.message }; }
 });
-ipcMain.handle('start-rojo', () => {
-  if (rojoProcess) { if (mainWindow) mainWindow.webContents.send('rojo-status', 'running'); return { ok: true }; }
-  try {
-    rojoProcess = spawn('rojo', ['serve'], { shell: true, stdio: 'ignore', detached: false });
-    rojoProcess.on('close', () => {
-      rojoProcess = null;
-      if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
-    });
-    rojoProcess.on('error', () => {
-      rojoProcess = null;
-      if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
-    });
-    if (mainWindow) mainWindow.webContents.send('rojo-status', 'running');
-    return { ok: true };
-  } catch { return { ok: false, error: 'Rojo not found — install from rojo.space' }; }
-});
-
 ipcMain.handle('queue-studio-actions', async (event, actions) => {
   const safeActions = Array.isArray(actions) ? actions.slice(0, 10) : [];
   studioActionQueue.push(...safeActions);
@@ -515,13 +559,47 @@ ipcMain.handle('queue-studio-actions', async (event, actions) => {
 
 // ─── IPC: Local auth callback server ─────────────────────────────────────────
 // ─── IPC: Studio Plugin Server ───────────────────────────────────────────────
-ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass, projectMode) => {
-  pluginToken = token;
+async function startPluginServerInternal(token, projectName, proPass, projectMode) {
+  pluginToken = token || ensurePluginTokenValue();
   currentProjectName = projectName || '';
   userAuthToken = proPass || '';
   userProjectMode = projectMode || '';
 
   if (pluginServer) return pluginServerPort || 7878; // reuse existing server, just update token
+
+  const pluginStatus = () => ({
+    connected: Boolean(lastHeartbeat && Date.now() - lastHeartbeat < PLUGIN_HEARTBEAT_TIMEOUT_MS),
+    port: pluginServerPort,
+    token: pluginToken || '',
+    project: currentProjectName || '',
+    lastSeen: lastHeartbeat || 0,
+  });
+
+  const sendPluginStatus = () => {
+    if (mainWindow) mainWindow.webContents.send('plugin-status', pluginStatus());
+  };
+
+  const markStudioConnected = (source = 'studio') => {
+    lastHeartbeat = Date.now();
+    if (mainWindow && !pluginConnectedSent) {
+      mainWindow.webContents.send(source === 'browser' ? 'browser-connected' : 'plugin-connected');
+      sendPluginStatus();
+    }
+    pluginConnectedSent = true;
+    if (!heartbeatTimer) {
+      heartbeatTimer = setInterval(() => {
+        if (Date.now() - lastHeartbeat > PLUGIN_HEARTBEAT_TIMEOUT_MS) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+          pluginConnectedSent = false;
+          if (mainWindow) {
+            mainWindow.webContents.send('plugin-disconnected');
+            sendPluginStatus();
+          }
+        }
+      }, 700);
+    }
+  };
 
   const sendJSON = (res, statusOrBody, maybeBody) => {
     const status = maybeBody !== undefined ? statusOrBody : 200;
@@ -534,7 +612,8 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
     res.end(body);
   };
 
-  pluginServer = http.createServer((req, res) => {
+  // Request handler (closure over pluginToken, markStudioConnected, etc.)
+  const requestHandler = (req, res) => {
     res.on('error', () => {});
     req.on('error', () => {});
     if (req.method === 'OPTIONS') {
@@ -543,79 +622,44 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
       return;
     }
 
-    const url = new URL(req.url, `http://127.0.0.1:${pluginServerPort || 7878}`);
+    let url;
+    try { url = new URL(req.url, `http://127.0.0.1:${pluginServerPort || 7878}`); }
+    catch { res.writeHead(400); res.end('bad request'); return; }
     const reqToken = url.searchParams.get('token') || '';
 
-    // /ping — accept any connection, send back token so plugin can auto-authenticate
     if (url.pathname === '/ping' && req.method === 'GET') {
       sendJSON(res, { ok: true, project: currentProjectName, token: pluginToken });
-      const source = url.searchParams.get('source') || 'studio';
-      if (mainWindow) {
-        mainWindow.webContents.send(source === 'browser' ? 'browser-connected' : 'plugin-connected');
-      }
-      pluginConnectedSent = true;
-      lastHeartbeat = Date.now();
-      if (!heartbeatTimer) {
-        heartbeatTimer = setInterval(() => {
-          if (Date.now() - lastHeartbeat > 30000) {
-            clearInterval(heartbeatTimer);
-            heartbeatTimer = null;
-            pluginConnectedSent = false;
-            if (mainWindow) mainWindow.webContents.send('plugin-disconnected');
-          }
-        }, 3000);
-      }
+      markStudioConnected(url.searchParams.get('source') || 'studio');
       return;
     }
 
     if (url.pathname === '/heartbeat' && req.method === 'POST') {
-      if (reqToken === pluginToken) {
-        lastHeartbeat = Date.now();
-        // Fire plugin-connected on first heartbeat after startup or reconnect
-        if (!pluginConnectedSent && mainWindow) {
-          pluginConnectedSent = true;
-          mainWindow.webContents.send('plugin-connected');
-          if (!heartbeatTimer) {
-            heartbeatTimer = setInterval(() => {
-              if (Date.now() - lastHeartbeat > 30000) {
-                clearInterval(heartbeatTimer);
-                heartbeatTimer = null;
-                pluginConnectedSent = false;
-                if (mainWindow) mainWindow.webContents.send('plugin-disconnected');
-              }
-            }, 3000);
-          }
-        }
-      }
-      sendJSON(res, { ok: true });
+      markStudioConnected('studio');
+      sendJSON(res, { ok: true, token: pluginToken });
       return;
     }
 
     if (reqToken !== pluginToken) {
-      sendJSON(res, 401, { ok: false, error: 'bad token' }); return;
+      sendJSON(res, 401, { ok: false, error: 'bad token', token: pluginToken }); return;
     }
 
-    if (url.pathname === '/rojo/start' && req.method === 'POST') {
-      if (!rojoProcess) {
-        rojoProcess = spawn('rojo', ['serve'], { shell: true, stdio: 'ignore', detached: false });
-        rojoProcess.on('close', () => {
-          rojoProcess = null;
-          if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
-        });
-        if (mainWindow) mainWindow.webContents.send('rojo-status', 'running');
+    if (url.pathname === '/disconnect' && req.method === 'POST') {
+      lastHeartbeat = 0;
+      pluginConnectedSent = false;
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
       }
-      sendJSON(res, { ok: true });
-      return;
-    }
-
-    if (url.pathname === '/rojo/stop' && req.method === 'POST') {
-      if (rojoProcess) { rojoProcess.kill(); rojoProcess = null; }
-      if (mainWindow) mainWindow.webContents.send('rojo-status', 'stopped');
+      if (mainWindow) {
+        mainWindow.webContents.send('plugin-disconnected');
+        sendPluginStatus();
+      }
       sendJSON(res, { ok: true });
       return;
     }
 
     if (url.pathname === '/ai/start' && req.method === 'POST') {
+      markStudioConnected('studio');
       let body = '';
       req.on('data', chunk => { body += chunk; });
       req.on('end', () => {
@@ -627,18 +671,34 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
     }
 
     if (url.pathname === '/studio/actions' && req.method === 'GET') {
+      markStudioConnected('studio');
       const action = studioActionQueue.shift() || null;
       sendJSON(res, { ok: true, action });
       return;
     }
 
     if (url.pathname === '/studio/result' && req.method === 'POST') {
+      markStudioConnected('studio');
       let body = '';
       req.on('data', chunk => { body += chunk; });
       req.on('end', () => {
         try {
           const result = JSON.parse(body || '{}');
           if (mainWindow) mainWindow.webContents.send('plugin-context', { studioResult: result });
+        } catch {}
+        sendJSON(res, { ok: true });
+      });
+      return;
+    }
+
+    if (url.pathname === '/studio/error' && req.method === 'POST') {
+      markStudioConnected('studio');
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const error = JSON.parse(body || '{}');
+          if (mainWindow) mainWindow.webContents.send('plugin-context', { studioError: error });
         } catch {}
         sendJSON(res, { ok: true });
       });
@@ -661,22 +721,13 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
           });
           const https = require('https');
           const options = {
-            hostname: 'rrotex.com',
-            port: 443,
-            path: '/api/chat',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData),
-            },
+            hostname: 'rrotex.com', port: 443, path: '/api/chat', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
           };
           const apiReq = https.request(options, (apiRes) => {
             let data = '';
             apiRes.on('data', chunk => { data += chunk; });
-            apiRes.on('end', () => {
-              res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
-              res.end(data);
-            });
+            apiRes.on('end', () => { res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' }); res.end(data); });
           });
           apiReq.on('error', err => sendJSON(res, 500, { error: err.message }));
           apiReq.write(postData);
@@ -689,41 +740,61 @@ ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass,
     }
 
     sendJSON(res, 404, { ok: false, error: 'not found' });
-  });
+  };
 
-  pluginServer.keepAliveTimeout = 2000;
-  pluginServer.headersTimeout = 8000;
-  pluginServer.on('connection', socket => {
-    socket.setNoDelay(true);
-  });
-
+  // Try each port with a FRESH server object per attempt.
+  // Reusing the same server after EADDRINUSE leaves it in a broken state.
   return new Promise(resolve => {
     let index = 0;
-    const tryListen = () => {
+    const tryNextPort = () => {
       const port = PLUGIN_PORTS[index++];
-      if (!port) {
-        pluginServer = null;
-        pluginServerPort = null;
-        resolve(null);
-        return;
-      }
-      pluginServer.once('error', err => {
-        if (err.code === 'EADDRINUSE') {
-          tryListen();
-        } else {
-          pluginServer = null;
-          pluginServerPort = null;
-          resolve(null);
-        }
+      if (port === undefined) { resolve(null); return; }
+
+      const server = http.createServer(requestHandler);
+      server.keepAliveTimeout = 2000;
+      server.headersTimeout   = 8000;
+      server.on('connection', socket => socket.setNoDelay(true));
+
+      // Only handle bind-time errors here; after listen succeeds we swap
+      // in a no-op handler so runtime errors never close the server.
+      server.once('error', err => {
+        server.close();
+        if (err.code === 'EADDRINUSE') { tryNextPort(); }
+        else { resolve(null); }
       });
-      pluginServer.listen(port, '127.0.0.1', () => {
+
+      server.listen(port, '127.0.0.1', () => {
+        // Remove the bind-time error handler and replace with a no-op.
+        // Without this, any later socket-level error emitted on the server
+        // triggers the handler above, calls server.close(), and kills it.
+        server.removeAllListeners('error');
+        server.on('error', () => {});
+        pluginServer     = server;
         pluginServerPort = port;
         resolve(port);
       });
     };
-    tryListen();
+    tryNextPort();
   });
+}
+
+ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass, projectMode) => {
+  return startPluginServerInternal(token, projectName, proPass, projectMode);
 });
+
+ipcMain.handle('get-plugin-status', () => ({
+  connected: Boolean(lastHeartbeat && Date.now() - lastHeartbeat < PLUGIN_HEARTBEAT_TIMEOUT_MS),
+  port: pluginServerPort,
+  token: pluginToken || '',
+  project: currentProjectName || '',
+  lastSeen: lastHeartbeat || 0,
+}));
+
+ipcMain.handle('get-server-info', () => ({
+  port: pluginServerPort,
+  running: pluginServer !== null,
+  token: pluginToken || '',
+}));
 
 // ─── IPC: TexBrain 0.5-β (single Ollama call, engine-aware) ──────────────────
 let _texbrainModel = null; // cached so /api/tags is only called once per session
@@ -754,25 +825,54 @@ ipcMain.handle('texbrain-call', async (event, messages, projectMode) => {
 
   // Engine-specific focus
   const engineGuides = {
-    Roblox:           'Your specialty is Roblox game development: Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, DataStoreService, TweenService, RunService, and Roblox Studio. For casual or off-topic messages, respond naturally and briefly, then offer to help with the game.',
-    Unity:            'Your specialty is Unity game development: C# scripting, MonoBehaviour lifecycle, Unity APIs, GameObjects, physics, animations, and the Unity Editor. For casual or off-topic messages, respond naturally and briefly.',
-    Blender:          'Your specialty is Blender 3D: Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering. For casual or off-topic messages, respond naturally and briefly.',
-    'Roblox+Blender': 'Your specialty is Roblox game development (Luau) and Blender 3D (bpy) for creating assets used in Roblox games. For casual or off-topic messages, respond naturally and briefly.',
-    'Unity+Blender':  'Your specialty is Unity (C#) and Blender 3D (bpy) for creating assets used in Unity projects. For casual or off-topic messages, respond naturally and briefly.',
+    Roblox: `SPECIALTY: Roblox game development — Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, DataStoreService, TweenService, RunService, and Roblox Studio.
+
+KEY RULES FOR ROBLOX:
+- Use task.wait(n) NOT wait(n). Use task.spawn() NOT spawn(). Use task.delay() NOT delay(). The deprecated versions are slow and banned.
+- RemoteEvents MUST be created by a server Script first; LocalScripts use :WaitForChild("EventName", 10) to find them.
+- Always use :WaitForChild("Name", 10) with a timeout before accessing cross-script instances.
+- Wrap every DataStore call in pcall — they fail sometimes and will crash your script if unguarded.
+- LocalScripts CANNOT access ServerScriptService. Use ReplicatedStorage for shared assets.
+- game.Players.LocalPlayer is nil on the server — only use it inside LocalScripts.
+- Touched fires constantly — debounce with a table keyed by player to prevent spam.
+- Character loads async; use player.CharacterAdded:Wait() before accessing the character.
+- Use Humanoid:TakeDamage(amount) not Humanoid.Health = 0 (respects ForceField).
+- Always :Disconnect() connections when done to prevent memory leaks.
+
+For casual or off-topic messages, respond naturally in 1-2 sentences without code.`,
+    Unity:            'SPECIALTY: Unity game development — C# scripting, MonoBehaviour lifecycle (Awake→Start→FixedUpdate→Update→LateUpdate), Unity APIs, GameObjects, Rigidbody physics, Animator, NavMeshAgent, Input System, TextMeshPro. Cache GetComponent in Awake. Use Coroutines for async sequences. Never hallucinate Unity APIs that do not exist. For casual messages, respond naturally in 1-2 sentences without code.',
+    Blender:          'SPECIALTY: Blender 3D — Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering. Use bpy.data over bpy.ops for stability in scripts. bmesh for geometry editing in Edit mode. For casual messages, respond naturally in 1-2 sentences without code.',
+    'Roblox+Blender': 'SPECIALTY: Roblox game development (Luau) and Blender 3D (bpy) for creating assets for Roblox games. Same Roblox rules apply (task.wait, WaitForChild, pcall DataStores). For Blender: apply transforms before FBX export, Y-up, FBX Units Scale. For casual messages, respond naturally in 1-2 sentences without code.',
+    'Unity+Blender':  'SPECIALTY: Unity (C#) and Blender 3D (bpy) for creating assets for Unity projects. Apply all transforms in Blender before export. Normal maps from Blender are OpenGL; Unity HDRP/URP needs DirectX — flip the G channel. For casual messages, respond naturally in 1-2 sentences without code.',
   };
   const engine = (projectMode || 'Roblox').trim();
   const engineFocus = engineGuides[engine] || engineGuides['Roblox'];
 
   const systemPrompt = [
-    'You are TexBrain 0.5-β, a free local AI model inside the ROTEX app for game developers. You run entirely on-device via Ollama — no internet, no TexTokens spent.',
+    'You are TexBrain 0.5-β, the local ROTEX coding model for game developers. You run on-device through Ollama.',
     engineFocus,
     'You cannot see or process images. If asked to look at an image, tell the user to switch to a model with vision support (Claude Haiku).',
-    'Be concise and direct. Answer with working code. Do not go off-topic or hallucinate APIs that do not exist.',
-    'When writing Roblox Lua scripts, ALWAYS use file blocks so ROTEX can apply them directly to Roblox Studio. Format: start a fenced code block with ```file:ServiceName/path/ScriptName.lua (on its own line), put the complete Lua code inside, then close with ```. Example:\n```file:ServerScriptService/DashSystem.lua\n-- code here\n```\nUse service names as the root: ServerScriptService, ReplicatedStorage, StarterPlayer/StarterPlayerScripts, StarterGui, Workspace, ServerStorage, StarterPack. Write the COMPLETE file contents — no placeholders.',
+    'CRITICAL RULE: Do NOT generate code for greetings, casual conversation, or questions that do not ask for code. If the user says "hi", "thanks", "how are you", or asks a general question, respond conversationally in 1-2 sentences. Never attach a code block to a casual message.',
+    'DECISION PROTOCOL: classify the user request as answer-only, plan-only, create, modify, remove/disable, debug, inspect, or verify. Then do only that class. If the user gave a direct command, use the available context to act instead of asking questions you can answer from context.',
+    'CONTEXT PROTOCOL: use the recent chat and any project/studio context to identify the exact existing script/path that owns the behavior. Modify/remove exact matches instead of creating duplicates.',
+    'REMOVAL PROTOCOL: if the user says remove, undo, turn off, disable, stop, or get out of something, the correct action is usually delete/disable the owning script or restore default properties. Do not recreate the unwanted feature.',
+    'ROBLOX PATH PROTOCOL: Studio file paths start with ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. StarterPlayerScripts paths must use StarterPlayer/StarterPlayerScripts/Name.client.lua.',
+    'SELF-CHECK before answering: verify the code/action matches the request, client/server placement is correct, cleanup exists, and every referenced Instance is created or accessed with WaitForChild.',
+    'Work like a careful Roblox Studio assistant, not a generic chatbot. First infer the exact user intent: create, modify, remove, disable, debug, explain, or plan. Pick the operation that actually changes the game correctly.',
+    'AGENT SMARTNESS: for normal tasks, make the smallest complete change that solves the request. If an existing script owns the behavior, modify or delete that script instead of creating a duplicate.',
+    'SUPER AGENT SMARTNESS: when the prompt or mode indicates Super Agent, do a deeper pass: find conflicting scripts, remove stale behavior, include required server/client pieces, create missing RemoteEvents, add cleanup, and verify that the final behavior will not fight itself.',
+    'If the user asks to remove, undo, turn off, or get out of a feature, do not rewrite the feature back in. Delete or disable the script that causes it, or clearly say which script should be deleted/disabled.',
+    'Never say a fix is done unless you output the concrete change needed. Avoid vague claims like "fixed it" without an executable script or explicit delete/disable action.',
+    'For Roblox camera, character, UI, and input systems, use LocalScripts in StarterPlayer/StarterPlayerScripts, StarterCharacterScripts, StarterGui, or tools as appropriate. Server Scripts cannot control LocalPlayer camera.',
+    'Preserve existing project structure. If a script already exists, modify that path instead of creating duplicate scripts with similar names.',
+    'Always include cleanup for long-running behavior: disconnect events, handle respawns, restore CameraType and MouseBehavior when disabling camera systems, and avoid leaving players stuck.',
+    'Write COMPLETE, RUNNABLE code every time. Never truncate with placeholders like "-- rest of code", "-- your logic here", or "...". Every function must be fully implemented.',
+    'Only use real, documented APIs. Never invent Roblox service names, events, or properties. If you are unsure whether something exists, say so.',
+    'When writing Roblox Lua scripts, ALWAYS use file blocks so ROTEX can apply them directly to Roblox Studio. Format: start a fenced code block with ```file:ServiceName/path/ScriptName.lua (on its own line), put the complete Lua code inside, then close with ```. Example:\n```file:ServerScriptService/DashSystem.lua\n-- code here\n```\nService roots: ServerScriptService, ReplicatedStorage, StarterPlayer/StarterPlayerScripts, StarterGui, Workspace, ServerStorage, StarterPack. Write the COMPLETE file — no placeholders, no shortcuts.',
   ].join('\n');
 
   const ollamaCall = (msgs) => new Promise((resolve, reject) => {
-    const postData = JSON.stringify({ model, stream: false, messages: msgs });
+    const postData = JSON.stringify({ model, stream: false, messages: msgs, options: { temperature: 0.2, top_p: 0.8, repeat_penalty: 1.08 } });
     const req = http.request(
       { hostname: '127.0.0.1', port: OLLAMA_PORT, path: '/api/chat', method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
@@ -795,13 +895,15 @@ ipcMain.handle('texbrain-call', async (event, messages, projectMode) => {
     // Task 1: clarifier — expand the last user message into a precise task description
     const lastUser = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
     let clarified = lastUser;
-    try {
-      const clarifyRes = await ollamaCall([
-        { role: 'system', content: `You are a code task clarifier for a ${engine} developer. In 1-3 sentences, restate the user's request as a precise, unambiguous technical task. Do not answer it — only restate it clearly. Output only the restated task.` },
-        { role: 'user', content: lastUser },
-      ]);
-      clarified = clarifyRes.message?.content?.trim() || lastUser;
-    } catch { /* fallback: use original */ }
+    if (/\b(make|create|add|fix|debug|build|implement|change|update|remove|delete|disable|turn off|get out of|undo|script|camera|gui|ui|tool|system)\b/i.test(lastUser)) {
+      try {
+        const clarifyRes = await ollamaCall([
+          { role: 'system', content: `You are a code task clarifier for a ${engine} developer. Restate the user's request as a precise technical task in 1-2 sentences. Preserve removal/disable/undo intent exactly; never turn "remove/disable/get out of" into "create/add". Do not answer it. Output only the restated task.` },
+          { role: 'user', content: lastUser },
+        ]);
+        clarified = clarifyRes.message?.content?.trim() || lastUser;
+      } catch { /* fallback: use original */ }
+    }
 
     // Task 2: worker — generate the actual response
     const workerHistory = [

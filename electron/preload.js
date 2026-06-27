@@ -38,16 +38,21 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
   installStudioPlugin: () => ipcRenderer.invoke('install-studio-plugin'),
   checkStudioPlugin: () => ipcRenderer.invoke('check-studio-plugin'),
   startPluginServer: (token, projectName, proPass, projectMode) => ipcRenderer.invoke('start-plugin-server', token, projectName, proPass, projectMode),
+  getPluginStatus: () => ipcRenderer.invoke('get-plugin-status'),
+  getServerInfo:   () => ipcRenderer.invoke('get-server-info'),
   queueStudioActions: (actions) => ipcRenderer.invoke('queue-studio-actions', actions),
   callTexBrain: (messages, projectMode) => ipcRenderer.invoke('texbrain-call', messages, projectMode),
   onPluginConnected: (fn) => ipcRenderer.on('plugin-connected', fn),
   onPluginDisconnected: (fn) => ipcRenderer.on('plugin-disconnected', fn),
-  startRojo: () => ipcRenderer.invoke('start-rojo'),
+  onPluginStatus: (fn) => ipcRenderer.on('plugin-status', (_, status) => fn(status)),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   captureScreen: () => ipcRenderer.invoke('capture-screen'),
   onBrowserConnected: (fn) => ipcRenderer.on('browser-connected', fn),
-  onPluginContext: (fn) => ipcRenderer.on('plugin-context', (_, ctx) => fn(ctx)),
-  onRojoStatus: (fn) => ipcRenderer.on('rojo-status', (_, status) => fn(status)),
+  onPluginContext: (fn) => {
+    const listener = (_, ctx) => fn(ctx);
+    ipcRenderer.on('plugin-context', listener);
+    return () => ipcRenderer.removeListener('plugin-context', listener);
+  },
 
   // ─── In-app updater ───────────────────────────────────────────────────────
   onUpdateAvailable:    (fn) => ipcRenderer.on('rotex-update-available',     (_, info) => fn(info)),

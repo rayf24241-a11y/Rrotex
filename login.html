@@ -253,7 +253,7 @@
       <div class="error" id="errBox"></div>
     </div>
 
-    <div class="footer">ROTEX v2.0.0</div>
+    <div class="footer">ROTEX v1.5.105</div>
   </div>
 
   <script src="./desktop-auth.js"></script>
@@ -275,11 +275,11 @@
        ══════════════════════════════════════════════════════════════════ */
     if (window.rotexDesktop?.isDesktop) {
       (async () => {
-        const s = await window.rotexDesktopAuth?.ensureRestored?.();
-        if (s?.uid) {
-          window.rotexDesktop.navigate('projects');
-          return;
-        }
+        try {
+          localStorage.removeItem('rotex_desktop_auth');
+          localStorage.removeItem('rotex_desktop_auth_mirror');
+          await window.rotexDesktop?.clearDesktopAuth?.();
+        } catch {}
 
       // Replace card with desktop sign-in UI
       document.querySelector('.card').innerHTML = `
@@ -306,12 +306,32 @@
         </div>
       `;
 
-      document.getElementById('openBrowserBtn').onclick = async () => {
-        const port = await window.rotexDesktop.startAuthServer();
-        window.rotexDesktop.openExternal(`https://www.rrotex.com/login?desktop=1&callback=${port}`);
-        document.getElementById('openBrowserBtn').style.display = 'none';
-        document.getElementById('waitingState').style.display = 'block';
-      };
+      async function openDesktopBrowserLogin() {
+        try {
+          const btn = document.getElementById('openBrowserBtn');
+          const waiting = document.getElementById('waitingState');
+          if (btn) btn.style.display = 'none';
+          if (waiting) waiting.style.display = 'block';
+          const port = await window.rotexDesktop.startAuthServer();
+          await window.rotexDesktop.openExternal(`https://www.rrotex.com/login?desktop=1&callback=${port}`);
+        } catch {
+          const btn = document.getElementById('openBrowserBtn');
+          const waiting = document.getElementById('waitingState');
+          const err = document.getElementById('errBox');
+          if (btn) btn.style.display = 'flex';
+          if (waiting) waiting.style.display = 'none';
+          if (err) {
+            err.textContent = 'Could not open the browser automatically. Click the button to try again.';
+            err.classList.add('show');
+          }
+        }
+      }
+
+      document.getElementById('openBrowserBtn').onclick = openDesktopBrowserLogin;
+
+      setTimeout(() => {
+        openDesktopBrowserLogin();
+      }, 350);
 
       window.resetDesktopLogin = () => {
         document.getElementById('openBrowserBtn').style.display = 'flex';
@@ -327,12 +347,14 @@
           name:  data.name   || '',
           exp:   data.exp    || String(Date.now() + 365 * 24 * 60 * 60 * 1000),
           token: data.token  || '',
+          refreshToken: data.refreshToken || '',
         }) || {
           uid: data.uid,
           email: data.email || '',
           name: data.name || '',
           exp: data.exp || String(Date.now() + 365 * 24 * 60 * 60 * 1000),
           token: data.token || '',
+          refreshToken: data.refreshToken || '',
         };
         localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
         window.rotexDesktop.navigate('projects');
@@ -377,13 +399,15 @@
 
     async function go(user) {
       const token    = await user.getIdToken().catch(() => '');
+      const refreshToken = user?.stsTokenManager?.refreshToken || user?.refreshToken || '';
       const authLifetimeDays = isDesktopLogin ? 365 : 7;
       const authData = {
         uid:   user.uid,
         email: user.email        || '',
         name:  user.displayName  || '',
         exp:   String(Date.now() + authLifetimeDays * 24 * 60 * 60 * 1000),
-        token
+        token,
+        refreshToken
       };
       localStorage.setItem('rotex_desktop_auth', JSON.stringify(authData));
 

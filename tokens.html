@@ -283,8 +283,86 @@
       import { getFirestore, doc, getDoc, setDoc, increment, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
       const TOKENS_PER_DOLLAR = 400_000; // $2.50 = 1M
+      const FIREBASE_API_KEY = 'AIzaSyBKg2g-hnMMLflCoDNkG810qRlIWktQ3oY';
 
-      let auth, db, currentUser;
+      let auth, db, currentUser, desktopAuth;
+
+      function readDesktopAuthFromHash() {
+        const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+        const uid = hash.get('desktop_uid') || '';
+        if (!uid) return null;
+        const data = {
+          uid,
+          email: hash.get('desktop_email') || '',
+          token: hash.get('desktop_token') || '',
+          refreshToken: hash.get('desktop_refresh') || '',
+        };
+        try {
+          sessionStorage.setItem('rotex_tokens_desktop_auth', JSON.stringify(data));
+          history.replaceState('', document.title, window.location.pathname + window.location.search);
+        } catch {}
+        return data;
+      }
+
+      function readDesktopAuth() {
+        if (desktopAuth?.uid) return desktopAuth;
+        desktopAuth = readDesktopAuthFromHash();
+        if (desktopAuth?.uid) return desktopAuth;
+        try {
+          const saved = JSON.parse(sessionStorage.getItem('rotex_tokens_desktop_auth') || 'null');
+          if (saved?.uid) desktopAuth = saved;
+        } catch {}
+        return desktopAuth;
+      }
+
+      function tokenLooksExpired(token) {
+        try {
+          const payload = JSON.parse(atob(String(token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+          return Number(payload.exp || 0) * 1000 <= Date.now() + 60000;
+        } catch {
+          return true;
+        }
+      }
+
+      async function refreshDesktopToken() {
+        const data = readDesktopAuth();
+        const refreshToken = data?.refreshToken || '';
+        if (!refreshToken) return '';
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 6500);
+          const r = await fetch('https://securetoken.googleapis.com/v1/token?key=' + FIREBASE_API_KEY, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(refreshToken),
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (!r.ok) return '';
+          const j = await r.json();
+          const token = j.id_token || j.access_token || '';
+          if (!token) return '';
+          desktopAuth = { ...data, token, refreshToken: j.refresh_token || refreshToken };
+          try { sessionStorage.setItem('rotex_tokens_desktop_auth', JSON.stringify(desktopAuth)); } catch {}
+          return token;
+        } catch {
+          return '';
+        }
+      }
+
+      async function getCheckoutAuth() {
+        const data = readDesktopAuth();
+        if (data?.uid) {
+          let token = data.token || '';
+          if (!token || tokenLooksExpired(token)) token = await refreshDesktopToken();
+          if (token) return { uid: data.uid, email: data.email || '', authToken: token };
+        }
+        if (currentUser?.getIdToken) {
+          const token = await currentUser.getIdToken(true).catch(() => '');
+          if (token) return { uid: currentUser.uid, email: currentUser.email || '', authToken: token };
+        }
+        return null;
+      }
 
       const dollarInput   = document.getElementById('dollarInput');
       const tokenPreview  = document.getElementById('tokenPreview');
@@ -299,17 +377,34 @@
       const successSub    = document.getElementById('successSub');
 
       async function boot() {
+        const desktop = readDesktopAuth();
         const res = await fetch('/api/firebase-config');
         const cfg = await res.json();
-        if (!cfg.configured) { showAnon(); return; }
+        if (!cfg.configured) {
+          if (desktop?.uid) {
+            currentUser = {
+              uid: desktop.uid,
+              email: desktop.email || '',
+              getIdToken: async () => (desktopAuth?.token && !tokenLooksExpired(desktopAuth.token)) ? desktopAuth.token : refreshDesktopToken(),
+            };
+            showSignedIn();
+          } else {
+            showAnon();
+          }
+          return;
+        }
         const app = initializeApp(cfg.firebaseConfig);
         auth = getAuth(app);
         db   = getFirestore(app);
         onAuthStateChanged(auth, async (user) => {
-          currentUser = user;
-          if (user) {
+          currentUser = user || (desktop?.uid ? {
+            uid: desktop.uid,
+            email: desktop.email || '',
+            getIdToken: async () => (desktopAuth?.token && !tokenLooksExpired(desktopAuth.token)) ? desktopAuth.token : refreshDesktopToken(),
+          } : null);
+          if (currentUser) {
             showSignedIn();
-            await handleReturn(user);
+            await handleReturn(currentUser);
           } else {
             showAnon();
           }
@@ -320,6 +415,8 @@
         loadingState.hidden = true;
         anonState.hidden    = false;
         signedInState.hidden = true;
+        const email = new URLSearchParams(window.location.search).get('desktop_email') || '';
+        if (email) setMsg(`Sign in as ${email} to buy test TexTokens.`, 'error');
       }
 
       function showSignedIn() {
@@ -347,18 +444,21 @@
       dollarInput.addEventListener('input', updatePreview);
 
       buyBtn.addEventListener('click', async () => {
-        if (!currentUser) return;
         const dollars = getDollars();
         if (!dollars) { setMsg('Choose a whole dollar amount between $5 and $500.', 'error'); return; }
         const desktopCallback = new URLSearchParams(window.location.search).get('desktop_callback') || '';
         buyBtn.disabled = true;
         setMsg('Opening Stripe...');
         try {
-          const authToken = await currentUser.getIdToken().catch(() => '');
+          const checkoutAuth = await getCheckoutAuth();
+          if (!checkoutAuth?.authToken) {
+            setMsg('Your login expired. Go back to ROTEX Desktop and sign in again before checkout.', 'error');
+            return;
+          }
           const res  = await fetch('/api/create-checkout-session', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ uid: currentUser.uid, email: currentUser.email || '', authToken, kind: 'credits', dollars, desktopCallback }),
+            body:    JSON.stringify({ uid: checkoutAuth.uid, email: checkoutAuth.email || '', authToken: checkoutAuth.authToken, kind: 'credits', dollars, desktopCallback }),
           });
           const data = await res.json();
           if (data.url) { window.location.href = data.url; return; }

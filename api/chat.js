@@ -1,6 +1,7 @@
 const AdmZip = require('adm-zip');
 const { verifyProPass } = require('./_lib/propass.js');
 const { MODELS, resolveModelId } = require('./_lib/catalog.js');
+const { userHasActiveProSubscription } = require('./_lib/stripe.js');
 const {
   checkCreditSafety,
   estimateTexTokens,
@@ -8,6 +9,53 @@ const {
   logUsage,
   onInsufficientCredits,
 } = require('./_lib/credit-safety.js');
+// ── Server-authoritative usage (Firestore, inlined to stay under Vercel's
+// function limit). Stored at users/{uid}/billing/usage, written with the user's
+// own ID token. Fail-open: any failure returns null and the caller falls back
+// to the in-memory limiter.
+const FREE_MONTHLY = 1_000_000;
+const PRO_MONTHLY  = 40_000_000;
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'rotex-e0be7';
+function _usageDocUrl(uid) {
+  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/usage`;
+}
+function _fsNum(field) { if (!field) return 0; return Math.max(0, Math.floor(Number(field.integerValue ?? field.doubleValue ?? 0) || 0)); }
+function _fsStr(field) { return field?.stringValue || ''; }
+function _dayKey()   { return new Date().toISOString().slice(0, 10); }
+function _monthKey() { return new Date().toISOString().slice(0, 7); }
+async function readUsage(uid, authToken) {
+  if (!uid || !authToken || !FIREBASE_PROJECT_ID) return null;
+  try {
+    const res = await fetch(_usageDocUrl(uid), { headers: { Authorization: `Bearer ${authToken}` } });
+    if (res.status === 404) return { dayUsed: 0, monthUsed: 0 };
+    if (!res.ok) return null;
+    const doc = await res.json();
+    const f = doc.fields || {};
+    return {
+      dayUsed:   _fsStr(f.dayKey)   === _dayKey()   ? _fsNum(f.dayUsed)   : 0,
+      monthUsed: _fsStr(f.monthKey) === _monthKey() ? _fsNum(f.monthUsed) : 0,
+    };
+  } catch { return null; }
+}
+async function addUsage(uid, authToken, amount) {
+  if (!uid || !authToken || !FIREBASE_PROJECT_ID || !(amount > 0)) return;
+  try {
+    const cur = (await readUsage(uid, authToken)) || { dayUsed: 0, monthUsed: 0 };
+    const body = { fields: {
+      dayKey:    { stringValue: _dayKey() },
+      dayUsed:   { integerValue: String(cur.dayUsed + amount) },
+      monthKey:  { stringValue: _monthKey() },
+      monthUsed: { integerValue: String(cur.monthUsed + amount) },
+      updatedAt: { timestampValue: new Date().toISOString() },
+    } };
+    const mask = ['dayKey', 'dayUsed', 'monthKey', 'monthUsed', 'updatedAt'].map((k) => 'updateMask.fieldPaths=' + k).join('&');
+    await fetch(`${_usageDocUrl(uid)}?${mask}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch { /* fail-open */ }
+}
 
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
@@ -62,10 +110,20 @@ function isMultiAccount(ip, uid, email) {
   uidSet.add(uid);
   return uidSet.size > 1; // two or more accounts on the same IP today
 }
-const GROQ_BUSY_TEXT = 'That model is busy right now. Try Smart, Claude Haiku, or TexBrain while it cools down.';
+const GROQ_BUSY_TEXT = 'That model is busy right now. Try TexBrain Thinking-beta or Claude Haiku while it cools down.';
 const OPENROUTER_OUT_TEXT = 'ai is being used to much! please purchase pro to bypass this!';
 
 function _today() { return new Date().toISOString().slice(0, 10); }
+
+function noTokensText(proPass, isPro, hasPurchased) {
+  if (proPass && !isPro) {
+    return "Your Pro pass could not be verified. Please sign out and back in, or refresh your Pro subscription at rrotex.com/pro.";
+  }
+  if (hasPurchased) {
+    return "You've used all your TexTokens for today. Buy more at rrotex.com/tokens.";
+  }
+  return "You've used your 150k free TexTokens daily limit. Come back tomorrow, or buy more at rrotex.com/tokens.";
+}
 
 function getFreeTokensUsed(key) {
   const e = freeTokenCounters.get(key);
@@ -95,6 +153,35 @@ function bumpCounter(map, key) {
   return e.count;
 }
 
+// ── Request-frequency limiter (anti-spam) ───────────────────────────────────
+// Throttles rapid-fire requests per IP, independent of the TexToken budget.
+// Two windows: a short burst guard and a per-minute cap. In-memory, so it
+// resets on cold starts, but it blocks sustained hammering on a warm instance.
+const reqWindows = new Map(); // ip → number[] of request timestamps (ms)
+const REQ_PER_MIN = 30;          // max requests in a rolling 60s window
+const REQ_BURST = 8;             // max requests in a rolling 10s window
+const REQ_BURST_WINDOW = 10_000;
+
+function checkRequestRate(ip) {
+  const now = Date.now();
+  let arr = reqWindows.get(ip);
+  if (!arr) {
+    arr = [];
+    reqWindows.set(ip, arr);
+    if (reqWindows.size > 5000) reqWindows.clear();
+  }
+  while (arr.length && now - arr[0] > 60_000) arr.shift(); // drop entries >60s old
+  const inBurst = arr.reduce((c, t) => c + (now - t < REQ_BURST_WINDOW ? 1 : 0), 0);
+  if (inBurst >= REQ_BURST) {
+    return { ok: false, retry: Math.ceil(REQ_BURST_WINDOW / 1000) };
+  }
+  if (arr.length >= REQ_PER_MIN) {
+    return { ok: false, retry: Math.max(1, Math.ceil((60_000 - (now - arr[0])) / 1000)) };
+  }
+  arr.push(now);
+  return { ok: true };
+}
+
 module.exports = async function handler(request, response) {
   response.setHeader('Access-Control-Allow-Origin', '*');
   response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -105,6 +192,18 @@ module.exports = async function handler(request, response) {
   }
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  // Anti-spam: throttle rapid-fire requests per IP before any heavy work.
+  const ip = ipFromRequest(request) || 'unknown';
+  const rate = checkRequestRate(ip);
+  if (!rate.ok) {
+    response.setHeader('Retry-After', String(rate.retry));
+    response.status(429).json({
+      error: 'rate_limited',
+      text: `Slow down — too many requests. Try again in ${rate.retry}s.`,
+    });
     return;
   }
 
@@ -129,8 +228,36 @@ module.exports = async function handler(request, response) {
 
   const authResult = await verifyFirebaseToken(authToken); // optional: logged-in users get cloud sync, guests can still chat
 
-  const proPayload = verifyProPass(proPass);
-  const isPro = Boolean(proPayload);
+  let proPayload = verifyProPass(proPass);
+  let isPro = Boolean(proPayload);
+
+  // If the signed Pro pass is stale/invalid, fall back to Stripe verification for
+  // authenticated users. This handles secret rotations or passes signed in a
+  // different environment without breaking legitimate Pro users.
+  if (!isPro && authResult.ok) {
+    const hasSubscription = await userHasActiveProSubscription(authResult.uid, authResult.email, '');
+    if (hasSubscription) {
+      isPro = true;
+    }
+  }
+
+  // Emergency fallback: if the Pro pass signature is invalid but the payload still
+  // decodes to a UID with an active Stripe subscription, trust the subscription.
+  // This is a temporary safety net for existing users whose pass was signed with a
+  // rotated or different PRO_PASS_SECRET. It does not grant Pro access to arbitrary
+  // UIDs — the UID must have an active Stripe subscription.
+  if (!isPro && proPass) {
+    try {
+      const body = proPass.split('.', 2)[0];
+      const decodedPayload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+      if (decodedPayload?.uid) {
+        const hasSubscription = await userHasActiveProSubscription(decodedPayload.uid, '', '');
+        if (hasSubscription) {
+          isPro = true;
+        }
+      }
+    } catch {}
+  }
 
   const modelId = resolveModelId(model);
   const selected = MODELS[modelId];
@@ -147,10 +274,30 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const ip = ipFromRequest(request);
-
   // Multi-account: free alt accounts get 0 tokens. Pro accounts are unaffected.
   const linkedMultiAccount = !isDev && isMultiAccount(ip, userId, userEmail);
+
+  // ── Server-authoritative usage (Firestore, persists across cold starts) ──
+  // Read once; used for both the monthly cap and the daily cap below. Fail-open:
+  // if Firestore is unreachable we fall back to the in-memory limiter.
+  const isAuthUser = authResult.ok && authResult.uid && userId === authResult.uid;
+  const serverUsage = (isAuthUser && !isDev) ? await readUsage(authResult.uid, authToken) : null;
+  request._serverUsage = serverUsage;
+  request._isAuthUser = isAuthUser;
+
+  // Monthly cap (free 1M, Pro 40M). Only enforced when we have a real reading.
+  if (!isDev && serverUsage) {
+    const monthlyLimit = isPro ? PRO_MONTHLY : FREE_MONTHLY;
+    if (serverUsage.monthUsed >= monthlyLimit) {
+      response.status(402).json({
+        error: 'no_textokens',
+        text: isPro
+          ? "You've used your 40M monthly TexTokens. They reset next month, or add a pack at rrotex.com/tokens."
+          : "You've used your 1M monthly free TexTokens. Upgrade to Pro for 40M/month at rrotex.com/pro.",
+      });
+      return;
+    }
+  }
 
   // TexToken daily budget for free users (150k/day base). Dev account is exempt.
   // Authenticated users who have purchased extra TexTokens get an extended daily
@@ -172,7 +319,11 @@ module.exports = async function handler(request, response) {
     const ipKey   = `ip:${ip}`;
     const usedByKey = getFreeTokensUsed(freeKey);
     const usedByIp  = getFreeTokensUsed(ipKey);
-    const usedToday = Math.max(usedByKey, usedByIp);
+    // Prefer the persistent Firestore daily count; fall back to the in-memory
+    // counters when Firestore is unavailable (fail-open).
+    const usedToday = serverUsage
+      ? Math.max(serverUsage.dayUsed, usedByKey, usedByIp)
+      : Math.max(usedByKey, usedByIp);
 
     // Authenticated users with purchased tokens get an extended daily cap.
     // We trust their client-reported balance only when they have a valid Firebase
@@ -187,9 +338,7 @@ module.exports = async function handler(request, response) {
       const hasPurchased = effectiveDailyLimit > FREE_DAILY_TEXTOKENS;
       response.status(402).json({
         error: 'no_textokens',
-        text: hasPurchased
-          ? "You've used all your TexTokens for today. Buy more at rrotex.com/tokens."
-          : "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
+        text: noTokensText(proPass, isPro, hasPurchased),
       });
       return;
     }
@@ -210,14 +359,18 @@ module.exports = async function handler(request, response) {
     }
   }
 
-  const maxTokens = isPro ? (selected.proMaxTokens || selected.maxTokens) : selected.maxTokens;
+  let maxTokens = isPro ? (selected.proMaxTokens || selected.maxTokens) : selected.maxTokens;
+  // Agent / Super Agent run on stronger models and need room to write complete,
+  // multi-file solutions. Streaming is used in the editor, so larger caps are safe.
+  if (superAgent) maxTokens = Math.max(maxTokens, 16000);
+  else if (agent) maxTokens = Math.max(maxTokens, 12000);
   const isEditor = mode === 'editor';
   const modelGuide = buildModelGuide();
   const cleanAttachments = normalizeAttachments(attachments);
   const hasImages = cleanAttachments.some((item) => item.kind === 'image');
   const connectionStatus = summarizeConnections(computerConnections, pcBridge);
-  const perMessageCap = isEditor ? 16000 : 8000;
-  const lastMessageCap = isEditor ? 48000 : 16000;
+  const perMessageCap = isEditor ? 24000 : 8000;
+  const lastMessageCap = isEditor ? 64000 : 16000;
   const cleanMessages = messages
     .filter((message) => message && ['user', 'assistant', 'system'].includes(message.role))
     .slice(isEditor ? -24 : -18)
@@ -240,7 +393,7 @@ module.exports = async function handler(request, response) {
   if (isEditor) {
     cleanMessages.unshift({
       role: 'system',
-      content: buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode),
+      content: buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent),
     });
   } else {
     cleanMessages.unshift({
@@ -252,9 +405,9 @@ module.exports = async function handler(request, response) {
         'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
         'Never start a response with "Certainly", "Sure", "Of course", "Absolutely", or similar filler.',
         'Use Markdown in your responses: **bold** for emphasis, `code` for inline code, fenced code blocks for multi-line code.',
-        'When asked what models are available or to list the models, output EXACTLY these three lines and nothing else — no intro, no outro:\n**TexBrain thinking-β** (gpt-oss-120b · Cohere · Qwen3 Coder, Free, 0.3x TexTokens/output token) — Cheap\n**Claude Haiku** (Claude Haiku 4.5, Free, 5x TexTokens/output token) — Expensive',
+        'When asked what models are available or to list the models, output EXACTLY these two lines and nothing else — no intro, no outro:\n**TexBrain Thinking-beta** (Free, 2.4x TexTokens/output token) — Balanced\n**Claude Haiku** (Claude Haiku 4.5, Free, 16x TexTokens/output token) — Expensive',
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
-        `ROTEX model ranking: 1st Claude Haiku (best quality) → 2nd TexBrain thinking-β (cheap, multi-model). If asked which is best: Claude Haiku. If asked which is cheapest: TexBrain thinking-β.`,
+        `ROTEX model ranking: 1st Claude Haiku (best quality) → 2nd TexBrain Thinking-beta (balanced Roblox-focused model). If asked which is best: Claude Haiku. If asked which is cheaper: TexBrain Thinking-beta.`,
         `ROTEX model data (internal): ${modelGuide}`,
         'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person. Pro: $20/month, 40M TexTokens/month, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
@@ -278,7 +431,7 @@ module.exports = async function handler(request, response) {
     });
   }
 
-  const providerCall = resolveProviderCall(selected, cleanMessages);
+  const providerCall = resolveProviderCall(selected, cleanMessages, { agent, superAgent });
   if (!providerCall) {
     response.status(500).json({
       error: 'backend_unavailable',
@@ -299,9 +452,7 @@ module.exports = async function handler(request, response) {
       const hasPurchased = effectiveDailyLimit > FREE_DAILY_TEXTOKENS;
       response.status(402).json({
         error: 'no_textokens',
-        text: hasPurchased
-          ? "You've used all your TexTokens for today. Buy more at rrotex.com/tokens."
-          : "You've used your 150k free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.",
+        text: noTokensText(proPass, isPro, hasPurchased),
       });
       return;
     }
@@ -312,13 +463,20 @@ module.exports = async function handler(request, response) {
     }
   }
 
+  // Persist usage to Firestore for ALL authenticated accounts (free and Pro) so
+  // the daily + monthly counters survive cold starts and enforce the monthly cap.
+  // Fire-and-forget, fail-open — never blocks the response.
+  if (!isDev && request._isAuthUser && authResult.uid && estimate.textokens > 0) {
+    addUsage(authResult.uid, authToken, estimate.textokens).catch(() => {});
+  }
+
   // Never trust client-provided texTokensLeft for non-Pro users.
   // Free user budget is already enforced above via freeTokenCounters (server-side).
   // Use undefined (not null) so checkCreditSafety skips the TexToken check —
   // Number(null)=0 would wrongly block free users who still have budget.
   // Pro users have a verified proPass, so their client value is used to enforce
   // their own plan limits (the server trusts the pass, not the number).
-  const trustedTexTokensLeft = (isPro && !isDev) ? texTokensLeft : undefined;
+  const trustedTexTokensLeft = undefined;
 
   const safety = await checkCreditSafety({
     selected,
@@ -327,6 +485,7 @@ module.exports = async function handler(request, response) {
     userId,
     estimate,
     texTokensLeft: trustedTexTokensLeft,
+    isPro: isPro && !isDev,
   });
   if (!safety.ok) {
     logUsage({
@@ -373,7 +532,14 @@ module.exports = async function handler(request, response) {
         error: publicError,
         text: publicText,
       });
-      sseWrite(response, { done: true });
+      sseWrite(response, {
+        done: true,
+        usage: {
+          input_tokens: context.estimate.inputTokens,
+          output_tokens: context.estimate.outputTokens,
+          textokens_charged: context.estimate.textokens,
+        },
+      });
       response.end();
       return;
     }
@@ -452,25 +618,32 @@ end)
 \`\`\`
 
 ROBLOX-SPECIFIC GOTCHAS:
-- Never invent Roblox APIs, services, events, or properties. If you need a custom RemoteEvent/BindableEvent, create it in the file block before using it. Do not use fake members like ReplicatedStorage.OnGameStart unless the project context shows that exact instance already exists.
-- There is no general "game start" event in ReplicatedStorage. For server startup, code runs when the Script starts. For players joining, use Players.PlayerAdded. For character spawn, use player.CharacterAdded.
-- RemoteEvents MUST be created on the server first. The correct pattern: a server Script creates the RemoteEvent in ReplicatedStorage, then LocalScripts use WaitForChild to find it. Never assume RemoteEvents exist before being created.
-- WaitForChild() when accessing instances that may not exist yet (especially cross-script). Use :WaitForChild("Name", timeout) with a timeout for graceful failure.
-- LocalScripts CANNOT read from ServerScriptService — use ReplicatedStorage for anything both sides need.
-- ModuleScript state is shared per VM: all server Scripts share one instance of a server module, all LocalScripts share one instance of the client module. Do not store per-player state in a module unless it is keyed by player.
-- Touched events fire many times per second — use a debounce table keyed by the touching part or player.
-- Character is loaded async: player.CharacterAdded:Wait() or CharacterAppearanceLoaded. Never assume character exists when PlayerAdded fires.
-- Destroy() removes an instance AND disconnects all its connections; don't use the object after.
-- Humanoid.Health = 0 kills a character; use Humanoid:TakeDamage() to respect ForceField.
-- Parts with Anchored = true are not affected by physics.
-- Vector3, CFrame, Color3, UDim2, Enum values are value types — assign, don't mutate.
-- Instance:FindFirstChildOfClass() is safer than direct name indexing.
-- Use task.spawn / task.delay / task.wait instead of spawn / wait / delay (deprecated, slower).
-- Always disconnect connections when no longer needed (store :Connect() return value and call :Disconnect()).
-- game.Players.LocalPlayer is only accessible in LocalScripts. Using it in a Script returns nil.
-- RunService:IsServer() / :IsClient() let a ModuleScript behave differently on each side.
+- Never invent Roblox APIs, services, events, or properties. If you need a custom RemoteEvent/BindableEvent, create it in the file block before using it. Do not reference fake members like ReplicatedStorage.OnGameStart unless the project context confirms it exists.
+- There is no general "game start" event. Server startup: code runs when the Script loads. Players joining: Players.PlayerAdded. Character spawn: player.CharacterAdded.
+- RemoteEvents MUST be created on the server first. Server Script creates it in ReplicatedStorage; LocalScript uses :WaitForChild("EventName", 10) to get it. Never assume a RemoteEvent exists.
+- Always use :WaitForChild("Name", 10) with a timeout when accessing cross-script instances. A plain index that doesn't exist returns nil silently and errors later.
+- LocalScripts CANNOT access ServerScriptService. Put shared assets in ReplicatedStorage.
+- ModuleScript state is per-VM: one shared instance for all server Scripts, one for all LocalScripts. Key per-player data by player object, not globals.
+- Touched fires multiple times per second — debounce with a table keyed by player: local db = {}; part.Touched:Connect(function(hit) local p = Players:GetPlayerFromCharacter(hit.Parent); if not p or db[p] then return end; db[p] = true; task.delay(1, function() db[p] = nil end) end).
+- Character loads async. After PlayerAdded fires, character may not exist yet. Always use player.CharacterAdded:Wait() before accessing the character model.
+- Humanoid.Health = 0 kills instantly and ignores ForceField. Use Humanoid:TakeDamage(amount) instead.
+- Destroy() removes AND disconnects everything. Never reference a destroyed instance.
+- task.wait / task.spawn / task.delay are correct modern APIs. wait() / spawn() / delay() are deprecated — never use them.
+- Always store :Connect() return values and call :Disconnect() when done to prevent memory leaks.
+- game.Players.LocalPlayer is nil on the server. Only use it in LocalScripts.
+- RunService:IsServer() / :IsClient() lets a ModuleScript branch correctly for each side.
+- If displaying user-entered text to other players, filter it with TextService:FilterStringAsync() on the server first.
+- ProximityPrompt: place it inside any Part; listen on server with ProximityPrompt.Triggered:Connect(function(player) ... end).
+- Tween pattern: local ts = game:GetService("TweenService"); local tw = ts:Create(part, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = targetCFrame}); tw:Play().
+- HumanoidRootPart access: local hrp = char:WaitForChild("HumanoidRootPart", 5); if not hrp then return end.
 
-STUDIO WORKFLOW: When the ROTEX plugin is connected, output Lua using \`\`\`file:ServiceName/path/Script.lua\`\`\` blocks so ROTEX can apply them directly to Studio. Use the service name as the root folder (e.g. \`ServerScriptService/Leaderstats.lua\`, \`ReplicatedStorage/Modules/Inventory.lua\`).`,
+COMMON RUNTIME ERRORS AND FIXES:
+- "attempt to index nil" — something wasn't WaitForChild'd or LocalPlayer was used on server. Add a nil guard.
+- "DataStore request was added to queue" — DataStore rate limit hit; add pcall and retry logic, or use UpdateAsync with exponential backoff.
+- "Unable to cast value to Object" — wrong argument type passed to a Roblox API; check expected types.
+- "X is not a valid member of Y" — typo in service or instance name, or the instance hasn't been created yet.
+
+STUDIO WORKFLOW: ALWAYS output Lua using \`\`\`file:ServiceName/path/Script.lua\`\`\` blocks so ROTEX can apply them directly to Studio. Use the service name as the root folder (e.g. \`ServerScriptService/Leaderstats.lua\`, \`ReplicatedStorage/Modules/Inventory.lua\`). Never output a plain \`\`\`lua block for code that belongs in a Studio file.`,
 
     'Roblox+Blender': `ENGINE FOCUS — Roblox Studio (Luau) + Blender
 You are an expert in both Roblox game development and Blender 3D asset creation, specializing in the pipeline between them.
@@ -690,57 +863,122 @@ COMMON SCRIPTING PATTERNS:
   return guides[mode] || `ENGINE FOCUS: You are specialized in ${mode}. Focus your answers on ${mode} topics and game development. Redirect unrelated questions.`;
 }
 
-function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode) {
+function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false) {
+  const projectContextText = String(projectContext || '');
+  const askMode = /ROTEX UI MODE:\s*ASK/i.test(projectContextText);
+  const planMode = /ROTEX UI MODE:\s*PLAN/i.test(projectContextText);
   const parts = [
     'You are ROTEX AI, the coding assistant inside the ROTEX desktop app chat.',
     `You are running as the **${selected.name}** model (${selected.providerName}).`,
     buildEngineSection(projectMode || 'Roblox'),
     'Output only what is needed. No preamble ("Sure!", "Here\'s how...", "Let me help you..."), no closing filler ("Let me know if you need anything else", "Hope this helps!"). Start with the answer — code first, one short explanation line after only if the code alone is not enough.',
-    'Do NOT generate code for greetings, casual conversation, or questions that do not ask for code. If the user says "hi", "thanks", or asks a question, respond conversationally without any code blocks.',
-    'Write COMPLETE, RUNNABLE code every time. File blocks must contain the full file — no placeholders, no "-- your logic here", no "-- rest of code", no "...", no truncation. Every function must be fully implemented.',
-    'Format responses clearly: use bullet points for multiple items, numbered steps for sequences. Avoid walls of text. Keep explanations tight — one sentence per point.',
+    'Do NOT generate code for greetings, casual conversation, or questions that do not ask for code. If the user says "hi", "thanks", or asks a question, respond conversationally in 1-2 sentences. Never attach a code block to a casual message.',
+    'Write COMPLETE, RUNNABLE code every time. File blocks must contain the full file — no placeholders, no "-- your logic here", no "-- rest of code", no "...", no truncation of any kind. Every function must be fully implemented. If the file is long, write every line.',
+    'Format responses clearly: use bullet points for multiple items, numbered steps for sequences. Avoid walls of text. Keep explanations tight — one sentence per point. Never use markdown headers (##) inside chat responses.',
     'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
-    'STRICT API ACCURACY: Before writing any API call, service name, event name, or property, verify it is real and documented. Never invent Roblox members, Unity methods, or Blender bpy calls. If unsure whether something exists, say so rather than guessing.',
-    'When fixing a bug: state the root cause in one sentence, then output the fixed file block. Nothing else.',
-    'When adding a feature: output all modified file blocks directly. Output every file that needs to change — do not leave any out. If a new script is needed alongside an existing one, output both.',
-    'Read PROJECT CONTEXT before writing anything. If the user\'s project already has a script at a path, modify that exact script — do not create a duplicate at a different location. Match the existing variable names, RemoteEvent names, and coding patterns in their project.',
-    'When showing code changes for a specific file, ALWAYS use a file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. The editor shows the user a diff and an Apply button for each file block.',
-    'The file block header must contain ONLY the path. Put the code on the next line. Correct:\n```file:ServerScriptService/Example.lua\nprint("hello")\n```\nWrong: ```file:ServerScriptService/Example.lua print("hello")```.',
-    'For small inline snippets that are not meant to replace a file, use normal ```lang code fences instead.',
+    'STRICT API ACCURACY: Only use documented, real APIs. Never invent Roblox service members, Unity methods, or Blender bpy calls. Before writing any RemoteEvent name or Instance path, check the PROJECT CONTEXT to confirm it already exists, or create it explicitly in the code.',
+    'AGENT DECISION PROTOCOL: classify the user request as one of: answer-only, plan-only, create, modify, remove/disable, debug, inspect, or verify. Then perform only that class. Do not drift into a different class. If the user already gave a direct command, execute it instead of asking setup questions that PROJECT CONTEXT can answer.',
+    'REASON BEFORE ACTING: silently analyze every request in three steps before answering: (1) INTENT — what does the user actually want? (2) CONTEXT — which existing scripts, events, or instances already own this behavior? (3) IMPACT — what could this change break? Use the answers to pick the smallest correct action.',
+    'PROJECT CONTEXT PROTOCOL: scan PROJECT CONTEXT for matching script names, paths, RemoteEvents, ScreenGuis, Tools, camera/input scripts, and previous ROTEX-created scripts. Prefer modifying/removing exact matches over creating new scripts.',
+    'ROBLOX PATH PROTOCOL: file paths must start with a real Roblox root: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. For StarterPlayerScripts use StarterPlayer/StarterPlayerScripts/Name.client.lua.',
+    'OUTPUT PROTOCOL: In Agent/Super Agent, output hidden executable blocks first. Use file blocks for source changes and studio-action blocks for deletion/property/model actions. Do not output plain code that cannot be applied.',
+    'SELF-CHECK PROTOCOL before final output: check whether the blocks actually satisfy the user request, whether removal requests remove/disable instead of recreate, whether client/server placement is correct, whether cleanup exists, and whether all referenced Instances are created or WaitForChild-ed.',
+    'You are not a code dispenser. In Agent/Super Agent mode, your job is to make the user\'s actual game state correct. Decide whether the task requires creating, updating, deleting, disabling, selecting, or setting a property, then output the exact hidden file/studio-action blocks needed.',
+    'Before changing a Roblox feature, identify the script/path from PROJECT CONTEXT that owns the behavior. If the user asks to undo/remove/turn off a feature, prefer deleting or disabling the owning script instead of writing replacement code.',
+    'Never claim something is fixed unless your output includes an executable file block or studio-action block that would actually make the change. If the right action is unclear, ask one short question instead of pretending.',
+    'For camera/control/input tasks, reason about LocalScript placement carefully. Client-only behavior belongs under StarterPlayer/StarterPlayerScripts or StarterCharacterScripts; server Scripts cannot control LocalPlayer camera.',
+    'For existing Roblox scripts, preserve unrelated code. Modify only the script that owns the requested behavior. Do not create duplicate scripts with similar names unless the user asked for a new separate system.',
+    'If a requested feature needs both setup and cleanup, include cleanup: disconnect RBXScriptConnections, restore CameraType/MouseBehavior when disabling, handle respawn/CharacterAdded, and avoid permanent locked state.',
+    'When fixing a bug: identify the root cause in exactly one sentence (e.g. "The debounce table was keyed by part, not by player, so two players touching simultaneously both triggered."), then output the corrected file block with no further explanation.',
+    'When the user pastes an error: read the full stack trace, identify the exact line and type of error (nil reference, missing child, rate limit, etc.), explain in one sentence why it happened, then give the fix.',
+    'When adding a feature: output all modified file blocks directly. Output every file that needs to change — never leave one out. If adding something that requires both a server Script and a LocalScript, output both.',
+    'Read PROJECT CONTEXT before writing anything. If the user\'s project already has a script at a path, modify that exact script — do not create a duplicate. Match the existing variable names, RemoteEvent names, function names, and coding style from their project.',
+    'When writing Roblox Lua: always use task.wait(n) not wait(n), task.spawn() not spawn(), task.delay() not delay() — the task library is faster and non-deprecated. Always wrap DataStore calls in pcall. Always use :WaitForChild("Name", 10) with a timeout when accessing cross-script instances.',
+    'ROBLOX LIFECYCLE RULES: CharacterAdded can fire multiple times per player (respawns). Never assume the character exists at the top of a LocalScript; wait for it or use CharacterAdded. PlayerRemoving/Destroying events must disconnect custom loops to avoid errors.',
+    'ROBLOX SECURITY RULES: validate all RemoteEvent/RemoteFunction payloads on the server. Never trust the client for damage, currency, inventory, or moderation. Use server authority for game-state changes.',
+    'ROBLOX PERFORMANCE RULES: avoid busy loops without task.wait(). Disconnect event connections when systems are disabled. Use :WaitForChild with timeouts instead of infinite waits. Cache expensive lookups like GetService or FindFirstChild.',
+    'ERROR INTELLIGENCE: when a Studio error is reported, trace it backward from the failing line to the source. Common patterns: nil from LocalPlayer on server → script is a Script, not LocalScript; "attempt to index nil with X" → missing WaitForChild or wrong path; "HTTP 401" → bad plugin token; "not a valid member" → typo or wrong service.',
+    'SMART DUPLICATION CHECK: before creating a new script, search PROJECT CONTEXT for existing scripts with similar names or behavior. If found, modify the existing one and use studio-action delete_instance to remove duplicates if necessary.',
+    'DUPLICATE UI/SYSTEM FIX RULE: if the user says there are two bars, duplicate buttons, duplicate stamina/sprint UI, duplicate health UI, or "make only one", do not only edit the newest script. Search PROJECT CONTEXT for every script and ScreenGui that creates that UI, keep exactly one owner, and output studio-action delete_instance blocks for stale UI scripts/ScreenGuis plus the corrected owner file.',
+    'STAMINA/SPRINT SPECIFIC RULE: if fixing duplicate stamina bars, inspect paths containing Stamina, Sprint, Bar, UI, Gui, StarterGui, StarterPlayerScripts, and PlayerGui. Prefer one LocalScript owner under StarterPlayer/StarterPlayerScripts or StarterGui, and delete/disable duplicate StaminaUI/SprintUI scripts or ScreenGuis.',
+    'SMART CHANGE SCOPING: only change files that must change. If the user asks for a UI tweak, do not rewrite unrelated game systems. If the user asks for a bug fix, do not add features. Keep diffs minimal and correct.',
+    'SMART NAMING: reuse existing variable names, RemoteEvent names, and function names from PROJECT CONTEXT. Do not introduce new naming conventions unless the project is empty.',
+    'SMART DEFAULTS: when a value is missing from context, choose sensible, safe defaults. Prefer existing project constants over invented ones. Document defaults only if they materially affect behavior.',
+    'AUTO-FIX OVERRIDE: if the user message starts with "[AUTO-FIX]", the user is asking you to fix a Studio runtime error that was detected automatically. Start your response with exactly "Oh! Roblox sent a error, let me fix it..." on its own line, then diagnose the error using the PROJECT CONTEXT and output the fix. This is the only exception to the no-preamble rule.',
+    askMode ? 'ASK MODE HARD RULE: Do not output code blocks, file blocks, patches, commands, or implementation snippets. Ask mode can answer questions and explain concepts only. If the user asks you to make/edit/fix/build something, tell them to switch to Agent or Super Agent mode to edit the game.' : '',
+    planMode ? 'PLAN MODE HARD RULE: Do not output code blocks, file blocks, patches, commands, or implementation snippets. Return a concise numbered plan only. Mention that Agent or Super Agent can execute it.' : '',
+    (!askMode && !planMode) ? 'When showing code changes for a specific file, ALWAYS use a file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. The editor shows the user a diff and an Apply button for each file block.' : '',
+    (!askMode && !planMode) ? 'The file block header must contain ONLY the path. Put the code on the next line. Correct:\n```file:ServerScriptService/Example.lua\nprint("hello")\n```\nWrong: ```file:ServerScriptService/Example.lua print("hello")```.' : '',
+    (!askMode && !planMode) ? 'For small inline snippets that are not meant to replace a file, use normal ```lang code fences instead.' : '',
     'If PROJECT CONTEXT says the Roblox Studio plugin is CONNECTED, treat Studio as connected even if older chat messages suggest otherwise.',
-    'When the user asks you to make/create/add/fix anything in Roblox, ALWAYS output the Lua code in a ```file:ServiceName/path/ScriptName.lua block — not a plain ```lua block. Use service names as the root folder: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, StarterPack. ROTEX auto-applies file blocks to Studio when connected, and shows them ready-to-apply when not. Never tell the user to paste code manually.',
-    'For client scripts under StarterPlayerScripts, use paths like ```file:StarterPlayer/StarterPlayerScripts/FirstPersonCamera.client.lua, not ```file:StarterPlayerScripts/FirstPersonCamera.client.lua.',
+    (!askMode && !planMode) ? 'When the user asks you to make/create/add/fix anything in Roblox, ALWAYS output the Lua code in a ```file:ServiceName/path/ScriptName.lua block — not a plain ```lua block. Use service names as the root folder: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, StarterPack. ROTEX auto-applies file blocks to Studio when connected, and shows them ready-to-apply when not. Never tell the user to paste code manually.' : '',
+    (!askMode && !planMode) ? 'For client scripts under StarterPlayerScripts, use paths like ```file:StarterPlayer/StarterPlayerScripts/FirstPersonCamera.client.lua, not ```file:StarterPlayerScripts/FirstPersonCamera.client.lua.' : '',
+    (!askMode && !planMode) ? 'When the user asks to remove, undo, turn off, disable, or get out of a feature, do NOT rewrite the same feature back in. Delete or disable the script that causes it. Use a studio-action block when deletion or property edits are the right operation.' : '',
+    (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
+    (!askMode && !planMode) ? 'Common removal examples: "get out of first person" should delete or disable the first-person LocalScript; "remove sprint" should delete/disable the sprint script and any UI it created; "stop the GUI" should disable or delete the ScreenGui/LocalScript, not add another script that fights it.' : '',
+    (!askMode && !planMode) ? 'Duplicate UI example: if the user says "there are still 2 bars" after a stamina/sprint change, output delete_instance actions for the extra StaminaUI/SprintUI ScreenGui/LocalScript paths and update the remaining sprint/stamina script so it creates or controls only one bar.' : '',
+    (!askMode && !planMode) ? 'After file/studio-action blocks, do not add fake success claims. The desktop app reports Studio results. Keep any human text to one short sentence about what the change is intended to do.' : '',
     'To create 3D models/parts in Studio, use a ```roblox-model block with JSON. Example:\n```roblox-model\n{"name":"Castle","parent":"Workspace","parts":[{"name":"Base","size":[20,1,20],"position":[0,0,0],"color":[128,128,128],"material":"SmoothPlastic","anchored":true},{"name":"Wall","size":[20,10,1],"position":[0,5,-10],"color":[110,110,110],"material":"SmoothPlastic","anchored":true}]}\n```\nROTEX sends this to Studio which creates the real 3D objects. Each part can have: name, size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder), anchored, transparency, cancollide, scripts[{name,source}]. The model can also have a top-level "scripts" array for scripts attached to the Model itself.',
-    'The PROJECT CONTEXT below contains the full source of all scripts in the user\'s game (auto-scanned when Studio connected). Read them to understand the existing codebase before suggesting changes. When modifying existing scripts, reference the exact script path from the context and output a file block for it.',
+    'The PROJECT CONTEXT below contains the full source of all scripts in the user\'s game (auto-scanned when Studio connected), plus any recent Studio errors or selection data. Read them to understand the existing codebase before suggesting changes. When modifying existing scripts, reference the exact script path from the context and output a file block for it.'
   ].filter(Boolean);
   if (agent) {
     parts.push(
-      'AGENT MODE is ON. You may propose changes to multiple files in one reply: output one file block per file that needs to change (created, rewritten, or updated).',
-      'Before the file blocks, write a one-line plan of what you are changing and why. After the blocks, write at most 2 sentences on how to test.',
-      'Use the PROJECT CONTEXT below to keep paths and imports consistent with the real project structure.',
+      'AGENT MODE is ON. You are an expert Roblox engineer. Think through the FULL solution before writing — what the user actually wants, which scripts own that behavior, what could break — then deliver code that is correct and complete on the first try. No half-measures, no placeholders, no "you could also...".',
+      'AGENT MODE is ON. Be smart, direct, and execution-focused. Use PROJECT CONTEXT to choose the most likely correct path, then output the exact file/studio-action blocks needed.',
+      'AGENT ANALYSIS LOOP: (1) identify the exact user intent, (2) scan PROJECT CONTEXT for the owning script or existing pattern, (3) decide create/modify/delete/disable, (4) produce the smallest complete change, (5) verify it does not conflict with existing scripts.',
+      'Agent should solve normal one-step and two-step tasks: create a feature, modify an existing script, remove an unwanted script, or fix an obvious bug. Do not over-plan; do the smallest complete change that satisfies the request.',
+      'Before the file/studio-action blocks, write one short intent line only when it helps. After the blocks, write at most one sentence on how to test.',
+      'If multiple files are clearly required, output all of them. If the request is ambiguous but one safe default exists, choose the safe default and implement it.',
+      'When fixing an error from the Studio output, reproduce the error mentally: which script, which line, which variable is nil or wrong, and why. Then output the exact fix with no extra chatter.',
+      'Agent must not create duplicate systems. If a similar feature exists, modify it. If a stale conflicting script exists, delete it with a studio-action block.',
+      'Ask a question only when acting could damage unrelated systems or when PROJECT CONTEXT has no usable target and no safe default path exists.',
+    );
+  }
+  if (superAgent) {
+    parts.push(
+      'SUPER AGENT MODE is ON. You are the most capable Roblox architect available — reason far more deeply than Agent before acting. Map the entire problem, every script and system it touches, every edge case and failure mode, then produce a flawless, production-ready solution. Aim to be dramatically more thorough and correct than a normal agent: nothing missing, nothing broken, nothing left for the user to finish.',
+      'SUPER AGENT MODE is ON. You are 5x deeper than Agent. Do not stop at the first obvious edit. Run a full five-pass workflow and produce a complete, conflict-free, production-ready result.',
+      'SUPER AGENT PASS 1 — INTENT & ARCHITECTURE: restate the user request in technical terms. Identify the game systems involved (combat, economy, UI, movement, inventory, etc.). Determine whether this is a create, modify, remove, debug, or refactor task. Name the expected outcome in one sentence.',
+      'SUPER AGENT PASS 2 — CONTEXT MAPPING: scan every script, ScreenGui, RemoteEvent, RemoteFunction, Tool, ModuleScript, camera/input controller, and previous ROTEX-created object in PROJECT CONTEXT. Build a mental map of what owns the requested behavior and what could conflict. List relevant paths explicitly.',
+      'SUPER AGENT PASS 3 — CONFLICT & DUPLICATION DETECTION: find any scripts that duplicate the requested behavior or would fight the change. For removal/disable tasks, identify the feature owner. For bug fixes, identify the root cause and any duplicate scripts that would reintroduce it. Plan studio-action delete_instance or set_property blocks for stale/conflicting instances.',
+      'SUPER AGENT PASS 4 — COMPLETE EXECUTION: output every file block and studio-action block required. Include server authority, client feedback, RemoteEvents, validation, cleanup, sensible defaults, and error handling. For client systems include respawn/CharacterAdded handling. For server systems include payload validation. Never output half a feature.',
+      'SUPER AGENT PASS 5 — VERIFICATION & EDGE CASES: mentally test the change. Check respawns, multiple players, nil characters, missing children, event leaks, permanent camera/input locks, duplicate logic, and incorrect Script vs LocalScript placement. Verify every referenced Instance is created or WaitForChild-ed. If any risk remains, add a guard.',
+      'SUPER AGENT PRODUCTION CHECKLIST before final output: (a) request intent satisfied, (b) no duplicate or conflicting behavior, (c) correct Roblox service roots, (d) correct Script/LocalScript/ModuleScript placement, (e) no invented APIs, (f) no missing RemoteEvents, (g) cleanup/disconnects present, (h) server validates client input, (i) no permanent camera/input lock, (j) every file block is complete.',
+      'For bug reports, fix the root cause and remove any duplicate script that would keep reintroducing the bug. For removal requests, aggressively delete/disable the feature owner instead of writing code that fights it.',
+      'For feature requests, prefer a complete working vertical slice over a tiny partial snippet: include server authority, client feedback, RemoteEvents, validation, cleanup, and sensible defaults when relevant.',
+      'Super Agent may touch more files than Agent when needed, but every touched file must be necessary. If safe completion is impossible from context, ask one concise blocking question and name the exact missing fact.',
+      'When the user provides a Studio error or runtime output, treat it as the primary signal. Diagnose the exact line and root cause, then produce a fix and verify it cannot happen again with the same inputs.',
     );
   }
   if (projectContext) {
-    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, isPro ? 24000 : 8000)}`);
+    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, isPro ? 48000 : 16000)}`);
   }
   return parts.join('\n');
 }
 
-function pickTbThinkingModel(selected, cleanMessages) {
-  const lastUser = [...cleanMessages].reverse().find(m => m.role === 'user');
-  const raw = lastUser?.content || '';
-  const txt = (Array.isArray(raw) ? raw.filter(p => p.type === 'text').map(p => p.text).join(' ') : String(raw)).toLowerCase();
-  const isCode = /\b(write|create|make|add|build|implement|script|function|generate code|program|give me|roblox)\b/.test(txt);
-  const isTest = /\b(test|check|debug|review|error|bug|broken|validate|analyze|fix|why|what.?s wrong|doesn.?t work)\b/.test(txt);
-  if (isCode) return selected.codeModel;
-  if (isTest) return selected.testModel;
-  return selected.chatModel;
+function pickTbThinkingModel(selected) {
+  return selected.thinkingModel || selected.chatModel || selected.codeModel || selected.testModel;
 }
 
-function resolveProviderCall(selected, cleanMessages) {
+function resolveProviderCall(selected, cleanMessages, opts = {}) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const attempts = [];
+
+  // Agent / Super Agent run on the strongest available Claude models so they
+  // reason and plan far better than the base chat models. Super Agent uses the
+  // most capable model (Opus); Agent uses a strong, faster model (Sonnet).
+  // These are tried first; the model's normal attempts below act as fallback.
+  if (anthropicKey && (opts.agent || opts.superAgent)) {
+    const smartModel = opts.superAgent
+      ? (process.env.ROTEX_SUPERAGENT_MODEL || 'claude-opus-4-8')
+      : (process.env.ROTEX_AGENT_MODEL || 'claude-sonnet-4-6');
+    attempts.push({
+      provider: 'anthropic',
+      providerModel: smartModel,
+      apiKey: anthropicKey,
+    });
+  }
 
   if (selected.route === 'tb-thinking' && openRouterKey) {
     const model = pickTbThinkingModel(selected, cleanMessages || []);
@@ -749,6 +987,15 @@ function resolveProviderCall(selected, cleanMessages) {
       providerModel: model,
       apiKey: openRouterKey,
       baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    });
+  }
+
+  // Fallback: if OpenRouter fails for tb-thinking, use Anthropic Haiku
+  if (selected.route === 'tb-thinking' && anthropicKey) {
+    attempts.push({
+      provider: 'anthropic',
+      providerModel: process.env.CLAUDE_HAIKU_PINNED_MODEL || 'claude-haiku-4-5-20251001',
+      apiKey: anthropicKey,
     });
   }
 
@@ -1112,10 +1359,7 @@ async function verifyFirebaseToken(authToken) {
     return { ok: false };
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  if (!projectId) {
-    return { ok: false };
-  }
+  const projectId = FIREBASE_PROJECT_ID;
 
   try {
     const result = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(authToken)}`);

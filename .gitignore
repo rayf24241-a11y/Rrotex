@@ -2,14 +2,7 @@
 node_modules/
 build/
 dist/
-downloads/desktop/*.exe
-downloads/desktop/*.dmg
-downloads/desktop/*.zip
-downloads/desktop/*.AppImage
-downloads/desktop/*.deb
-downloads/desktop/*.blockmap
-downloads/desktop/*-unpacked/
-downloads/desktop/ROTEX-Desktop-win/
+downloads/desktop*/
 downloads/electron-build/
 downloads/single-exe/
 *.spec

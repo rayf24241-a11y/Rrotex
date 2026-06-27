@@ -1,7 +1,7 @@
--- ROTEX Studio Plugin v2.1
+-- ROTEX Studio Plugin v2.3
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 
-local PORTS = {7878, 7874}
+local PORTS = {7878, 7874, 7871, 7870, 7861}
 local HTTP_PORT = PORTS[1]
 
 local HttpService          = game:GetService("HttpService")
@@ -72,7 +72,7 @@ local root = Frame(widget, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), C.bg)
 
 local hdr = Frame(root, UDim2.new(1,0,0,48), UDim2.new(0,0,0,0), C.surface)
 Label(hdr, "ROTEX AI", UDim2.new(1,-14,0,20), UDim2.new(0,12,0,8), C.text, 14, true)
-Label(hdr, "Studio Bridge v2.1", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
+Label(hdr, "Studio Bridge v2.3", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
 Frame(root, UDim2.new(1,0,0,1), UDim2.new(0,0,0,48), C.border)
 
 local Y = 58
@@ -91,8 +91,7 @@ Y = Y + 10
 local disconnectBtn = Button(root, "Disconnect ROTEX", UDim2.new(1,-20,0,30), UDim2.new(0,10,0,Y), C.red, Color3.new(1,1,1), 11)
 Y = Y + 38
 
-local sendCtxBtn    = Button(root, "Send Context to ROTEX", UDim2.new(1,-20,0,36), UDim2.new(0,10,0,Y), C.yellow, C.yellowDk, 13)
-Y = Y + 46
+-- Scripts now auto-sync every 10s while connected — no manual "Send Context" button.
 
 Frame(root, UDim2.new(1,-20,0,1), UDim2.new(0,10,0,Y), C.border)
 Y = Y + 10
@@ -131,7 +130,6 @@ outputText.Parent = outputScroll
 local connected    = false
 local currentToken = plugin:GetSetting("rotex_token") or ""
 local projectName  = ""
-local _connecting  = false
 
 local function setStatus(text, color)
 	statusLbl.Text, statusLbl.TextColor3 = text, color or C.quiet
@@ -140,7 +138,6 @@ end
 local function setActionButtons(enabled)
 	local a = enabled and 0 or 0.45
 	disconnectBtn.BackgroundTransparency = a; disconnectBtn.Active = enabled
-	sendCtxBtn.BackgroundTransparency    = a; sendCtxBtn.Active    = enabled
 end
 
 local function appendLog(text)
@@ -152,21 +149,32 @@ local function appendLog(text)
 end
 
 -- ── HTTP: GET with timeout ────────────────────────────────────────────────────
--- Uses GetAsync (simpler API, no body confusion, different HTTP path in Roblox)
 local function getJSON(port, path, timeoutSecs)
 	local token = currentToken:match("^%s*(.-)%s*$")
 	local url   = "http://127.0.0.1:" .. port .. path .. "?token=" .. token
 	local ref   = {done = false, data = nil, err = nil}
 	task.spawn(function()
-		local ok, body = pcall(function()
-			return HttpService:GetAsync(url, true)
+		local ok, res = pcall(function()
+			return HttpService:RequestAsync({
+				Url     = url,
+				Method  = "GET",
+				Headers = {},
+			})
 		end)
-		if ok and type(body) == "string" then
-			local ok2, decoded = pcall(function() return HttpService:JSONDecode(body) end)
-			ref.data = ok2 and decoded or nil
-			if not ok2 then ref.err = "bad JSON" end
+		if ok and res then
+			if res.Success then
+				local ok2, decoded = pcall(function() return HttpService:JSONDecode(res.Body or "") end)
+				ref.data = ok2 and decoded or nil
+				if not ok2 then ref.err = "bad JSON: " .. tostring(res.Body) end
+				if ok2 and type(decoded) == "table" and decoded.token and decoded.token ~= "" then
+					currentToken = tostring(decoded.token)
+					plugin:SetSetting("rotex_token", currentToken)
+				end
+			else
+				ref.err = "HTTP " .. tostring(res.StatusCode) .. " " .. tostring(res.StatusMessage)
+			end
 		else
-			ref.err = ok and "empty response" or tostring(body)
+			ref.err = tostring(res)
 		end
 		ref.done = true
 	end)
@@ -177,21 +185,33 @@ end
 
 -- ── HTTP: POST with timeout ───────────────────────────────────────────────────
 local function postJSON(port, path, body, timeoutSecs)
-	local token = currentToken:match("^%s*(.-)%s*$")
-	local url   = "http://127.0.0.1:" .. port .. path .. "?token=" .. token
 	local ref   = {done = false, data = nil}
 	task.spawn(function()
-		local ok, res = pcall(function()
-			return HttpService:RequestAsync({
-				Url     = url,
-				Method  = "POST",
-				Headers = { ["Content-Type"] = "application/json" },
-				Body    = body or "{}",
-			})
-		end)
-		if ok and res and res.StatusCode == 200 then
-			local ok2, decoded = pcall(function() return HttpService:JSONDecode(res.Body) end)
-			ref.data = ok2 and decoded or { ok = true }
+		for attempt = 1, 2 do
+			local token = currentToken:match("^%s*(.-)%s*$")
+			local url   = "http://127.0.0.1:" .. port .. path .. "?token=" .. token
+			local ok, res = pcall(function()
+				return HttpService:RequestAsync({
+					Url     = url,
+					Method  = "POST",
+					Headers = { ["Content-Type"] = "application/json" },
+					Body    = body or "{}",
+				})
+			end)
+			if ok and res then
+				local ok2, decoded = pcall(function() return HttpService:JSONDecode(res.Body or "{}") end)
+				if ok2 and type(decoded) == "table" and decoded.token and decoded.token ~= "" then
+					currentToken = tostring(decoded.token)
+					plugin:SetSetting("rotex_token", currentToken)
+				end
+				if res.StatusCode >= 200 and res.StatusCode < 300 then
+					ref.data = ok2 and decoded or { ok = true }
+					break
+				end
+				if res.StatusCode ~= 401 then break end
+			else
+				break
+			end
 		end
 		ref.done = true
 	end)
@@ -249,14 +269,29 @@ local function buildGameContext(includeSelected)
 			end
 		end
 	end
-	return { project = projectName, scripts = scripts, selected = selected }
+	local gameName = projectName
+	if not gameName or gameName == "" then
+		local ok, n = pcall(function() return game.Name end)
+		gameName = (ok and n and n ~= "" and n) or "Untitled Experience"
+	end
+	return { project = projectName, gameName = gameName, pluginVersion = "2.3", scripts = scripts, selected = selected }
 end
 
 -- ── Instance resolver ─────────────────────────────────────────────────────────
 local function resolveByPath(fullPath)
 	local parts = {}
-	for part in string.gmatch(fullPath or "", "[^%.]+") do table.insert(parts, part) end
+	for part in string.gmatch((fullPath or ""):gsub("[/\\]", "."), "[^%.]+") do table.insert(parts, part) end
 	if #parts == 0 then return nil end
+	if parts[1] == "StarterPlayerScripts" or parts[1] == "StarterCharacterScripts" then
+		table.insert(parts, 1, "StarterPlayer")
+	end
+	if parts[#parts] then
+		parts[#parts] = (parts[#parts] or "")
+			:gsub("%.client%.lua$","")
+			:gsub("%.server%.lua$","")
+			:gsub("%.module%.lua$","")
+			:gsub("%.lua$","")
+	end
 	local ok, root = pcall(function()
 		if parts[1] == "game" or parts[1] == "Game" then return game end
 		return game:GetService(parts[1])
@@ -392,109 +427,126 @@ local function handleSelectInstances(action)
 	return true, "Selected " .. #targets .. " instances"
 end
 
--- ── Connect ───────────────────────────────────────────────────────────────────
-local function doConnect(manual)
-	if _connecting then
-		if manual then appendLog("[ROTEX] Already connecting, please wait…") end
-		return
-	end
-	_connecting = true
-
-	if manual then
-		setStatus("● Connecting…", C.yellow)
-		connectBtn.Text = "Connecting…"
-		appendLog("[ROTEX] Trying ports " .. table.concat(PORTS, ", ") .. "…")
-	end
-	scriptCountLbl.Text = ""
-
-	local connPort, connData
-	for _, port in ipairs(PORTS) do
-		local data, err = getJSON(port, "/ping", 5)
-		if data and data.ok then
-			connPort = port
-			connData = data
-			break
-		end
-		if manual then
-			appendLog("[ROTEX] Port " .. port .. ": " .. (err or "no response"))
-		end
-	end
-
-	_connecting = false
-
-	if connPort then
-		HTTP_PORT = connPort
-		local token = (connData.token or ""):match("^%s*(.-)%s*$")
-		if #token >= 4 then
-			currentToken = token
-			plugin:SetSetting("rotex_token", token)
-		end
-		connected   = true
-		projectName = connData.project or ""
-		setActionButtons(true)
-		connectBtn.Text = "Reconnect"
-		setStatus("✓ Connected to ROTEX", C.green)
-		appendLog("[ROTEX] Connected on port " .. connPort .. (projectName ~= "" and (" — " .. projectName) or ""))
-
-		-- Auto-start Rojo
-		task.spawn(function()
-			local r = postJSON(HTTP_PORT, "/rojo/start", "{}", 5)
-			if r then
-				setStatus("✓✓ Connected + Rojo", C.green)
-				appendLog("[Rojo] Started — syncing files")
-			else
-				appendLog("[Rojo] Not available (install from rojo.space)")
-			end
-		end)
-
-		-- Send initial context
-		task.spawn(function()
-			appendLog("[Scan] Reading game scripts…")
-			local ctx = buildGameContext(false)
-			local n = #(ctx.scripts or {})
-			scriptCountLbl.Text = n .. " scripts found"
-			local body = HttpService:JSONEncode(ctx)
-			postJSON(HTTP_PORT, "/ai/start", body, 8)
-			appendLog("[Scan] Sent " .. n .. " scripts to ROTEX — ready to chat!")
-		end)
-	else
-		connectBtn.Text = "Connect to ROTEX"
-		if manual then
-			setStatus("● Not connected", C.quiet)
-			appendLog("[ROTEX] Could not reach ROTEX — is the desktop app open?")
-		end
-	end
+-- ── Connection helpers ────────────────────────────────────────────────────────
+-- Detects the "Http requests are not enabled" Studio error so we can tell the
+-- user exactly how to fix it instead of silently showing "not found".
+local function isHttpDisabled(err)
+	if not err then return false end
+	local e = string.lower(tostring(err))
+	return e:find("not enabled", 1, true) ~= nil
+		or e:find("http requests", 1, true) ~= nil
+		or e:find("httpenabled", 1, true) ~= nil
 end
 
--- ── Disconnect ────────────────────────────────────────────────────────────────
-disconnectBtn.MouseButton1Click:Connect(function()
-	if not connected then return end
-	task.spawn(function() postJSON(HTTP_PORT, "/rojo/stop", "{}", 3) end)
+local function tryConnect()
+	local lastErr = nil
+	for _, port in ipairs(PORTS) do
+		local data, err = getJSON(port, "/ping", 2)
+		if data and data.ok then return port, data end
+		if err then
+			lastErr = err
+			appendLog("[ROTEX] port " .. port .. " → " .. err)
+		end
+	end
+	return nil, nil, lastErr
+end
+
+local function onConnected(connPort, connData)
+	HTTP_PORT   = connPort
+	local token = (connData.token or ""):match("^%s*(.-)%s*$")
+	if #token >= 4 then
+		currentToken = token
+		plugin:SetSetting("rotex_token", token)
+	end
+	connected   = true
+	projectName = connData.project or ""
+	setActionButtons(true)
+	connectBtn.Text = "Reconnect"
+	setStatus("✓ Connected · port " .. connPort, C.green)
+	appendLog("[ROTEX] Connected on port " .. connPort)
+	task.spawn(function()
+		appendLog("[Scan] Reading game scripts…")
+		local ctx = buildGameContext(false)
+		local n   = #(ctx.scripts or {})
+		scriptCountLbl.Text = n .. " scripts found"
+		postJSON(HTTP_PORT, "/ai/start", HttpService:JSONEncode(ctx), 8)
+		appendLog("[Scan] Sent " .. n .. " scripts — ready to chat!")
+	end)
+end
+
+local function onDisconnected(reason)
 	connected = false
 	setActionButtons(false)
 	connectBtn.Text = "Connect to ROTEX"
-	setStatus("● Not connected", C.quiet)
+	setStatus("● " .. (reason or "Disconnected"), C.quiet)
 	scriptCountLbl.Text = ""
-	appendLog("[ROTEX] Disconnected")
+end
+
+-- ── Auto-connect loop (runs forever, retries every 5 s when not connected) ───
+task.spawn(function()
+	while true do
+		if not connected then
+			setStatus("● Searching for ROTEX Desktop…", C.yellow)
+			local connPort, connData, connErr = tryConnect()
+			if connPort then
+				onConnected(connPort, connData)
+			elseif isHttpDisabled(connErr) then
+				setStatus("⚠ Enable HTTP Requests (see log)", C.red)
+				connectBtn.Text = "Connect to ROTEX"
+				appendLog("[ROTEX] HTTP requests are OFF. Fix: Home → Game Settings → Security → turn ON 'Allow HTTP Requests' (or run  game:GetService('HttpService').HttpEnabled = true  in the command bar), then click Connect.")
+			else
+				setStatus("● ROTEX Desktop not found — is the app open?", C.quiet)
+				connectBtn.Text = "Connect to ROTEX"
+			end
+		end
+		task.wait(5)
+	end
 end)
 
--- ── Send Context ──────────────────────────────────────────────────────────────
-sendCtxBtn.MouseButton1Click:Connect(function()
+-- ── Disconnect button (manual stop) ──────────────────────────────────────────
+disconnectBtn.MouseButton1Click:Connect(function()
 	if not connected then return end
-	appendLog("[Context] Scanning game…")
-	task.spawn(function()
-		local ctx = buildGameContext(true)
-		local n = #(ctx.scripts or {})
-		local s = #(ctx.selected or {})
-		scriptCountLbl.Text = n .. " scripts" .. (s > 0 and (" · " .. s .. " selected") or "")
-		postJSON(HTTP_PORT, "/ai/start", HttpService:JSONEncode(ctx), 8)
-		appendLog("[Context] Sent " .. n .. " scripts" .. (s > 0 and (", " .. s .. " selected") or ""))
-	end)
+	postJSON(HTTP_PORT, "/disconnect", "{}", 2)
+	onDisconnected("Manually disconnected")
+	appendLog("[ROTEX] Manually disconnected")
 end)
 
--- ── Connect button ────────────────────────────────────────────────────────────
+-- ── Auto-send game context every 10s while connected ──────────────────────────
+-- Replaces the old manual "Send Context" button. Keeps ROTEX's view of the
+-- place's scripts fresh automatically.
+task.spawn(function()
+	while true do
+		task.wait(10)
+		if not connected then continue end
+		local ok, ctx = pcall(function() return buildGameContext(false) end)
+		if ok and ctx then
+			local n = #(ctx.scripts or {})
+			scriptCountLbl.Text = n .. " scripts found"
+			postJSON(HTTP_PORT, "/ai/start", HttpService:JSONEncode(ctx), 8)
+		end
+	end
+end)
+
+-- ── Connect button (force immediate retry) ────────────────────────────────────
 connectBtn.MouseButton1Click:Connect(function()
-	task.spawn(doConnect, true)
+	if connected then return end
+	setStatus("● Connecting…", C.yellow)
+	connectBtn.Text = "Connecting…"
+	appendLog("[ROTEX] Connecting…")
+	task.spawn(function()
+		local connPort, connData, connErr = tryConnect()
+		if connPort then
+			onConnected(connPort, connData)
+		elseif isHttpDisabled(connErr) then
+			connectBtn.Text = "Connect to ROTEX"
+			setStatus("⚠ Enable HTTP Requests (see log)", C.red)
+			appendLog("[ROTEX] HTTP requests are OFF. Fix: Home → Game Settings → Security → turn ON 'Allow HTTP Requests' (or run  game:GetService('HttpService').HttpEnabled = true  in the command bar), then click Connect.")
+		else
+			connectBtn.Text = "Connect to ROTEX"
+			setStatus("● ROTEX Desktop not found", C.quiet)
+			appendLog("[ROTEX] Could not reach ROTEX — is the desktop app open?")
+		end
+	end)
 end)
 
 -- ── Toolbar toggle ────────────────────────────────────────────────────────────
@@ -502,13 +554,23 @@ btnOpen.Click:Connect(function()
 	widget.Enabled = not widget.Enabled
 end)
 
--- ── Action poll loop (1s) ─────────────────────────────────────────────────────
+-- ── Action poll loop (1 s) — also detects disconnect via consecutive failures ─
 task.spawn(function()
+	local failCount = 0
 	while true do
 		task.wait(1)
-		if not connected then continue end
+		if not connected then failCount = 0; continue end
 		local data = getJSON(HTTP_PORT, "/studio/actions", 4)
-		if not data then continue end
+		if not data then
+			failCount = failCount + 1
+			if failCount >= 5 then
+				appendLog("[ROTEX] Connection lost — reconnecting automatically…")
+				onDisconnected("Lost connection — reconnecting…")
+				failCount = 0
+			end
+			continue
+		end
+		failCount = 0
 		local action = data.action
 		if not action then continue end
 
@@ -554,14 +616,33 @@ task.spawn(function()
 		end
 
 		appendLog("[Studio] " .. table.concat(msgs, "\n[Studio] "))
-		postJSON(HTTP_PORT, "/studio/result", HttpService:JSONEncode({ ok = success, messages = msgs }), 4)
+		postJSON(HTTP_PORT, "/studio/result", HttpService:JSONEncode({ ok = success, messages = msgs, actionId = action.id }), 4)
 	end
 end)
 
--- ── Heartbeat (every 3s) ──────────────────────────────────────────────────────
+-- ── Error capture ─────────────────────────────────────────────────────────────
+local LogService = game:GetService("LogService")
+local lastErrorAt = 0
+local ERROR_THROTTLE_SEC = 2
+local errorConnection = LogService.MessageOut:Connect(function(message, messageType)
+	if not connected then return end
+	if messageType ~= Enum.MessageType.MessageError and messageType ~= Enum.MessageType.MessageWarning then return end
+	-- Throttle identical errors to avoid spamming the AI.
+	local now = tick()
+	if now - lastErrorAt < ERROR_THROTTLE_SEC then return end
+	lastErrorAt = now
+	local payload = HttpService:JSONEncode({
+		message = tostring(message),
+		type = tostring(messageType),
+		time = os.time(),
+	})
+	postJSON(HTTP_PORT, "/studio/error", payload, 4)
+end)
+
+-- ── Heartbeat (every 0.7s) ────────────────────────────────────────────────────
 task.spawn(function()
 	while true do
-		task.wait(3)
+		task.wait(0.7)
 		if not connected then continue end
 		local r = postJSON(HTTP_PORT, "/heartbeat", "{}", 4)
 		if not r then
@@ -572,4 +653,3 @@ end)
 
 -- ── Startup ───────────────────────────────────────────────────────────────────
 setActionButtons(false)
-task.delay(3, function() doConnect(false) end)

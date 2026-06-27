@@ -1,4 +1,6 @@
-downloads/single-exe/**
-downloads/electron-build/**
-downloads/desktop/ROTEX-Desktop-win/**
+downloads/**
 build/**
+electron/node_modules/**
+asar-patch/**
+asar-patch-check/**
+api/billing-sync.js

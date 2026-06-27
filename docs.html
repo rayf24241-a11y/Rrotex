@@ -133,35 +133,35 @@
 
     <div class="box box-note">
       <div class="box-icon">ℹ️</div>
-      <p><strong>Download:</strong> Get ROTEX at <strong>rrotex.com</strong>. The browser extension and Studio plugin are bundled with the desktop app.</p>
+      <p><strong>Download:</strong> Get ROTEX at <strong>rrotex.com</strong>. The Roblox Studio plugin is bundled with the desktop app and installs into Studio automatically.</p>
     </div>
   </section>
 
   <!-- ══ Quick Start ══ -->
   <section id="quickstart">
     <h2>Quick Start</h2>
-    <h3>1. Open a Project</h3>
-    <p>Launch ROTEX, sign in, and click <strong>New Project</strong>. Choose Roblox as your engine and give it a name.</p>
+    <h3>1. Open ROTEX</h3>
+    <p>Launch ROTEX and sign in. It opens straight to the AI chat — there is nothing to set up first.</p>
 
-    <h3>2. Connect Studio</h3>
-    <p>Inside your project, click <strong>Install Studio Plugin</strong> — ROTEX copies the plugin into your Roblox plugins folder. Open Roblox Studio, click the <strong>Open</strong> button in the ROTEX toolbar, and paste the 6-character token shown in the ROTEX desktop app.</p>
+    <h3>2. Connect Roblox Studio</h3>
+    <p>ROTEX <strong>automatically installs</strong> its plugin into Roblox Studio for you. Open (or restart) Roblox Studio, then click the <strong>ROTEX AI</strong> button in the toolbar to open the panel — it <strong>connects automatically</strong>. There is no token to copy or paste. If the panel says HTTP requests are off, turn on <strong>Game Settings → Security → Allow HTTP Requests</strong>, then click <strong>Connect</strong>.</p>
 
     <h3>3. Chat with AI</h3>
-    <p>Type any question in the chat panel. The AI knows which project you're in, whether Studio is connected, and what mode you're working in.</p>
+    <p>Once Studio is connected the chat unlocks. ROTEX shows your experience name, plugin version, and the AI you're using, and it auto-syncs your scripts every 10 seconds. Just type what you want and the AI builds, edits, or fixes it in your place.</p>
   </section>
 
   <!-- ══ Studio Plugin ══ -->
   <section id="studio-plugin">
     <h2>Studio Plugin</h2>
-    <p>The ROTEX Studio plugin runs inside Roblox Studio and communicates with the desktop app over a local HTTP server (port 7878). It lets the AI know your Studio session is live, so answers are context-aware.</p>
+    <p>The ROTEX Studio plugin runs inside Roblox Studio and talks to the desktop app over a local HTTP server (ports 7878/7874/7871/7870/7861). It connects automatically and securely — no token to enter — so the AI always knows your live Studio session is connected and stays context-aware.</p>
 
     <div class="box box-warn">
       <div class="box-icon">⚠️</div>
-      <p>The token regenerates each session. If Studio disconnects, copy the new token from the desktop app and re-enter it in the plugin panel.</p>
+      <p>ROTEX reinstalls the plugin every time the desktop app launches, so it stays up to date. After a plugin update, <strong>restart Roblox Studio once</strong> so it loads the new version — Studio only loads plugins at startup.</p>
     </div>
 
-    <h3>Rojo Sync</h3>
-    <p>Click <strong>Rojo Connect</strong> inside the plugin panel to start a Rojo dev session. The AI will see whether Rojo sync is running and can give advice accordingly.</p>
+    <h3>Connect &amp; Disconnect</h3>
+    <p>The panel has two buttons: <strong>Connect to ROTEX</strong> (it also auto-connects on its own every few seconds) and <strong>Disconnect ROTEX</strong>. While connected it sends your place's scripts to the AI automatically every 10 seconds — there is no manual "send context" step. You cannot chat with the AI until the plugin is connected.</p>
   </section>
 
   <!-- ══ Models ══ -->
@@ -169,24 +169,12 @@
     <h2>AI Model Overview</h2>
     <div class="model-cards">
       <div class="model-card">
-        <h4>Fast <span class="badge badge-free">FREE</span></h4>
-        <p>Groq Llama 3.1 8B Instant. Best for quick one-liners, simple script fixes, and fast lookups. Lowest TexToken cost.</p>
-      </div>
-      <div class="model-card">
-        <h4>Balanced <span class="badge badge-free">FREE</span></h4>
-        <p>Groq Qwen3 32B. Good balance of speed and quality. Great for mid-size coding tasks and explaining systems.</p>
-      </div>
-      <div class="model-card">
-        <h4>Smart <span class="badge badge-free">FREE</span></h4>
-        <p>Groq Llama 3.3 70B. Best free-tier model for complex debugging, architecture planning, and detailed explanations.</p>
+        <h4>TexBrain Thinking-beta <span class="badge badge-free">FREE</span></h4>
+        <p>Stronger Roblox-focused planning, code, and Studio-edit reasoning model for Roblox, Blender, debugging, and regular coding tasks.</p>
       </div>
       <div class="model-card">
         <h4>Claude Haiku <span class="badge badge-free">FREE</span></h4>
         <p>Claude Haiku 4.5. The highest quality model. Best code, best reasoning. Available to everyone and costs more TexTokens.</p>
-      </div>
-      <div class="model-card" style="grid-column:1/-1">
-        <h4>TexBrain 0.5-β <span class="badge badge-local">LOCAL · FREE</span></h4>
-        <p>Runs entirely on your machine via Ollama — completely free, no TexTokens, no rate limits. Requires <a href="#texbrain" style="color:var(--yellow)">Ollama installed</a>. Uses a three-agent pipeline: a clarifier expands your request, a worker generates the response, giving you higher quality answers from local hardware.</p>
       </div>
     </div>
   </section>
@@ -212,42 +200,10 @@
           <tr>
             <td>
               <div class="model-cell">
-                <div class="model-dot" style="background:#22C55E"></div>
-                <div>
-                  <div class="model-name">TexBrain 0.5-β</div>
-                  <div class="model-sub">Local · Ollama</div>
-                </div>
-              </div>
-            </td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="model-cell">
                 <div class="model-dot" style="background:#A855F7"></div>
                 <div>
-                  <div class="model-name">Fast</div>
-                  <div class="model-sub">Groq Llama 3.1 8B</div>
-                </div>
-              </div>
-            </td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="model-cell">
-                <div class="model-dot" style="background:#A855F7"></div>
-                <div>
-                  <div class="model-name">Balanced</div>
-                  <div class="model-sub">Groq Qwen3 32B</div>
+                  <div class="model-name">TexBrain Thinking-beta</div>
+                  <div class="model-sub">Cloud · merged pipeline</div>
                 </div>
               </div>
             </td>
@@ -256,22 +212,6 @@
             <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
             <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div><div class="star off"></div></div></td>
             <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="model-cell">
-                <div class="model-dot" style="background:#A855F7"></div>
-                <div>
-                  <div class="model-name">Smart</div>
-                  <div class="model-sub">Groq Llama 3.3 70B</div>
-                </div>
-              </div>
-            </td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div><div class="star off"></div></div></td>
-            <td><div class="stars"><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star on"></div><div class="star off"></div></div></td>
           </tr>
           <tr style="background:rgba(255,214,10,0.04);">
             <td>
@@ -302,29 +242,14 @@
 
     <div class="token-grid">
       <div class="token-card">
-        <h4>Fast</h4>
-        <div class="amount">0.16x</div>
-        <div class="sub">TexTokens per output token</div>
-      </div>
-      <div class="token-card">
-        <h4>Balanced</h4>
-        <div class="amount">1.18x</div>
-        <div class="sub">TexTokens per output token</div>
-      </div>
-      <div class="token-card">
-        <h4>Smart</h4>
-        <div class="amount">1.58x</div>
+        <h4>TexBrain Thinking-beta</h4>
+        <div class="amount">2.4x</div>
         <div class="sub">TexTokens per output token</div>
       </div>
       <div class="token-card">
         <h4>Claude Haiku</h4>
         <div class="amount">16x</div>
         <div class="sub">TexTokens per output token</div>
-      </div>
-      <div class="token-card">
-        <h4>TexBrain</h4>
-        <div class="amount" style="color:var(--green)">0</div>
-        <div class="sub">Always free — runs locally</div>
       </div>
     </div>
     <p>Agent mode doubles the cost; Super Agent mode quadruples it, since those modes run extra reasoning passes.</p>
@@ -336,7 +261,7 @@
     <div class="model-cards">
       <div class="model-card">
         <h4>Free</h4>
-        <p>150,000 TexTokens per day · 1M per month. Access to Fast, Balanced (limited), Smart (limited), and Claude Haiku. No agent mode. One account per person — multi-accounts are detected and blocked.</p>
+        <p>150,000 TexTokens per day · 1M per month. Access to TexBrain Thinking-beta and Claude Haiku. No agent mode. One account per person — multi-accounts are detected and blocked.</p>
       </div>
       <div class="model-card" style="border-color:rgba(255,214,10,0.4);">
         <h4 style="color:var(--yellow)">Pro — $20/mo</h4>

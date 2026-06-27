@@ -21,6 +21,10 @@
     projectModes: readProjectModes(),
     projectName: localStorage.getItem('rotex_project_name') || '',
     projectMode: localStorage.getItem('rotex_project_mode') || readProjectModes().join(' + ') || 'Unity',
+    studioScripts: [],
+    studioSelected: [],
+    studioErrors: [],
+    lastAutoFixAt: 0,
   };
 
   // ─── AI Models (IDs match /api/chat.js) ────────────────────────────
@@ -52,27 +56,98 @@
     return Boolean(payload && payload.plan === 'pro' && Number(payload.exp) > Date.now());
   }
 
+  function getDesktopAuth() {
+    const raw = localStorage.getItem('rotex_desktop_auth') || localStorage.getItem('rotex_desktop_auth_mirror');
+    if (!raw) return { uid: '', email: '', token: '', refreshToken: '' };
+    try {
+      const auth = JSON.parse(raw);
+      return {
+        uid: String(auth.uid || ''),
+        email: String(auth.email || ''),
+        token: String(auth.token || ''),
+        refreshToken: String(auth.refreshToken || ''),
+      };
+    } catch { return { uid: '', email: '', token: '', refreshToken: '' }; }
+  }
+
+  async function getFirebaseConfig() {
+    try {
+      const response = await fetch(`${API_BASE}/api/firebase-config`);
+      const data = await response.json();
+      return data.configured ? data.firebaseConfig : null;
+    } catch { return null; }
+  }
+
+  async function refreshIdToken() {
+    const auth = getDesktopAuth();
+    if (!auth.refreshToken) return auth.token;
+    const cfg = await getFirebaseConfig();
+    if (!cfg?.apiKey) return auth.token;
+    try {
+      const response = await fetch(`https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(cfg.apiKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(auth.refreshToken)}`,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.id_token) return auth.token;
+      const newToken = data.id_token;
+      const newRefreshToken = data.refresh_token || auth.refreshToken;
+      try {
+        const raw = localStorage.getItem('rotex_desktop_auth') || localStorage.getItem('rotex_desktop_auth_mirror') || '{}';
+        const parsed = JSON.parse(raw);
+        parsed.token = newToken;
+        parsed.refreshToken = newRefreshToken;
+        parsed.exp = String(Date.now() + 365 * 24 * 60 * 60 * 1000);
+        const serialized = JSON.stringify(parsed);
+        localStorage.setItem('rotex_desktop_auth', serialized);
+        localStorage.setItem('rotex_desktop_auth_mirror', serialized);
+      } catch {}
+      return newToken;
+    } catch { return auth.token; }
+  }
+
+  async function getValidIdToken() {
+    return await refreshIdToken();
+  }
+
+  async function refreshProPass() {
+    const pass = getProPass();
+    const auth = getDesktopAuth();
+    const idToken = await getValidIdToken();
+    if (!pass && !idToken) return { ok: false, message: 'No Pro pass or login session found.' };
+    try {
+      const response = await fetch(`${API_BASE}/api/refresh-pro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proPass: pass, authToken: idToken, uid: auth.uid, email: auth.email }),
+      });
+      const data = await response.json();
+      if (data.refreshed && data.proPass) {
+        localStorage.setItem(PRO_PASS_KEY, data.proPass);
+        userIsPro = computeIsPro();
+        buildModelMenu();
+        if (window.rotexTokens) window.rotexTokens.refreshBalanceDisplay();
+        return { ok: true };
+      } else if (data.cancelled) {
+        localStorage.removeItem(PRO_PASS_KEY);
+        userIsPro = false;
+        buildModelMenu();
+        return { ok: false, message: 'Pro subscription is no longer active.' };
+      }
+      return { ok: false, message: data.message || 'Could not refresh Pro pass.' };
+    } catch (err) {
+      return { ok: false, message: err?.message || 'Network error while refreshing Pro pass.' };
+    }
+  }
+
   async function ensureFreshProPass() {
     const pass = getProPass();
     if (!pass) return;
     const payload = proPassPayload(pass);
     const exp = payload ? Number(payload.exp) : 0;
     if (exp - Date.now() > 7 * 24 * 60 * 60 * 1000) return;
-    try {
-      const response = await fetch(`${API_BASE}/api/refresh-pro`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proPass: pass }),
-      });
-      const data = await response.json();
-      if (data.refreshed && data.proPass) {
-        localStorage.setItem(PRO_PASS_KEY, data.proPass);
-      } else if (data.cancelled || exp < Date.now()) {
-        localStorage.removeItem(PRO_PASS_KEY);
-      }
-      userIsPro = computeIsPro();
-      buildModelMenu();
-    } catch { /* network issue — retry next launch */ }
+    await refreshProPass();
   }
 
   // User plan state from the signed Pro pass.
@@ -120,9 +195,20 @@
   }
 
   function spendTexTokens(amount) {
-    const spent = spentTexTokensToday() + Math.max(0, Math.ceil(Number(amount) || 0));
-    localStorage.setItem(TEX_SPENT_DATE_KEY, new Date().toDateString());
-    localStorage.setItem(TEX_SPENT_KEY, String(spent));
+    const charge = Math.max(0, Math.ceil(Number(amount) || 0));
+    if (!charge) {
+      if (window.rotexTokens) window.rotexTokens.refreshBalanceDisplay();
+      return;
+    }
+    // Use the shared wallet so Pro/free daily allowance and purchased balance stay in sync.
+    if (window.rotexTokens) {
+      window.rotexTokens.spend(charge);
+    } else {
+      const spent = spentTexTokensToday() + charge;
+      localStorage.setItem(TEX_SPENT_DATE_KEY, new Date().toDateString());
+      localStorage.setItem(TEX_SPENT_KEY, String(spent));
+    }
+    if (window.rotexTokens) window.rotexTokens.refreshBalanceDisplay();
   }
 
   // ─── Usage Tracking ─────────────────────────────────────────────────
@@ -595,6 +681,25 @@
       }
     }
 
+    // Roblox Studio scanned scripts and selection (auto-synced by plugin every 10s).
+    if (state.studioScripts?.length) {
+      const maxScripts = userIsPro ? 120 : 40;
+      const scriptCap = userIsPro ? 3000 : 1500;
+      const scriptLines = [];
+      for (let i = 0; i < Math.min(state.studioScripts.length, maxScripts); i++) {
+        const s = state.studioScripts[i];
+        scriptLines.push(`SCRIPT: ${s.path} (${s.class})\n\`\`\`lua\n${(s.source || '').slice(0, scriptCap)}\n\`\`\``);
+      }
+      parts.push(`STUDIO SCRIPTS (${state.studioScripts.length} total):\n${scriptLines.join('\n')}`);
+    }
+    if (state.studioSelected?.length) {
+      parts.push(`STUDIO SELECTED:\n${state.studioSelected.map((s) => `- ${s.path} (${s.class})`).join('\n')}`);
+    }
+    if (state.studioErrors?.length) {
+      const recent = state.studioErrors.slice(-5);
+      parts.push(`RECENT STUDIO ERRORS / WARNINGS:\n${recent.map((e) => `- [${e.type}] ${e.message}`).join('\n')}`);
+    }
+
     return parts.join('\n\n');
   }
 
@@ -602,6 +707,19 @@
   // ─── AI Chat (streaming) ───────────────────────────────────────────
   let aiBusy = false;
   let aiAbortController = null;
+  let studioConnectWarningAt = 0;
+
+  async function isStudioConnected() {
+    if (window.__rotexStudioConnected) return true;
+    if (!window.rotexDesktop?.getPluginStatus) return false;
+    try {
+      const status = await window.rotexDesktop.getPluginStatus();
+      window.__rotexStudioConnected = Boolean(status?.connected);
+      return window.__rotexStudioConnected;
+    } catch {
+      return false;
+    }
+  }
 
   stopAiButton?.addEventListener('click', () => {
     if (aiAbortController) aiAbortController.abort();
@@ -609,15 +727,22 @@
     showToast('Stopped current ROTEX task.');
   });
 
-  aiComposer.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const text = aiInput.value.trim();
-    if (!text || aiBusy) return;
-    if (!confirmLargeTaskIfNeeded()) return;
+  async function sendChatRequest(text, options = {}) {
+    if (aiBusy || !text) return;
+    if (options.requireConfirm && !confirmLargeTaskIfNeeded()) return;
 
+    const isAutoFix = options.autoFix || false;
     addAIMessage('user', text);
-    aiInput.value = '';
-    aiInput.style.height = 'auto';
+    if (!isAutoFix) {
+      aiInput.value = '';
+      aiInput.style.height = 'auto';
+    }
+
+    const studioConnected = await isStudioConnected();
+    if (!studioConnected && !isAutoFix && Date.now() - studioConnectWarningAt > 30000) {
+      studioConnectWarningAt = Date.now();
+      addAIMessage('assistant', 'Studio is not connected yet. You can keep chatting, but I cannot apply scripts or read your Roblox place until you open the ROTEX AI plugin in Roblox Studio and click Connect to ROTEX.');
+    }
 
     // Determine which model to use
     let modelId = state.aiModel;
@@ -637,6 +762,9 @@
       state.projectName ? `Project name: ${state.projectName}` : '',
       `Project mode: ${state.projectMode}`,
       state.projectModes?.length ? `Selected tools: ${state.projectModes.join(', ')}` : '',
+      studioConnected
+        ? 'Roblox Studio plugin: CONNECTED. Studio actions can be queued and applied.'
+        : 'Roblox Studio plugin: NOT CONNECTED. Tell the user to open the ROTEX AI plugin in Roblox Studio and click Connect to ROTEX before applying scripts or reading Studio context.',
       buildProjectContext(),
     ].filter(Boolean).join('\n');
 
@@ -659,6 +787,8 @@
 
     aiBusy = true;
     aiAbortController = new AbortController();
+    const desktopAuth = getDesktopAuth();
+    const idToken = await getValidIdToken();
     try {
       const resp = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
@@ -673,6 +803,9 @@
             projectMode: state.projectMode,
             projectContext,
             proPass: getProPass(),
+            authToken: idToken,
+            uid: desktopAuth.uid,
+            email: desktopAuth.email,
             texTokensLeft: texTokensLeft(),
             stream: true,
           }),
@@ -681,6 +814,16 @@
       const contentType = resp.headers.get('content-type') || '';
       if (!resp.ok || !contentType.includes('text/event-stream')) {
         const errData = await resp.json().catch(() => ({}));
+        // If the user is Pro but the server rejected the pass, try refreshing once.
+        if ((errData.error === 'pro_required' || errData.error === 'no_textokens') && userIsPro && !options.retryedProRefresh) {
+          const refresh = await refreshProPass();
+          if (refresh.ok) {
+            bubble.remove();
+            aiBusy = false;
+            aiAbortController = null;
+            return sendChatRequest(text, { ...options, retryedProRefresh: true });
+          }
+        }
         bubble.remove();
         addAIMessage('assistant', errData.text || 'servers are down');
         return;
@@ -730,7 +873,74 @@
       aiBusy = false;
       aiAbortController = null;
     }
+  }
+
+  aiComposer.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await sendChatRequest(aiInput.value.trim(), { requireConfirm: true });
   });
+
+  // ─── Studio Plugin Context (scripts, selection, errors) ───────────
+  function handlePluginContext(ctx) {
+    if (!ctx) return;
+
+    if (ctx.scripts && Array.isArray(ctx.scripts)) {
+      state.studioScripts = ctx.scripts;
+    }
+    if (ctx.selected && Array.isArray(ctx.selected)) {
+      state.studioSelected = ctx.selected;
+    }
+    if (ctx.aiContext) {
+      if (ctx.aiContext.scripts && Array.isArray(ctx.aiContext.scripts)) {
+        state.studioScripts = ctx.aiContext.scripts;
+      }
+      if (ctx.aiContext.selected && Array.isArray(ctx.aiContext.selected)) {
+        state.studioSelected = ctx.aiContext.selected;
+      }
+    }
+
+    if (ctx.studioError && ctx.studioError.message) {
+      state.studioErrors.push({
+        message: ctx.studioError.message,
+        type: ctx.studioError.type || 'Error',
+        time: ctx.studioError.time || Date.now(),
+      });
+      // Keep only the most recent 20 errors.
+      if (state.studioErrors.length > 20) state.studioErrors = state.studioErrors.slice(-20);
+      // Only auto-fix real errors; warnings are just context.
+      if (ctx.studioError.type !== 'MessageWarning') {
+        triggerAutoFix(ctx.studioError);
+      }
+    }
+
+    if (ctx.studioResult) {
+      // Action results can also contain failures that look like errors.
+      const result = ctx.studioResult;
+      if (result.ok === false && result.messages && result.messages.length) {
+        const msg = result.messages.join('\n');
+        state.studioErrors.push({ message: msg, type: 'ActionFailed', time: Date.now() });
+        if (state.studioErrors.length > 20) state.studioErrors = state.studioErrors.slice(-20);
+        triggerAutoFix({ message: msg, type: 'ActionFailed' });
+      }
+    }
+  }
+
+  async function triggerAutoFix(error) {
+    if (!error || !error.message) return;
+    if (aiBusy) return;
+    if (Date.now() - state.lastAutoFixAt < 8000) return;
+    const studioConnected = await isStudioConnected();
+    if (!studioConnected) return;
+
+    // Only auto-fix real errors, not warnings about missing instances from removal actions.
+    const msg = String(error.message).toLowerCase();
+    if (msg.includes('not found') && msg.includes('delete')) return;
+    if (msg.includes('not found') && msg.includes('remove')) return;
+
+    state.lastAutoFixAt = Date.now();
+    const prompt = `[AUTO-FIX] Roblox Studio reported an error. Please investigate the PROJECT CONTEXT and fix it.\n\nError: ${error.message}\n\nType: ${error.type || 'Error'}`;
+    sendChatRequest(prompt, { autoFix: true });
+  }
 
   function addAIMessage(role, content, modelName) {
     state.aiMessages.push({ role, content });
@@ -1537,6 +1747,8 @@
       ].join('\n\n');
 
       try {
+        const ctrlkAuth = getDesktopAuth();
+        const ctrlkToken = await getValidIdToken();
         const resp = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1545,6 +1757,9 @@
             messages: [{ role: 'user', content: prompt }],
             mode: 'editor',
             proPass: getProPass(),
+            authToken: ctrlkToken,
+            uid: ctrlkAuth.uid,
+            email: ctrlkAuth.email,
             texTokensLeft: texTokensLeft(),
           }),
         });
@@ -1692,5 +1907,12 @@
   // ─── Init ──────────────────────────────────────────────────────────
   appendTerminal('ROTEX Terminal — type "help" for commands', 'cmd');
   updateCostPreview();
+
+  // Listen for Studio plugin context (scripts, selection, runtime errors).
+  if (window.rotexDesktop?.onPluginContext) {
+    window.rotexDesktop.onPluginContext(handlePluginContext);
+  }
+  // Also expose the handler so editor.html can register it if needed.
+  window.__rotexHandlePluginContext = handlePluginContext;
 })();
 

@@ -31,13 +31,16 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
   };
 }
 
-async function checkCreditSafety({ selected, provider, model, userId, estimate, texTokensLeft }) {
+async function checkCreditSafety({ selected, provider, model, userId, estimate, texTokensLeft, isPro = false }) {
   const balance = providerBalanceUsd();
+  const outText = isPro
+    ? "You've used your 40M monthly TexTokens. They reset next month, or add a pack at rrotex.com/tokens."
+    : 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.';
   if (texTokensLeft != null && Number.isFinite(Number(texTokensLeft)) && Number(texTokensLeft) <= 0) {
     return {
       ok: false,
       error: 'no_textokens',
-      text: 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.',
+      text: outText,
       balance,
     };
   }
@@ -45,7 +48,7 @@ async function checkCreditSafety({ selected, provider, model, userId, estimate, 
     return {
       ok: false,
       error: 'no_textokens',
-      text: 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.',
+      text: outText,
       balance,
     };
   }

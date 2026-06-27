@@ -2,7 +2,11 @@
 // Called by the app when the stored pass is close to expiry. A cancelled
 // subscription fails the check, the pass expires, and the user downgrades
 // automatically — no webhook or database needed.
+//
+// Also accepts an idToken fallback so a stale/mis-signed pass can be recovered
+// by verifying the Firebase identity directly against Stripe.
 const { signProPass, verifyProPass } = require('./_lib/propass.js');
+const { userHasActiveProSubscription, stripeMode } = require('./_lib/stripe.js');
 
 module.exports = async function handler(request, response) {
   response.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,42 +21,47 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
-  const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
-  const testMode = process.env.STRIPE_MODE === 'test' || (!liveSecretKey && Boolean(testSecretKey));
-  const secretKey = testMode ? testSecretKey : liveSecretKey;
-
+  const { secretKey } = stripeMode();
   if (!secretKey) {
     response.status(200).json({ refreshed: false, message: 'Stripe is not configured.' });
     return;
   }
 
-  if (!testMode && secretKey.startsWith('sk_test_')) {
-    response.status(500).json({ refreshed: false, message: 'Stripe is using a test key — cannot verify real subscriptions. Set STRIPE_SECRET_KEY to a live key (sk_live_...).' });
-    return;
-  }
+  const { proPass = '', authToken = '' } = request.body || {};
+  let payload = verifyProPass(proPass);
 
-  const { proPass = '' } = request.body || {};
-  const payload = verifyProPass(proPass);
+  // Fallback: if the signed pass is invalid (e.g. secret rotated), verify the
+  // Firebase identity and look up the Stripe subscription directly.
   if (!payload || !payload.sub) {
-    response.status(401).json({ refreshed: false, message: 'Invalid or expired Pro pass. Go Pro again from the pricing page.' });
-    return;
+    const auth = await verifyFirebaseToken(authToken);
+    if (!auth.ok) {
+      response.status(401).json({ refreshed: false, message: 'Invalid or expired Pro pass. Go Pro again from the pricing page.' });
+      return;
+    }
+    const hasSubscription = await userHasActiveProSubscription(auth.uid, auth.email, '');
+    if (!hasSubscription) {
+      response.status(403).json({ refreshed: false, cancelled: true, message: 'This Pro subscription is no longer active.' });
+      return;
+    }
+    payload = { uid: auth.uid, sub: '' };
   }
 
-  const stripeResponse = await fetch(
-    `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(payload.sub)}`,
-    { headers: { Authorization: `Bearer ${secretKey}` } },
-  );
-  const subscription = await stripeResponse.json();
-  if (!stripeResponse.ok) {
-    response.status(500).json({ refreshed: false, message: subscription.error?.message || 'Could not check the subscription.' });
-    return;
-  }
-
-  const active = subscription.status === 'active' || subscription.status === 'trialing';
-  if (!active) {
-    response.status(403).json({ refreshed: false, cancelled: true, message: 'This Pro subscription is no longer active.' });
-    return;
+  // If we have a valid subscription ID from the old pass, confirm it is still active.
+  if (payload.sub) {
+    const stripeResponse = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(payload.sub)}`,
+      { headers: { Authorization: `Bearer ${secretKey}` } },
+    );
+    const subscription = await stripeResponse.json();
+    if (!stripeResponse.ok) {
+      response.status(500).json({ refreshed: false, message: subscription.error?.message || 'Could not check the subscription.' });
+      return;
+    }
+    const active = subscription.status === 'active' || subscription.status === 'trialing';
+    if (!active) {
+      response.status(403).json({ refreshed: false, cancelled: true, message: 'This Pro subscription is no longer active.' });
+      return;
+    }
   }
 
   const newPass = signProPass({
@@ -64,6 +73,22 @@ module.exports = async function handler(request, response) {
 
   response.status(200).json({ refreshed: true, proPass: newPass });
 };
+
+async function verifyFirebaseToken(authToken) {
+  if (!authToken || !process.env.FIREBASE_PROJECT_ID) return { ok: false };
+  try {
+    const result = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(authToken)}`);
+    if (!result.ok) return { ok: false };
+    const token = await result.json();
+    return {
+      ok: token.aud === process.env.FIREBASE_PROJECT_ID && Boolean(token.sub),
+      uid: token.sub || '',
+      email: token.email || '',
+    };
+  } catch {
+    return { ok: false };
+  }
+}
 
 function cleanEnv(value) {
   return String(value || '').trim().replace(/^['"]|['"]$/g, '').replace(/[^\x20-\x7E]/g, '');

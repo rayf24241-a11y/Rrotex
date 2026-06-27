@@ -301,7 +301,8 @@ async function loadCreditBalance(user) {
       renderCredits();
     }
   } catch {
-    setCreditMessage('Signed in. Cloud TexToken sync is not available yet, so this device will remember purchases.', true);
+    // Browser Firestore reads can be blocked by rules; keep the local/desktop balance without alarming users.
+    renderCredits();
   }
 }
 
@@ -319,7 +320,7 @@ async function addCredits(user, amount, sessionId) {
     }, { merge: true });
     await loadCreditBalance(user);
   } catch {
-    setCreditMessage('TexTokens were added on this device. Cloud sync needs Firestore rules/admin setup.', true);
+    setCreditMessage('TexTokens were added to this device.', false);
   }
 }
 
