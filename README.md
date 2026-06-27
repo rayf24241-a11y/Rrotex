@@ -8,7 +8,7 @@ Current web features:
 - Firebase login before Pro or TexToken purchases
 - Account dashboard for plan status, Pro checkout, and TexToken credits
 - Extra TexTokens through Stripe Checkout at `$1 = 1M TexTokens`
-- Pro user TexTokens: `1M` daily soft limit, `40M` monthly
+- Pro user TexTokens: `1M` daily soft limit, `20M` monthly
 - Desktop app/editor served from `editor.html`
 
 Model catalog:

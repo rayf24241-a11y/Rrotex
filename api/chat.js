@@ -14,7 +14,7 @@ const {
 // own ID token. Fail-open: any failure returns null and the caller falls back
 // to the in-memory limiter.
 const FREE_MONTHLY = 1_000_000;
-const PRO_MONTHLY  = 40_000_000;
+const PRO_MONTHLY  = 20_000_000;
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'rotex-e0be7';
 function _usageDocUrl(uid) {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/usage`;
@@ -285,15 +285,15 @@ module.exports = async function handler(request, response) {
   request._serverUsage = serverUsage;
   request._isAuthUser = isAuthUser;
 
-  // Monthly cap (free 1M, Pro 40M). Only enforced when we have a real reading.
+  // Monthly cap (free 1M, Pro 20M). Only enforced when we have a real reading.
   if (!isDev && serverUsage) {
     const monthlyLimit = isPro ? PRO_MONTHLY : FREE_MONTHLY;
     if (serverUsage.monthUsed >= monthlyLimit) {
       response.status(402).json({
         error: 'no_textokens',
         text: isPro
-          ? "You've used your 40M monthly TexTokens. They reset next month, or add a pack at rrotex.com/tokens."
-          : "You've used your 1M monthly free TexTokens. Upgrade to Pro for 40M/month at rrotex.com/pro.",
+          ? "You've used your 20M monthly TexTokens. They reset next month, or add a pack at rrotex.com/tokens."
+          : "You've used your 1M monthly free TexTokens. Upgrade to Pro for 20M/month at rrotex.com/pro.",
       });
       return;
     }
@@ -409,7 +409,7 @@ module.exports = async function handler(request, response) {
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
         `ROTEX model ranking: 1st Claude Haiku (best quality) → 2nd TexBrain Thinking-beta (balanced Roblox-focused model). If asked which is best: Claude Haiku. If asked which is cheaper: TexBrain Thinking-beta.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person. Pro: $20/month, 40M TexTokens/month, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens.',
+        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person. Pro: $20/month, 20M TexTokens/month, 1M/day, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
