@@ -83,7 +83,11 @@ function ollamaGet(path) {
       let d = '';
       res.on('data', c => { d += c; });
       res.on('end', () => {
-        try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); }
+        if (res.statusCode !== 200) {
+          reject(new Error(`Railway GET ${path} returned HTTP ${res.statusCode}: ${d.slice(0, 300)}`));
+          return;
+        }
+        try { resolve(JSON.parse(d)); } catch { reject(new Error(`parse error on GET ${path} — raw: ${d.slice(0, 300)}`)); }
       });
     });
     req.on('error', reject);
@@ -99,7 +103,17 @@ function ollamaChat(model, messages) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
     });
-    req.on('response', r => { let d = ''; r.on('data', c => { d += c; }); r.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } }); });
+    req.on('response', r => {
+      let d = '';
+      r.on('data', c => { d += c; });
+      r.on('end', () => {
+        if (r.statusCode !== 200) {
+          reject(new Error(`Railway returned HTTP ${r.statusCode}: ${d.slice(0, 300)}`));
+          return;
+        }
+        try { resolve(JSON.parse(d)); } catch { reject(new Error(`parse error — raw: ${d.slice(0, 300)}`)); }
+      });
+    });
     req.on('error', reject);
     req.setTimeout(120000, () => { req.destroy(); reject(new Error('timeout')); });
     req.write(postData);
