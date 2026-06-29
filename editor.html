@@ -1302,9 +1302,9 @@
       checkCanContinue();
       _ver = await Promise.race([
         window.rotexDesktop.getVersion(),
-        new Promise(resolve => setTimeout(() => resolve('1.16.36'), 2000))
-      ]).catch(() => '1.16.36');
-      document.getElementById('rxLSVersion').textContent = 'v' + _ver;
+        new Promise(resolve => setTimeout(() => resolve(null), 2000))
+      ]).catch(() => null);
+      if (_ver) document.getElementById('rxLSVersion').textContent = 'v' + _ver;
 
       // Show port from server info
       const _srvInfo = await window.rotexDesktop.getServerInfo?.().catch(() => null);
