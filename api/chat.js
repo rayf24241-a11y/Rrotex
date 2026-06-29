@@ -242,7 +242,7 @@ function tbBuildSystemPrompt(projectMode, mode) {
 const GROQ_KEY = cleanKey(process.env.GROQ_API_KEY);
 
 async function tbGroqPost(model, messages, maxTokens) {
-  const postData = JSON.stringify({ model, messages, temperature: 0.15, max_tokens: maxTokens || 4096, stream: false });
+  const postData = JSON.stringify({ model, messages, temperature: 0.1, max_tokens: maxTokens || 8192, stream: false });
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
@@ -350,15 +350,22 @@ async function handleTexBrain(req, res) {
       ...history,
     ];
 
-    let text = '', usedModel = 'groq/llama-3.3-70b';
+    let text = '', usedModel = 'groq/llama-4-maverick';
 
     // 1. Try Groq first — fastest by far (sub-2s)
     if (GROQ_KEY) {
-      try {
-        const result = await tbGroqPost('llama-3.3-70b-versatile', workerMessages, 4096);
-        const t = result.choices?.[0]?.message?.content?.trim();
-        if (t) { text = t; usedModel = 'groq/llama-3.3-70b-versatile'; }
-      } catch (e) { /* fall through to OpenRouter */ }
+      // Try Llama 4 Maverick first (smarter), fall back to 3.3 70B
+      const groqCandidates = [
+        'meta-llama/llama-4-maverick-17b-128e-instruct',
+        'llama-3.3-70b-versatile',
+      ];
+      for (const gm of groqCandidates) {
+        try {
+          const result = await tbGroqPost(gm, workerMessages, 8192);
+          const t = result.choices?.[0]?.message?.content?.trim();
+          if (t) { text = t; usedModel = 'groq/' + gm; break; }
+        } catch (e) { /* try next */ }
+      }
     }
 
     // 2. OpenRouter free models as fallback
