@@ -1,12 +1,17 @@
-const http = require('http');
 const https = require('https');
 
-const OLLAMA_BASE_URL = (process.env.OLLAMA_URL || 'https://auth-proxy-production-3349.up.railway.app').replace(/\/$/, '');
-const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || 'rotex-live-12345';
+const OR_KEY = process.env.OPENROUTER_API_KEY || '';
+const OR_BASE = 'https://openrouter.ai/api/v1';
 const MAX_CONCURRENT = 5;
 let activeCalls = 0;
 
-// Lightweight Firebase ID token verification (reuses logic from api/chat.js).
+// Models by role
+const MODEL_CODER   = 'qwen/qwen3-coder:free';          // 480B MoE — best free coder
+const MODEL_CHAT    = 'mistralai/magistral-medium-2509'; // free reasoning — chat/thinking
+const MODEL_CODER2  = 'meta-llama/llama-3.3-70b-instruct:free'; // fallback coder
+const MODEL_IMAGE   = 'black-forest-labs/flux-1-schnell:free';  // free image gen
+
+// Lightweight Firebase ID token verification.
 async function verifyFirebaseToken(authToken) {
   if (!authToken) return { ok: false };
   try {
@@ -50,7 +55,7 @@ For casual or off-topic messages, respond naturally in 1-2 sentences without cod
   const modeInstruction = modeInstructions[mode] || '';
 
   return [
-    'You are TexBrain, the ROTEX coding assistant running on a secure Ollama server via Railway.',
+    'You are TexBrain, the ROTEX AI coding assistant.',
     engineFocus,
     'You receive live ROTEX Studio context: script paths, source snippets, selected instances, experience name, and plugin status. Treat that context as your view of the project. If the context is present, do not say you cannot see the project.',
     'You cannot directly inspect raw pixels or screenshots unless their content is described in text.',
@@ -69,46 +74,26 @@ For casual or off-topic messages, respond naturally in 1-2 sentences without cod
   ].filter(Boolean).join('\n');
 }
 
-function ollamaRequest(path, options = {}) {
-  const url = new URL(`${OLLAMA_BASE_URL}${path}`);
-  const module = url.protocol === 'https:' ? https : http;
-  options.headers = { ...options.headers, 'x-api-key': OLLAMA_API_KEY };
-  return module.request(url, options);
-}
-
-function ollamaGet(path) {
+function orPost(endpoint, body) {
   return new Promise((resolve, reject) => {
-    const req = ollamaRequest(path, { method: 'GET' });
-    req.on('response', (res) => {
+    const postData = JSON.stringify(body);
+    const req = https.request({
+      hostname: 'openrouter.ai',
+      path: `/api/v1${endpoint}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'Authorization': `Bearer ${OR_KEY}`,
+        'HTTP-Referer': 'https://rrotex.com',
+        'X-Title': 'ROTEX TexBrain',
+      },
+    }, (res) => {
       let d = '';
       res.on('data', c => { d += c; });
       res.on('end', () => {
         if (res.statusCode !== 200) {
-          reject(new Error(`Railway GET ${path} returned HTTP ${res.statusCode}: ${d.slice(0, 300)}`));
-          return;
-        }
-        try { resolve(JSON.parse(d)); } catch { reject(new Error(`parse error on GET ${path} — raw: ${d.slice(0, 300)}`)); }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('timeout')); });
-    req.end();
-  });
-}
-
-function ollamaChat(model, messages) {
-  return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({ model, stream: false, messages, options: { temperature: 0.2, top_p: 0.8, repeat_penalty: 1.08 } });
-    const req = ollamaRequest('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-    });
-    req.on('response', r => {
-      let d = '';
-      r.on('data', c => { d += c; });
-      r.on('end', () => {
-        if (r.statusCode !== 200) {
-          reject(new Error(`Railway returned HTTP ${r.statusCode}: ${d.slice(0, 300)}`));
+          reject(new Error(`OpenRouter HTTP ${res.statusCode}: ${d.slice(0, 400)}`));
           return;
         }
         try { resolve(JSON.parse(d)); } catch { reject(new Error(`parse error — raw: ${d.slice(0, 300)}`)); }
@@ -121,25 +106,20 @@ function ollamaChat(model, messages) {
   });
 }
 
-async function pickModel() {
-  const tags = await ollamaGet('/api/tags');
-  const names = (tags.models || []).map(m => m.name);
-  const preferred = [
-    'qwen2.5-coder:14b', 'qwen2.5-coder:7b', 'qwen2.5-coder',
-    'deepseek-coder-v2:16b', 'deepseek-coder-v2',
-    'codellama:70b', 'codellama:34b', 'codellama',
-    'llama3.1:8b', 'llama3.1',
-    'llama3.2:3b', 'llama3.2',
-    'mistral:7b', 'mistral',
-    'gemma2:9b', 'gemma2',
-    'phi4',
-  ];
-  const found = preferred.find(p => names.some(n => n.startsWith(p)));
-  return found || names[0] || 'llama3.2';
+// Detect if the user's last message is asking for an image
+function isImageRequest(text) {
+  return /\b(generate|create|draw|make|render|show)\b.{0,40}\b(image|picture|photo|illustration|art|logo|icon|sprite|texture)\b/i.test(text)
+    || /\b(image|picture|photo|illustration|art|logo|icon|sprite|texture)\b.{0,40}\b(of|for|showing|with)\b/i.test(text);
+}
+
+// Pick model based on request type and mode
+function pickModel(lastUserMsg, mode) {
+  const coding = /\b(script|code|lua|luau|function|class|bug|fix|debug|create|make|add|remove|delete|disable|modify|update|implement|build|system|tool|gui|ui|camera|event|remote|datastore)\b/i.test(lastUserMsg);
+  if (coding || mode === 'agent' || mode === 'supreme') return MODEL_CODER;
+  return MODEL_CHAT;
 }
 
 module.exports = async function handler(req, res) {
-  // Allow CORS from rrotex.com and the desktop app origin.
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -153,53 +133,101 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  if (!OR_KEY) {
+    res.status(500).json({ error: 'TexBrain is not configured. Contact support.' });
+    return;
+  }
+
   if (activeCalls >= MAX_CONCURRENT) {
-    res.status(429).json({ error: 'Too many people are using this model, we\'re in beta. Use a different model!' });
+    res.status(429).json({ error: 'Too many people are using TexBrain right now (beta). Try again in a moment!' });
     return;
   }
   activeCalls++;
 
   try {
-    const model = await pickModel();
-    const systemPrompt = buildSystemPrompt(projectMode, mode);
     const normalizedMessages = (messages || []).map(m => ({
       role: m.role,
       content: Array.isArray(m.content)
         ? m.content.filter(p => p.type === 'text').map(p => p.text).join('\n')
         : m.content,
     }));
+
     const contextMessages = normalizedMessages
       .filter(m => m.role === 'system' && /\b(Studio|PROJECT SCRIPTS|CURRENTLY SELECTED|Plugin|Experience)\b/i.test(String(m.content || '')))
       .slice(-2);
     const history = normalizedMessages.filter(m => m.role !== 'system').slice(-8);
+    const lastUserMsg = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
 
-    // Optional clarifier
-    const lastUser = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
-    let clarified = lastUser;
-    if (/\b(make|create|add|fix|debug|build|implement|change|update|remove|delete|disable|turn off|get out of|undo|script|camera|gui|ui|tool|system)\b/i.test(lastUser)) {
-      try {
-        const clarifyRes = await ollamaChat(model, [
-          { role: 'system', content: `You are a code task clarifier for a ${projectMode} developer. Restate the user's request as a precise technical task in 1-2 sentences. Preserve removal/disable/undo intent exactly; never turn "remove/disable/get out of" into "create/add". Do not answer it. Output only the restated task.` },
-          { role: 'user', content: lastUser },
-        ]);
-        clarified = clarifyRes.message?.content?.trim() || lastUser;
-      } catch { /* fallback */ }
+    // Image generation path
+    if (isImageRequest(lastUserMsg)) {
+      const imgResult = await orPost('/images/generations', {
+        model: MODEL_IMAGE,
+        prompt: lastUserMsg,
+        n: 1,
+        size: '1024x1024',
+      });
+      const url = imgResult?.data?.[0]?.url;
+      if (url) {
+        res.status(200).json({ text: `![Generated image](${url})`, model: MODEL_IMAGE });
+      } else {
+        res.status(200).json({ text: '(Image generation returned no result)', model: MODEL_IMAGE });
+      }
+      return;
     }
 
-    const workerHistory = [
+    const model = pickModel(lastUserMsg, mode);
+    const systemPrompt = buildSystemPrompt(projectMode, mode);
+
+    // Optional: clarify coding tasks with the fast model before main call
+    let clarified = lastUserMsg;
+    const isCodingTask = /\b(make|create|add|fix|debug|build|implement|change|update|remove|delete|disable|turn off|get out of|undo|script|camera|gui|ui|tool|system)\b/i.test(lastUserMsg);
+    if (isCodingTask) {
+      try {
+        const clarifyRes = await orPost('/chat/completions', {
+          model: MODEL_CODER2,
+          temperature: 0.1,
+          max_tokens: 120,
+          messages: [
+            { role: 'system', content: `You are a code task clarifier for a ${projectMode} developer. Restate the user's request as a precise technical task in 1-2 sentences. Preserve removal/disable/undo intent exactly; never turn "remove/disable/get out of" into "create/add". Do not answer it. Output only the restated task.` },
+            { role: 'user', content: lastUserMsg },
+          ],
+        });
+        clarified = clarifyRes.choices?.[0]?.message?.content?.trim() || lastUserMsg;
+      } catch { /* fallback to original */ }
+    }
+
+    const workerMessages = [
       { role: 'system', content: systemPrompt },
       ...contextMessages,
       ...history.slice(0, -1),
       { role: 'user', content: clarified },
     ];
-    const result = await ollamaChat(model, workerHistory);
-    res.status(200).json({ text: result.message?.content || '(no response)', model });
-  } catch (err) {
-    if (err.message.includes('ECONNREFUSED') || err.message.includes('timeout') || err.message.includes('Ollama')) {
-      res.status(502).json({ error: 'Ollama is not running. Please pull a model in Railway.' });
-    } else {
-      res.status(500).json({ error: `TexBrain error: ${err.message}` });
+
+    let result = await orPost('/chat/completions', {
+      model,
+      temperature: 0.2,
+      top_p: 0.8,
+      max_tokens: 4096,
+      messages: workerMessages,
+    });
+
+    // Fallback to MODEL_CODER2 if primary model fails or returns empty
+    const text = result.choices?.[0]?.message?.content?.trim();
+    if (!text) {
+      result = await orPost('/chat/completions', {
+        model: MODEL_CODER2,
+        temperature: 0.2,
+        top_p: 0.8,
+        max_tokens: 4096,
+        messages: workerMessages,
+      });
     }
+
+    const finalText = result.choices?.[0]?.message?.content?.trim() || '(no response)';
+    const usedModel = result.model || model;
+    res.status(200).json({ text: finalText, model: usedModel });
+  } catch (err) {
+    res.status(500).json({ error: `TexBrain error: ${err.message}` });
   } finally {
     activeCalls--;
   }
