@@ -394,8 +394,12 @@ app.whenReady().then(() => {
     autoUpdater.on('download-progress', (progress) => {
       if (mainWindow) mainWindow.webContents.send('rotex-update-progress', progress);
     });
-    autoUpdater.on('update-downloaded', () => {
-      if (mainWindow) mainWindow.webContents.send('rotex-update-ready');
+    autoUpdater.on('update-downloaded', (info) => {
+      if (mainWindow) mainWindow.webContents.send('rotex-update-ready', info);
+      // Auto-install after 5 seconds — no user action needed.
+      setTimeout(() => {
+        autoUpdater.quitAndInstall(false, true);
+      }, 5000);
     });
   }
 });
