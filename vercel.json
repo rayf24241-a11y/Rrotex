@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "api/texbrain.js": { "maxDuration": 60 },
+    "api/chat.js": { "maxDuration": 60 }
+  },
   "rewrites": [
     { "source": "/editor", "destination": "/index.html" },
     { "source": "/account", "destination": "/account.html" },
