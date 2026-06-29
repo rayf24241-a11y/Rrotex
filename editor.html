@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -2064,34 +2064,33 @@
           }
 
           const full = String(result?.text || '').trim();
-          if (isTaskStatus && statusBubble) {
-            _renderTaskStatus(statusBubble, full ? 'Finishing task..' : 'Task done');
-          }
+          const hasActions = /\\\(?:file:|studio-action|roblox-model)/.test(full);
+          const codeLike = _looksLikeSourceCode(full);
+
           if (!bubble) bubble = _rxAddMsg('assistant', '');
           if (bubble) {
             bubble.style.opacity = '';
             const visible = _safeEditModeText(full, '');
-            const hasActions = /```(?:file:|studio-action|roblox-model)/.test(full);
-            const codeLike = _looksLikeSourceCode(full);
             _renderChatMessage(bubble, 'assistant', (hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : (full || 'No response.'));
           }
+
           const appliedToStudio = full ? await _applyStudioFilesFromResponse(full, bubble, text) : false;
-          if (appliedToStudio && isTaskStatus && statusBubble) {
-            _renderTaskStatus(statusBubble, 'Task done');
+
+          // Always clear task status after TexBrain responds — never leave 'On hold'
+          if (isTaskStatus && statusBubble) {
+            _renderTaskStatus(statusBubble, appliedToStudio ? 'Task done' : (full ? 'Done' : 'Task done'));
+          }
+          if (appliedToStudio && isTaskStatus) {
             const workedBubble = _rxAddMsg('assistant', '');
-            _renderTaskStatus(workedBubble, 'Worked on Roblox Studio');
+            _renderTaskStatus(workedBubble, 'Applied to Roblox Studio');
           }
           if (!appliedToStudio && hasActions && bubble) {
-            _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. Make sure the ROTEX plugin is connected, or the file blocks use valid paths like ServerScriptService/ScriptName.lua.');
+            _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. Make sure the ROTEX plugin is connected.');
           }
           if (full) {
-            // Local Ollama runs on-device, so TexBrain is free � no TexTokens charged.
             const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
             _chatHistory.push({ role: 'assistant', content: storedContent });
             _saveMessages();
-            if (isTaskStatus && statusBubble) {
-              _renderTaskStatus(statusBubble, 'Task done');
-            }
           }
           return;
         }
