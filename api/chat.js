@@ -389,7 +389,9 @@ async function handleTexBrain(req, res) {
     // infer the script path from context and rewrite them so the client can apply them.
     text = tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg);
 
-    res.status(200).json({ text, model: usedModel });
+    // Estimate token cost so the client can deduct TexTokens accurately
+    const tbCost = Math.max(1, Math.ceil((text.length + lastUserMsg.length) / 400));
+    res.status(200).json({ text, model: usedModel, usage: { textokens_charged: tbCost } });
   } catch (err) {
     res.status(500).json({ error: `TexBrain error: ${err.message}` });
   } finally {
