@@ -163,14 +163,14 @@
   </div>
 </div>
 
-<!-- Loading screen — lives outside .rx-app so overflow:hidden never clips it -->
+<!-- Loading screen ï¿½ lives outside .rx-app so overflow:hidden never clips it -->
 <div id="rxGate" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#0D0F17;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:1;">
 
   <!-- Logo -->
   <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:52px;">
     <div style="width:76px;height:76px;background:#FFD60A;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#0D0F17;letter-spacing:-0.5px;box-shadow:0 0 56px rgba(255,214,10,0.28);margin-bottom:20px;">RX</div>
     <div style="font-size:30px;font-weight:800;letter-spacing:.06em;color:#fff;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">ROTEX</div>
-    <div id="rxLSVersion" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;letter-spacing:.05em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">v1.16.25</div>
+    <div id="rxLSVersion" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;letter-spacing:.05em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">v1.16.26</div>
   </div>
 
   <!-- Animated loading bar -->
@@ -559,11 +559,11 @@
   }
 
   // Returns false (and navigates to login) if the session is expired and there's
-  // no refresh token to renew it — so the user re-auths once at startup instead
+  // no refresh token to renew it ï¿½ so the user re-auths once at startup instead
   // of getting blocked mid-chat. Refresh failures with a token present don't bounce.
   async function _ensureSessionUsable() {
     // Best-effort refresh, but NEVER force re-login. If refresh fails we keep the
-    // (stale) token — the server verifies it (by signature for the dev) and the
+    // (stale) token ï¿½ the server verifies it (by signature for the dev) and the
     // Pro pass covers Pro users. Forcing login here was the cause of the re-login loop.
     if (authTokenLooksExpired(currentUser?.token)) await _refreshIdToken();
     return true;
@@ -628,7 +628,7 @@
   }
 
   // Returns the freshest token we can get. If refresh fails, returns the STALE
-  // token (not '') so the server can still verify it — the dev is recognized by
+  // token (not '') so the server can still verify it ï¿½ the dev is recognized by
   // signature even on an expired token, and Pro users are covered by their pass.
   async function ensureFreshToken() {
     const token = currentUser?.token || readDesktopAuth()?.token || '';
@@ -758,7 +758,7 @@
   const TEXBRAIN_SVG    = `<img src="./texbrain-logo.png" width="22" height="22" style="border-radius:5px;object-fit:contain;" draggable="false" alt="TexBrain">`;
   const TB_THINKING_SVG = `<img src="./texbrain-logo.png" width="22" height="22" style="border-radius:5px;object-fit:contain;" draggable="false" alt="TexBrain thinking">`;
 
-  /* â"€â"€ Model selector â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Model selector ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   const MODELS = [
     { id: 'texbrain-thinking', name: 'TexBrain Thinking-beta', role: 'Balanced', subtitle: '2.4x', svg: TB_THINKING_SVG, pro: false, localOnly: false, localCapable: true, vision: true  },
     { id: 'pro-smart',         name: 'Claude Haiku',          role: 'Premium', subtitle: 'best',  svg: CLAUDE_SVG,      pro: false, localOnly: false, vision: true  },
@@ -845,7 +845,7 @@
   document.getElementById('rxSelectedModel').textContent = initModel.name;
   document.getElementById('rxSelectedRole').innerHTML = initModel.subtitle ? `${initModel.role}<br><span style="font-size:10px;opacity:0.55">${initModel.subtitle}</span>` : initModel.role;
 
-  /* â"€â"€ Mode dropdown â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Mode dropdown ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   let currentMode = 'ask';
   const modeBtn  = document.getElementById('rxModeBtn');
   const modeMenu = document.getElementById('rxModeMenu');
@@ -883,19 +883,19 @@
 
   document.getElementById('rxStopBtn').addEventListener('click', () => {});
 
-  /* â"€â"€ New chat from header shortcut â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ New chat from header shortcut ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   document.getElementById('rxSettingsBtn').addEventListener('click', () => {
     const modal = document.getElementById('projectSetupModal');
     if (modal) modal.hidden = false;
   });
 
-  /* â"€â"€ Profile / account â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Profile / account ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   document.getElementById('rxUserAvatar').addEventListener('click', () => {
     if (window.rotexDesktop) window.rotexDesktop.navigate('projects');
     else window.location.href = '/projects.html';
   });
 
-  /* â"€â"€ Token balance (rotex-tokens.js) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Token balance (rotex-tokens.js) ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   window.addEventListener('storage', e => {
     if (e.key === 'rotex_textokens_balance' || e.key === 'rotex_textokens_spent_today') {
       if (window.rotexTokens) window.rotexTokens.refreshBalanceDisplay();
@@ -929,7 +929,7 @@
     }).catch(() => null);
     if (!res) return null;
     if (res.status === 401) {
-      // Token rejected even after refresh — re-auth needed.
+      // Token rejected even after refresh ï¿½ re-auth needed.
       if (force && window.rotexDesktop?.navigate) window.rotexDesktop.navigate('login');
       return null;
     }
@@ -1091,7 +1091,7 @@
     }
   });
 
-  /* â"€â"€ Sidebar profile row â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Sidebar profile row ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   function setAccountAvatars(name, email) {
     const cleanName = String(name || '').trim();
     const cleanEmail = String(email || '').trim().toLowerCase();
@@ -1133,7 +1133,7 @@
     else window.open('/account', '_blank');
   });
 
-  /* â"€â"€ Loading screen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Loading screen ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   let _gateDismissed = false;
   if (window.rotexDesktop) {
     const updBtn = document.getElementById('rxCheckUpdateBtn');
@@ -1149,14 +1149,14 @@
       if (!gate) return;
       const _gateStart = Date.now();
 
-      // Force re-login for all users once (v1.5.15) — clears auth only, keeps
+      // Force re-login for all users once (v1.5.15) ï¿½ clears auth only, keeps
       // chats/tokens, then sends the user to login. Runs at most once per device.
       const FORCE_LOGOUT_VER = 'v1515b';
       if (localStorage.getItem('rotex_force_logout_done') !== FORCE_LOGOUT_VER) {
         localStorage.setItem('rotex_force_logout_done', FORCE_LOGOUT_VER);
         localStorage.removeItem('rotex_desktop_auth');
         localStorage.removeItem('rotex_desktop_auth_mirror');
-        // NOTE: do NOT remove rotex_pro_pass — that would wipe a paid Pro subscription.
+        // NOTE: do NOT remove rotex_pro_pass ï¿½ that would wipe a paid Pro subscription.
         try { await window.rotexDesktop?.clearDesktopAuth?.(); } catch {}
         setLoadStatus('Signing in...');
         await _goToLogin('force');
@@ -1172,7 +1172,7 @@
       // ensureSignedInAccount() redirects to login itself when no auth is found.
       const _acct = await _withTimeout(ensureSignedInAccount(), 8500, null);
       if (!_acct?.uid || !currentUser?.uid) {
-        // No auth — ensureSignedInAccount already navigated to login. Just stop.
+        // No auth ï¿½ ensureSignedInAccount already navigated to login. Just stop.
         clearTimeout(_s1); clearTimeout(_s2); clearTimeout(_s3);
         setLoadStatus('Session expired. Opening login...');
         setTimeout(() => { _goToLogin('expired'); }, 350);
@@ -1207,7 +1207,7 @@
       let _pluginConnected = false;
       let _studioConnected = false;
       let _pluginReady = false;
-      let _ver = '1.16.25';
+      let _ver = '1.16.26';
       function displayVersion(ver) { return ver; }
 
       function setLoadStatus(text) {
@@ -1226,7 +1226,7 @@
       function lsSub(n, text)   { const el = document.getElementById('rxLSS' + n); if (el) el.textContent = text; }
 
       function checkCanContinue() {
-        // Button is always enabled — auth is enforced in the click handler.
+        // Button is always enabled ï¿½ auth is enforced in the click handler.
         // You cannot reach editor.html without a valid auth backup.
         const btn = document.getElementById('rxLSOK');
         if (!btn) return;
@@ -1235,7 +1235,7 @@
         btn.style.cursor = 'pointer';
       }
 
-      // â"€â"€ Row 1: Updates â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // ï¿½"ï¿½ï¿½"ï¿½ Row 1: Updates ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½
       function markUpdateDone(label, sub) {
         _updateDone = true;
         lsIcon(1, 'ok'); lsLabel(1, label); lsSub(1, sub);
@@ -1264,7 +1264,7 @@
         _studioConnected = true;
         setRojoDot(true);
         if (_fresh) {
-          // Just connected — show the experience/plugin/AI info once. Give the
+          // Just connected ï¿½ show the experience/plugin/AI info once. Give the
           // plugin's auto context-send a moment to deliver the experience name.
           if (window.__rotexGameName) window.__rxShowConnectInfo?.();
           else setTimeout(() => window.__rxShowConnectInfo?.(), 1800);
@@ -1304,8 +1304,8 @@
       checkCanContinue();
       _ver = await Promise.race([
         window.rotexDesktop.getVersion(),
-        new Promise(resolve => setTimeout(() => resolve('1.16.25'), 2000))
-      ]).catch(() => '1.16.25');
+        new Promise(resolve => setTimeout(() => resolve('1.16.26'), 2000))
+      ]).catch(() => '1.16.26');
       document.getElementById('rxLSVersion').textContent = 'v' + _ver;
 
       // Show port from server info
@@ -1354,7 +1354,7 @@
       }).catch(() => {});
       setTimeout(() => window.rotexDesktop.checkForUpdates(), 1500);
 
-      // Full-screen update overlay — works whether user is on loading screen or in editor
+      // Full-screen update overlay ï¿½ works whether user is on loading screen or in editor
       function showUpdateOverlay(version) {
         let overlay = document.getElementById('rxUpdateOverlay');
         if (!overlay) {
@@ -1439,7 +1439,7 @@
     })();
   }
 
-  /* â"€â"€ Screenshot button â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Screenshot button ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
 
   /* -- Runtime update banner (fires during session, after gate is dismissed) */
   if (window.rotexDesktop) {
@@ -1462,10 +1462,17 @@
       if (!_gateDismissed) return;
       if (!_updBanner) return;
       _updBanner.classList.add('visible');
-      _updMsg.textContent = 'Update ready. It will install automatically when ROTEX closes.';
+      let secs = 30;
+      const tick = () => {
+        _updMsg.textContent = `Update ready â€” restarting in ${secs}s to install. Click X to cancel.`;
+        if (secs <= 0) return;
+        secs--;
+        setTimeout(tick, 1000);
+      };
+      tick();
     });
 
-    // Dismiss hides the banner. The updater installs on app quit.
+    // Dismiss cancels the countdown message but the updater still installs on quit.
     _updDismiss?.addEventListener('click', () => {
       _updBanner?.classList.remove('visible');
     });
@@ -1494,7 +1501,7 @@
     });
   }
 
-  /* â"€â"€ Update check button â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
+  /* ï¿½"ï¿½ï¿½"ï¿½ Update check button ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ï¿½"ï¿½ */
   document.getElementById('rxCheckUpdateBtn')?.addEventListener('click', () => {
     if (window.rotexDesktop?.checkForUpdates) {
       window.rotexDesktop.checkForUpdates();
@@ -1954,7 +1961,7 @@
         ? 'PLUGIN CAPABILITIES: ' + capabilities.join(', ') + '.'
         : 'PLUGIN CAPABILITIES: apply_files, create_model geometry, terrain_edit, lighting_set, create_ui_image, set_property, delete_instance, select_instances.';
       if (!scripts.length) return out + '\nPROJECT SCRIPTS: none scanned yet (the plugin auto-scans on connect and every 10s).';
-      out += '\nPROJECT SCRIPTS (live from Roblox Studio — ' + scripts.length + ' scripts). Search these before saying the project is empty:';
+      out += '\nPROJECT SCRIPTS (live from Roblox Studio ï¿½ ' + scripts.length + ' scripts). Search these before saying the project is empty:';
       for (const s of scripts) {
         const src = String(s.source || '').slice(0, 3000);
         out += '\n\n--- ' + (s.path || s.name || 'Script') + ' [' + (s.class || 'Script') + '] ---\n' + src;
@@ -2078,7 +2085,7 @@
             _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. Make sure the ROTEX plugin is connected, or the file blocks use valid paths like ServerScriptService/ScriptName.lua.');
           }
           if (full) {
-            // Local Ollama runs on-device, so TexBrain is free — no TexTokens charged.
+            // Local Ollama runs on-device, so TexBrain is free ï¿½ no TexTokens charged.
             const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
             _chatHistory.push({ role: 'assistant', content: storedContent });
             _saveMessages();

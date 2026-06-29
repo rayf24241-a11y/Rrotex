@@ -409,12 +409,12 @@ app.whenReady().then(() => {
       if (mainWindow) mainWindow.webContents.send('rotex-update-progress', progress);
     });
     autoUpdater.on('update-downloaded', (info) => {
-      ulog('update-downloaded! Installing in 5s...');
+      ulog('update-downloaded! Installing in 30s...');
       if (mainWindow) mainWindow.webContents.send('rotex-update-ready', info);
       setTimeout(() => {
         ulog('Calling quitAndInstall()');
         autoUpdater.quitAndInstall(false, true);
-      }, 5000);
+      }, 30000);
     });
   } else {
     ulog('autoUpdater is null — skipping update check');
