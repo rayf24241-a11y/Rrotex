@@ -170,7 +170,7 @@
   <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:52px;">
     <div style="width:76px;height:76px;background:#FFD60A;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#0D0F17;letter-spacing:-0.5px;box-shadow:0 0 56px rgba(255,214,10,0.28);margin-bottom:20px;">RX</div>
     <div style="font-size:30px;font-weight:800;letter-spacing:.06em;color:#fff;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">ROTEX</div>
-    <div id="rxLSVersion" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;letter-spacing:.05em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">v1.16.24</div>
+    <div id="rxLSVersion" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;letter-spacing:.05em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">v1.16.25</div>
   </div>
 
   <!-- Animated loading bar -->
@@ -179,7 +179,7 @@
   </div>
 
   <!-- Status text -->
-  <div id="rxLoadStatus" style="font-size:12px;color:rgba(255,255,255,0.32);letter-spacing:.04em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">Signing in…</div>
+  <div id="rxLoadStatus" style="font-size:12px;color:rgba(255,255,255,0.32);letter-spacing:.04em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">Signing in...</div>
 
   <!-- Update download progress (shown when an update is being fetched at launch) -->
   <div id="rxLSBar" style="display:none;width:200px;margin-top:16px;">
@@ -729,7 +729,7 @@
     const inp = document.getElementById('rxAiInput');
     if (inp) {
       inp.disabled = true;
-      inp.placeholder = 'Connect the Roblox plugin to start chatting…';
+      inp.placeholder = 'Connect the Roblox plugin to start chatting...';
     }
     const btn = document.querySelector('#rxAiComposer button[type="submit"]');
     if (btn) btn.disabled = true;
@@ -1158,23 +1158,23 @@
         localStorage.removeItem('rotex_desktop_auth_mirror');
         // NOTE: do NOT remove rotex_pro_pass — that would wipe a paid Pro subscription.
         try { await window.rotexDesktop?.clearDesktopAuth?.(); } catch {}
-        setLoadStatus('Signing in…');
+        setLoadStatus('Signing in...');
         await _goToLogin('force');
         return;
       }
 
       // Status progression during the 10-second loading screen
-      setLoadStatus('Signing in…');
-      const _s1 = setTimeout(() => setLoadStatus('Checking for updates…'), 3000);
-      const _s2 = setTimeout(() => setLoadStatus('Loading workspace…'), 6000);
-      const _s3 = setTimeout(() => setLoadStatus('Almost ready…'), 8500);
+      setLoadStatus('Signing in...');
+      const _s1 = setTimeout(() => setLoadStatus('Checking for updates...'), 3000);
+      const _s2 = setTimeout(() => setLoadStatus('Loading workspace...'), 6000);
+      const _s3 = setTimeout(() => setLoadStatus('Almost ready...'), 8500);
 
       // ensureSignedInAccount() redirects to login itself when no auth is found.
       const _acct = await _withTimeout(ensureSignedInAccount(), 8500, null);
       if (!_acct?.uid || !currentUser?.uid) {
         // No auth — ensureSignedInAccount already navigated to login. Just stop.
         clearTimeout(_s1); clearTimeout(_s2); clearTimeout(_s3);
-        setLoadStatus('Session expired. Opening login…');
+        setLoadStatus('Session expired. Opening login...');
         setTimeout(() => { _goToLogin('expired'); }, 350);
         return;
       }
@@ -1207,7 +1207,7 @@
       let _pluginConnected = false;
       let _studioConnected = false;
       let _pluginReady = false;
-      let _ver = '1.16.24';
+      let _ver = '1.16.25';
       function displayVersion(ver) { return ver; }
 
       function setLoadStatus(text) {
@@ -1304,8 +1304,8 @@
       checkCanContinue();
       _ver = await Promise.race([
         window.rotexDesktop.getVersion(),
-        new Promise(resolve => setTimeout(() => resolve('1.16.24'), 2000))
-      ]).catch(() => '1.16.24');
+        new Promise(resolve => setTimeout(() => resolve('1.16.25'), 2000))
+      ]).catch(() => '1.16.25');
       document.getElementById('rxLSVersion').textContent = 'v' + _ver;
 
       // Show port from server info
@@ -1364,7 +1364,7 @@
           overlay.innerHTML = `
             <div style="font-size:32px;">??</div>
             <div style="font-size:20px;font-weight:700;">Update downloaded!</div>
-            <div id="rxUpdateOverlaySub" style="font-size:14px;color:rgba(255,255,255,0.6);">Restarting to apply v${version} in 5 seconds…</div>
+            <div id="rxUpdateOverlaySub" style="font-size:14px;color:rgba(255,255,255,0.6);">Restarting to apply v${version} in 5 seconds...</div>
             <div style="width:240px;height:4px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">
               <div id="rxUpdateOverlayBar" style="height:100%;width:0%;background:#22C55E;transition:width 1s linear;border-radius:4px;"></div>
             </div>
@@ -1378,7 +1378,7 @@
         if (barEl) setTimeout(() => { barEl.style.width = '100%'; }, 50);
         const countdown = setInterval(() => {
           secs--;
-          if (subEl) subEl.textContent = secs > 0 ? `Restarting to apply v${version} in ${secs} second${secs !== 1 ? 's' : ''}…` : 'Restarting now…';
+          if (subEl) subEl.textContent = secs > 0 ? `Restarting to apply v${version} in ${secs} second${secs !== 1 ? 's' : ''}...` : 'Restarting now...';
           if (secs <= 0) { clearInterval(countdown); window.rotexDesktop.installUpdate(); }
         }, 1000);
       }
@@ -1396,7 +1396,7 @@
       });
       window.rotexDesktop.onUpdateReady((info) => {
         const ver = info?.version || '';
-        markUpdateDone('Update downloaded!', `Restarting to apply v${ver}…`);
+        markUpdateDone('Update downloaded!', `Restarting to apply v${ver}...`);
         showUpdateOverlay(ver);
       });
       window.rotexDesktop.onUpdateNotAvailable(() => markUpdateDone('Up to date', 'v' + _ver));

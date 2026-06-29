@@ -384,10 +384,13 @@ app.whenReady().then(() => {
   // autoInstallOnAppQuit is true — installs silently when the user closes the app.
   if (autoUpdater) {
     ulog('Scheduling update check in 8s...');
-    setTimeout(() => {
+    const runUpdateCheck = () => {
       ulog('Calling checkForUpdates()');
       autoUpdater.checkForUpdates().catch((e) => ulog('checkForUpdates error: ' + e.message));
-    }, 8000);
+    };
+    setTimeout(runUpdateCheck, 8000);
+    // Re-check every 30 minutes so long-running sessions pick up updates promptly.
+    setInterval(runUpdateCheck, 30 * 60 * 1000);
 
     autoUpdater.on('update-available', (info) => {
       ulog('update-available: ' + JSON.stringify(info));
