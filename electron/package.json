@@ -1,6 +1,6 @@
 {
   "name": "rotex-editor",
-  "version": "1.16.29",
+  "version": "1.16.33",
   "description": "ROTEX desktop AI agent for Unity, Roblox, Blender, and game dev projects",
   "main": "main.js",
   "scripts": {
@@ -146,6 +146,7 @@
     }
   }
 }
+
 
 
 
