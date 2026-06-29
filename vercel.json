@@ -3,6 +3,7 @@
     "api/chat.js": { "maxDuration": 60 }
   },
   "rewrites": [
+    { "source": "/api/chat/:path*", "destination": "/api/chat" },
     { "source": "/editor", "destination": "/index.html" },
     { "source": "/account", "destination": "/account.html" },
     { "source": "/login",   "destination": "/login.html" },
