@@ -832,7 +832,7 @@ function texbrainApiRequest(body) {
       res.on('data', c => { d += c; });
       res.on('end', () => {
         try { resolve({ status: res.statusCode, body: JSON.parse(d) }); }
-        catch { reject(new Error('parse')); }
+        catch { reject(new Error(`parse — HTTP ${res.statusCode} — raw: ${d.slice(0, 400)}`)); }
       });
     });
     req.on('error', reject);
