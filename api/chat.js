@@ -1269,13 +1269,18 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
   }
 
   if (selected.route === 'tb-thinking' && openRouterKey) {
-    const model = pickTbThinkingModel(selected, cleanMessages || []);
-    attempts.push({
-      provider: 'openrouter',
-      providerModel: model,
-      apiKey: openRouterKey,
-      baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    });
+    const primaryModel = pickTbThinkingModel(selected, cleanMessages || []);
+    const fallbacks = selected.thinkingFallbacks || [];
+    const allModels = [primaryModel, ...fallbacks.filter(m => m !== primaryModel)];
+    for (const m of allModels) {
+      if (!m) continue;
+      attempts.push({
+        provider: 'openrouter',
+        providerModel: m,
+        apiKey: openRouterKey,
+        baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+      });
+    }
   }
 
   // Fallback: if OpenRouter fails for tb-thinking, use Anthropic Haiku
