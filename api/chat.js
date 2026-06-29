@@ -270,6 +270,57 @@ async function tbOrPost(endpoint, body) {
   return JSON.parse(text);
 }
 
+// If the model returned plain ```lua blocks (ignoring the file: format instruction),
+// try to infer the correct path from context and upgrade them to ```file: blocks.
+function tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg) {
+  // Already has a file: block — nothing to fix
+  if (/```file:/.test(text)) return text;
+  // No code block at all — nothing to fix
+  if (!/```(?:lua|luau)?\s*\n/.test(text)) return text;
+
+  // Extract script paths mentioned in context system messages
+  const contextText = contextMsgs.map(m => String(m.content || '')).join('\n');
+  const pathMatches = [];
+  // Match patterns like "StarterPlayer/StarterPlayerScripts/Stamina.lua" or "ServerScriptService/Stamina"
+  const pathRe = /\b((?:ServerScriptService|ReplicatedStorage|StarterPlayer\/StarterPlayerScripts|StarterPlayer\/StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack)\/[\w/]+(?:\.lua|\.luau)?)/g;
+  let m;
+  while ((m = pathRe.exec(contextText)) !== null) pathMatches.push(m[1]);
+
+  // Also check the user message for explicit script names
+  const userPathMatch = lastUserMsg.match(/\b((?:ServerScriptService|ReplicatedStorage|StarterPlayer|StarterGui|Workspace|ServerStorage)\/[\w/]+(?:\.lua)?)/);
+  if (userPathMatch) pathMatches.unshift(userPathMatch[1]);
+
+  // Pick the best candidate — prefer the one most relevant to the user's request
+  let inferredPath = pathMatches[0] || null;
+
+  // If no path found from context, try to infer from script name mentioned in text or user msg
+  if (!inferredPath) {
+    const scriptNameMatch = text.match(/(?:script|Script)\s+[`"']?([\w]+(?:Script|Handler|System|UI|Controller)?)[`"']?/i)
+      || lastUserMsg.match(/\b([\w]+(?:Script|Handler|System|Stamina|Jump|Movement|Player)[\w]*)\b/i);
+    if (scriptNameMatch) {
+      const name = scriptNameMatch[1];
+      // Guess service from name
+      const isLocal = /UI|Client|Player|Stamina|Jump|Camera|Input/i.test(name);
+      const service = isLocal ? 'StarterPlayer/StarterPlayerScripts' : 'ServerScriptService';
+      inferredPath = `${service}/${name}.lua`;
+    }
+  }
+
+  if (!inferredPath) return text; // can't infer — leave as-is
+
+  // Ensure path has .lua extension
+  if (!/\.(lua|luau)$/.test(inferredPath)) inferredPath += '.lua';
+
+  // Replace plain ```lua / ```luau / ``` code blocks with ```file: blocks
+  let count = 0;
+  const fixed = text.replace(/```(?:lua|luau)?\s*\n([\s\S]*?)```/g, (_, code) => {
+    const path = count === 0 ? inferredPath : inferredPath.replace(/\.lua$/, `_${count}.lua`);
+    count++;
+    return '```file:' + path + '\n' + code + '```';
+  });
+  return fixed;
+}
+
 async function handleTexBrain(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -330,6 +381,11 @@ async function handleTexBrain(req, res) {
       res.status(503).json({ error: 'TexBrain models are busy right now. Try again in a moment, or use Claude Haiku.' });
       return;
     }
+
+    // Post-process: if the model used plain ```lua blocks instead of ```file: blocks,
+    // infer the script path from context and rewrite them so the client can apply them.
+    text = tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg);
+
     res.status(200).json({ text, model: usedModel });
   } catch (err) {
     res.status(500).json({ error: `TexBrain error: ${err.message}` });
