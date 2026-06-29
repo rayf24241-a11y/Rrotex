@@ -922,7 +922,7 @@
     const localBalance = window.rotexTokens?.getPurchased
       ? window.rotexTokens.getPurchased()
       : Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_balance') || 0)));
-    const res = await fetch('https://www.rrotex.com/api/billing-sync', {
+    const res = await fetch('https://www.rrotex.com/api/chat/billing-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uid, authToken: token, localBalance }),

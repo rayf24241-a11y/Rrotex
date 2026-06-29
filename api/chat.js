@@ -291,10 +291,57 @@ async function handleTexBrain(req, res) {
   }
 }
 
+async function handleBillingSync(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+  if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
+
+  const { uid = '', authToken = '', localBalance = null } = req.body || {};
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  if (!projectId) { res.status(200).json({ ok: false, error: 'firebase_not_configured' }); return; }
+
+  // Verify token (lightweight decode)
+  let tokenUid = '';
+  try {
+    const payload = JSON.parse(Buffer.from(authToken.split('.')[1], 'base64').toString());
+    tokenUid = payload.sub || '';
+  } catch {}
+  if (!tokenUid || tokenUid !== uid) { res.status(401).json({ ok: false, error: 'auth_expired', message: 'Sign in again to sync billing.' }); return; }
+
+  const docUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/textokens`;
+  let cloudBalance = 0;
+  const getRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${authToken}` } });
+  if (getRes.ok) {
+    const doc = await getRes.json();
+    const f = doc.fields?.balance;
+    cloudBalance = Math.max(0, Math.floor(Number(f?.integerValue ?? f?.doubleValue ?? 0) || 0));
+  } else if (getRes.status !== 404) {
+    const err = await getRes.json().catch(() => ({}));
+    res.status(getRes.status).json({ ok: false, error: 'firestore_read_failed', message: err.error?.message || 'Could not read billing balance.' });
+    return;
+  }
+
+  const local = Math.max(0, Math.floor(Number(localBalance) || 0));
+  const best = Math.max(cloudBalance, local);
+  if (best > cloudBalance) {
+    await fetch(`${docUrl}?updateMask.fieldPaths=balance&updateMask.fieldPaths=updatedAt`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { balance: { integerValue: String(best) }, updatedAt: { timestampValue: new Date().toISOString() } } }),
+    }).catch(() => {});
+  }
+  res.status(200).json({ ok: true, balance: best, cloudBalance });
+}
+
 module.exports = async function handler(request, response) {
-  // Route /api/chat/texbrain to the TexBrain handler
+  // Route sub-paths to inlined handlers (keeps under Vercel's 12-function limit)
   if (request.url && request.url.includes('/texbrain')) {
     return handleTexBrain(request, response);
+  }
+  if (request.url && request.url.includes('/billing-sync')) {
+    return handleBillingSync(request, response);
   }
 
   response.setHeader('Access-Control-Allow-Origin', '*');
