@@ -184,7 +184,119 @@ function checkRequestRate(ip, opts = {}) {
   return { ok: true };
 }
 
+// ── TexBrain handler (inlined here to stay under Vercel's 12-function limit) ──
+const OR_KEY = process.env.OPENROUTER_API_KEY || '';
+const TB_MAX_CONCURRENT = 5;
+let tbActiveCalls = 0;
+
+function tbVerifyToken(authToken) {
+  if (!authToken) return { ok: false };
+  try {
+    const payload = JSON.parse(Buffer.from(authToken.split('.')[1], 'base64').toString());
+    if (!payload.sub || !payload.aud || !payload.iss?.includes('firebase')) return { ok: false };
+    return { ok: true, uid: payload.sub };
+  } catch { return { ok: false }; }
+}
+
+function tbBuildSystemPrompt(projectMode, mode) {
+  const engineGuides = {
+    Roblox: `SPECIALTY: Roblox game development — Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, DataStoreService, TweenService, RunService, and Roblox Studio.\n\nKEY RULES FOR ROBLOX:\n- Use task.wait(n) NOT wait(n). Use task.spawn() NOT spawn(). Use task.delay() NOT delay().\n- RemoteEvents MUST be created by a server Script first; LocalScripts use :WaitForChild("EventName", 10) to find them.\n- Always use :WaitForChild("Name", 10) with a timeout before accessing cross-script instances.\n- Wrap every DataStore call in pcall.\n- LocalScripts CANNOT access ServerScriptService. Use ReplicatedStorage for shared assets.\n- game.Players.LocalPlayer is nil on the server — only use it inside LocalScripts.\n- Touched fires constantly — debounce with a table keyed by player.\n- Character loads async; use player.CharacterAdded:Wait() before accessing the character.\n- Use Humanoid:TakeDamage(amount) not Humanoid.Health = 0.\n- Always :Disconnect() connections when done.\n\nFor casual or off-topic messages, respond naturally in 1-2 sentences without code.`,
+    Unity: 'SPECIALTY: Unity game development — C# scripting, MonoBehaviour lifecycle, Unity APIs, GameObjects, Rigidbody physics, Animator, NavMeshAgent, Input System, TextMeshPro. Cache GetComponent in Awake. Use Coroutines for async sequences. Never hallucinate Unity APIs.',
+    Blender: 'SPECIALTY: Blender 3D — Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering. Use bpy.data over bpy.ops. bmesh for geometry editing.',
+    'Roblox+Blender': 'SPECIALTY: Roblox game development (Luau) and Blender 3D (bpy) for creating assets for Roblox games. Same Roblox rules apply. For Blender: apply transforms before FBX export, Y-up, FBX Units Scale.',
+    'Unity+Blender': 'SPECIALTY: Unity (C#) and Blender 3D (bpy) for creating assets for Unity projects. Apply all transforms in Blender before export. Normal maps from Blender are OpenGL; Unity needs DirectX — flip the G channel.',
+  };
+  const engineFocus = engineGuides[(projectMode || 'Roblox').trim()] || engineGuides['Roblox'];
+  const modeInstructions = {
+    agent: 'AGENT MODE: Output the smallest complete fix. Every code change MUST be in a ```file:ServiceName/path/ScriptName.lua block.',
+    supreme: 'SUPER AGENT MODE: Deeper multi-step edits. Every code change MUST be in a ```file:ServiceName/path/ScriptName.lua block.',
+  };
+  return [
+    'You are TexBrain, the ROTEX AI coding assistant.',
+    engineFocus,
+    'You receive live ROTEX Studio context. Treat that context as your view of the project.',
+    'Classify every request first: answer-only, plan-only, create, modify, remove/disable, debug, inspect, or verify.',
+    'For non-coding greetings or casual chat, reply in 1–2 sentences and never attach code.',
+    'ROBLOX QUALITY BAR: correct client/server boundaries, RemoteEvents created server-side, debounces keyed per-player, connections disconnected, task.wait/task.spawn, pcall around DataStore/HttpService. Never invent Roblox members.',
+    'MODIFY-EXISTING RULE: if context already contains the owning script, modify that exact script. No duplicates.',
+    'REMOVAL RULE: if user says remove/disable/turn off/undo, delete or disable the owning script. Never rewrite it back.',
+    'PATH FORMAT: ServiceName/path/ScriptName.lua. Valid roots: ServerScriptService, ReplicatedStorage, StarterPlayer/StarterPlayerScripts, StarterGui, Workspace, ServerStorage, StarterPack.',
+    'CODE COMPLETENESS: every file must be runnable with no placeholders.',
+    'FILE-BLOCK RULE: EVERY code change MUST be in ```file:ServiceName/path/ScriptName.lua blocks. Do NOT use plain ```lua blocks.',
+    modeInstructions[mode] || '',
+  ].filter(Boolean).join('\n');
+}
+
+async function tbOrPost(endpoint, body) {
+  const postData = JSON.stringify(body);
+  const res = await fetch(`https://openrouter.ai/api/v1${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OR_KEY}`,
+      'HTTP-Referer': 'https://rrotex.com',
+      'X-Title': 'ROTEX TexBrain',
+    },
+    body: postData,
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}: ${text.slice(0, 300)}`);
+  return JSON.parse(text);
+}
+
+async function handleTexBrain(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+  if (req.method !== 'POST') { res.status(405).json({ error: 'method not allowed' }); return; }
+
+  const { authToken, messages = [], projectMode = 'Roblox', mode = '' } = req.body || {};
+  if (!tbVerifyToken(authToken).ok) { res.status(401).json({ error: 'Please sign in to use TexBrain.' }); return; }
+  if (!OR_KEY) { res.status(500).json({ error: 'TexBrain is not configured.' }); return; }
+  if (tbActiveCalls >= TB_MAX_CONCURRENT) { res.status(429).json({ error: 'Too many people are using TexBrain right now (beta). Try again in a moment!' }); return; }
+
+  tbActiveCalls++;
+  try {
+    const normalized = (messages || []).map(m => ({
+      role: m.role,
+      content: Array.isArray(m.content) ? m.content.filter(p => p.type === 'text').map(p => p.text).join('\n') : m.content,
+    }));
+    const contextMsgs = normalized.filter(m => m.role === 'system' && /\b(Studio|PROJECT SCRIPTS|CURRENTLY SELECTED|Plugin|Experience)\b/i.test(String(m.content || ''))).slice(-2);
+    const history = normalized.filter(m => m.role !== 'system').slice(-8);
+    const lastUserMsg = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
+    const isCoding = /\b(make|create|add|fix|debug|build|implement|change|update|remove|delete|disable|script|camera|gui|ui|tool|system)\b/i.test(lastUserMsg);
+    const model = (isCoding || mode === 'agent' || mode === 'supreme') ? 'qwen/qwen3-coder:free' : 'mistralai/magistral-medium-2509';
+
+    let clarified = lastUserMsg;
+    if (isCoding) {
+      try {
+        const cr = await tbOrPost('/chat/completions', { model: 'meta-llama/llama-3.3-70b-instruct:free', temperature: 0.1, max_tokens: 120, messages: [{ role: 'system', content: `Restate the user's request as a precise 1-2 sentence technical task. Preserve removal/disable/undo intent. Output only the restated task.` }, { role: 'user', content: lastUserMsg }] });
+        clarified = cr.choices?.[0]?.message?.content?.trim() || lastUserMsg;
+      } catch { /* fallback */ }
+    }
+
+    const workerMessages = [{ role: 'system', content: tbBuildSystemPrompt(projectMode, mode) }, ...contextMsgs, ...history.slice(0, -1), { role: 'user', content: clarified }];
+    let result = await tbOrPost('/chat/completions', { model, temperature: 0.2, top_p: 0.8, max_tokens: 4096, messages: workerMessages });
+    let text = result.choices?.[0]?.message?.content?.trim();
+    if (!text) {
+      result = await tbOrPost('/chat/completions', { model: 'meta-llama/llama-3.3-70b-instruct:free', temperature: 0.2, top_p: 0.8, max_tokens: 4096, messages: workerMessages });
+      text = result.choices?.[0]?.message?.content?.trim() || '(no response)';
+    }
+    res.status(200).json({ text, model: result.model || model });
+  } catch (err) {
+    res.status(500).json({ error: `TexBrain error: ${err.message}` });
+  } finally {
+    tbActiveCalls--;
+  }
+}
+
 module.exports = async function handler(request, response) {
+  // Route /api/chat/texbrain to the TexBrain handler
+  if (request.url && request.url.includes('/texbrain')) {
+    return handleTexBrain(request, response);
+  }
+
   response.setHeader('Access-Control-Allow-Origin', '*');
   response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');

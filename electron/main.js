@@ -817,7 +817,7 @@ ipcMain.handle('get-server-info', () => ({
 }));
 
 // ─── IPC: TexBrain 0.5-β (proxied through ROTEX server to Railway Ollama) ─────
-const TEXBRAIN_API_URL = process.env.TEXBRAIN_API_URL || 'https://www.rrotex.com/api/texbrain';
+const TEXBRAIN_API_URL = process.env.TEXBRAIN_API_URL || 'https://www.rrotex.com/api/chat/texbrain';
 
 function texbrainApiRequest(body) {
   return new Promise((resolve, reject) => {
