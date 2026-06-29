@@ -239,6 +239,20 @@ function tbBuildSystemPrompt(projectMode, mode) {
   ].filter(Boolean).join('\n');
 }
 
+const GROQ_KEY = cleanKey(process.env.GROQ_API_KEY);
+
+async function tbGroqPost(model, messages, maxTokens) {
+  const postData = JSON.stringify({ model, messages, temperature: 0.15, max_tokens: maxTokens || 4096, stream: false });
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
+    body: postData,
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Groq HTTP ${res.status}: ${text.slice(0, 200)}`);
+  return JSON.parse(text);
+}
+
 async function tbOrPost(endpoint, body) {
   const postData = JSON.stringify(body);
   const res = await fetch(`https://openrouter.ai/api/v1${endpoint}`, {
@@ -279,30 +293,38 @@ async function handleTexBrain(req, res) {
     const history = normalized.filter(m => m.role !== 'system').slice(-10);
     const lastUserMsg = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
 
-    // Fastest free models first — llama-3.3-70b is significantly quicker than qwen
-    const candidates = [
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'qwen/qwen3-coder:free',
-      'openai/gpt-oss-120b:free',
-      'nvidia/nemotron-3-super-120b-a12b:free',
-    ];
-
     const workerMessages = [
       { role: 'system', content: tbBuildSystemPrompt(projectMode, mode) },
       ...contextMsgs,
       ...history,
     ];
 
-    const tried = new Set();
-    let text = '', usedModel = candidates[0];
-    for (const m of candidates) {
-      if (!m || tried.has(m)) continue;
-      tried.add(m);
+    let text = '', usedModel = 'groq/llama-3.3-70b';
+
+    // 1. Try Groq first — fastest by far (sub-2s)
+    if (GROQ_KEY) {
       try {
-        const result = await tbOrPost('/chat/completions', { model: m, temperature: 0.15, top_p: 0.9, max_tokens: 4096, messages: workerMessages });
+        const result = await tbGroqPost('llama-3.3-70b-versatile', workerMessages, 4096);
         const t = result.choices?.[0]?.message?.content?.trim();
-        if (t) { text = t; usedModel = result.model || m; break; }
-      } catch (e) { /* try next */ }
+        if (t) { text = t; usedModel = 'groq/llama-3.3-70b-versatile'; }
+      } catch (e) { /* fall through to OpenRouter */ }
+    }
+
+    // 2. OpenRouter free models as fallback
+    if (!text && OR_KEY) {
+      const candidates = [
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'qwen/qwen3-coder:free',
+        'openai/gpt-oss-120b:free',
+        'nvidia/nemotron-3-super-120b-a12b:free',
+      ];
+      for (const m of candidates) {
+        try {
+          const result = await tbOrPost('/chat/completions', { model: m, temperature: 0.15, top_p: 0.9, max_tokens: 4096, messages: workerMessages });
+          const t = result.choices?.[0]?.message?.content?.trim();
+          if (t) { text = t; usedModel = m; break; }
+        } catch (e) { /* try next */ }
+      }
     }
     if (!text) {
       res.status(503).json({ error: 'TexBrain models are busy right now. Try again in a moment, or use Claude Haiku.' });
