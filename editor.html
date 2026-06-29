@@ -1300,11 +1300,10 @@
       lsLabel(1, 'Scanning for updates...');
       lsSub(1, 'This runs in the background. You can continue now.');
       checkCanContinue();
-      _ver = await Promise.race([
-        window.rotexDesktop.getVersion(),
-        new Promise(resolve => setTimeout(() => resolve(null), 2000))
-      ]).catch(() => null);
-      if (_ver) document.getElementById('rxLSVersion').textContent = 'v' + _ver;
+      window.rotexDesktop.getVersion().then(v => {
+        if (v) { _ver = v; document.getElementById('rxLSVersion').textContent = 'v' + v; }
+      }).catch(() => {});
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Show port from server info
       const _srvInfo = await window.rotexDesktop.getServerInfo?.().catch(() => null);
