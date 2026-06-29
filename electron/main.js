@@ -276,7 +276,13 @@ function createWindow() {
   });
 
   mainWindow.setIcon(appIcon);
-  mainWindow.webContents.once('did-finish-load', () => mainWindow && mainWindow.setIcon(appIcon));
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (mainWindow) mainWindow.setIcon(appIcon);
+    const ver = app.getVersion();
+    mainWindow?.webContents.executeJavaScript(
+      `(function(){ var el = document.getElementById('rxLSVersion'); if(el) el.textContent = 'v${ver}'; })()`
+    ).catch(() => {});
+  });
   mainWindow.once('ready-to-show', showMainWindow);
   mainWindow.on('show', () => mainWindow && mainWindow.setSkipTaskbar(false));
 
