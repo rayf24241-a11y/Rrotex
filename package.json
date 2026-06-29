@@ -1,12 +1,13 @@
 {
   "name": "rrotex",
-  "version": "1.16.35",
+  "version": "1.16.36",
   "private": true,
   "dependencies": {
     "adm-zip": "^0.5.17",
     "nodemailer": "^8.0.11"
   }
 }
+
 
 
 
