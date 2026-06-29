@@ -215,16 +215,41 @@ function isActiveProSubscription(subscription, priceId) {
 }
 
 async function verifyFirebaseToken(authToken) {
-  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const projectId = process.env.FIREBASE_PROJECT_ID || 'rotex-e0be7';
   if (!authToken || !projectId) return { ok: false };
   try {
     const result = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(authToken)}`);
-    if (!result.ok) return { ok: false };
-    const token = await result.json();
+    if (result.ok) {
+      const token = await result.json();
+      return {
+        ok: token.aud === projectId && Boolean(token.sub),
+        uid: token.sub || '',
+        email: token.email || '',
+      };
+    }
+  } catch {}
+  return verifyFirebaseTokenSignature(authToken, projectId);
+}
+
+async function verifyFirebaseTokenSignature(authToken, projectId) {
+  try {
+    const [headerPart, payloadPart, signaturePart] = String(authToken || '').split('.');
+    if (!headerPart || !payloadPart || !signaturePart) return { ok: false };
+    const header = JSON.parse(Buffer.from(headerPart, 'base64url').toString('utf8'));
+    const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
+    if (payload.aud !== projectId) return { ok: false };
+    if (payload.iss !== `https://securetoken.google.com/${projectId}`) return { ok: false };
+    const certsRes = await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com');
+    if (!certsRes.ok) return { ok: false };
+    const certs = await certsRes.json();
+    const cert = certs[header.kid];
+    if (!cert) return { ok: false };
+    const crypto = require('crypto');
+    const ok = crypto.verify('RSA-SHA256', Buffer.from(`${headerPart}.${payloadPart}`), cert, Buffer.from(signaturePart, 'base64url'));
     return {
-      ok: token.aud === projectId && Boolean(token.sub),
-      uid: token.sub || '',
-      email: token.email || '',
+      ok,
+      uid: ok ? (payload.sub || payload.user_id || '') : '',
+      email: ok ? (payload.email || '') : '',
     };
   } catch {
     return { ok: false };

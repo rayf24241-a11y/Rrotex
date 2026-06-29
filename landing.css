@@ -18,10 +18,14 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
 
 body {
   margin: 0;
+  overflow-x: hidden;
   background:
     linear-gradient(180deg, rgba(75, 157, 255, 0.10), transparent 460px),
     linear-gradient(135deg, #05070b 0%, #0a1019 45%, #080b10 100%);
@@ -347,6 +351,35 @@ button { font: inherit; cursor: pointer; }
 .model-role {
   margin: 0 0 8px;
   font-size: 13px;
+}
+
+.model-cost-list {
+  display: grid;
+  gap: 0;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.model-cost-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.model-cost-row strong {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.model-cost-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .price-card {

@@ -1,5 +1,5 @@
 const AdmZip = require('adm-zip');
-const { verifyProPass } = require('./_lib/propass.js');
+const { verifyProPass, signProPass } = require('./_lib/propass.js');
 const { MODELS, resolveModelId } = require('./_lib/catalog.js');
 const { userHasActiveProSubscription } = require('./_lib/stripe.js');
 const {
@@ -111,7 +111,7 @@ function isMultiAccount(ip, uid, email) {
   return uidSet.size > 1; // two or more accounts on the same IP today
 }
 const GROQ_BUSY_TEXT = 'That model is busy right now. Try TexBrain Thinking-beta or Claude Haiku while it cools down.';
-const OPENROUTER_OUT_TEXT = 'ai is being used to much! please purchase pro to bypass this!';
+const OPENROUTER_OUT_TEXT = 'AI is busy right now. Please retry in a few seconds.';
 
 function _today() { return new Date().toISOString().slice(0, 10); }
 
@@ -162,7 +162,7 @@ const REQ_PER_MIN = 30;          // max requests in a rolling 60s window
 const REQ_BURST = 8;             // max requests in a rolling 10s window
 const REQ_BURST_WINDOW = 10_000;
 
-function checkRequestRate(ip) {
+function checkRequestRate(ip, opts = {}) {
   const now = Date.now();
   let arr = reqWindows.get(ip);
   if (!arr) {
@@ -171,11 +171,13 @@ function checkRequestRate(ip) {
     if (reqWindows.size > 5000) reqWindows.clear();
   }
   while (arr.length && now - arr[0] > 60_000) arr.shift(); // drop entries >60s old
+  const burstLimit = opts.dev ? 80 : opts.relaxed ? 28 : REQ_BURST;
+  const minuteLimit = opts.dev ? 240 : opts.relaxed ? 90 : REQ_PER_MIN;
   const inBurst = arr.reduce((c, t) => c + (now - t < REQ_BURST_WINDOW ? 1 : 0), 0);
-  if (inBurst >= REQ_BURST) {
+  if (inBurst >= burstLimit) {
     return { ok: false, retry: Math.ceil(REQ_BURST_WINDOW / 1000) };
   }
-  if (arr.length >= REQ_PER_MIN) {
+  if (arr.length >= minuteLimit) {
     return { ok: false, retry: Math.max(1, Math.ceil((60_000 - (now - arr[0])) / 1000)) };
   }
   arr.push(now);
@@ -195,17 +197,7 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  // Anti-spam: throttle rapid-fire requests per IP before any heavy work.
   const ip = ipFromRequest(request) || 'unknown';
-  const rate = checkRequestRate(ip);
-  if (!rate.ok) {
-    response.setHeader('Retry-After', String(rate.retry));
-    response.status(429).json({
-      error: 'rate_limited',
-      text: `Slow down — too many requests. Try again in ${rate.retry}s.`,
-    });
-    return;
-  }
 
   const {
     authToken = '',
@@ -226,9 +218,24 @@ module.exports = async function handler(request, response) {
     superAgent = false,
   } = request.body || {};
 
+  const modelId = resolveModelId(model);
+  const selected = MODELS[modelId];
+  let proPayload = verifyProPass(proPass);
+  const quickClaim = _decodeJwtPayload(authToken);
+  const quickIsDev = quickClaim?.email === 'rayf24241@gmail.com';
+  const relaxedRate = selected.route === 'tb-thinking' || quickIsDev || Boolean(proPayload);
+  const rate = checkRequestRate(ip, { relaxed: relaxedRate, dev: quickIsDev });
+  if (!rate.ok) {
+    response.setHeader('Retry-After', String(rate.retry));
+    response.status(429).json({
+      error: 'rate_limited',
+      text: `Slow down — too many requests. Try again in ${rate.retry}s.`,
+    });
+    return;
+  }
+
   const authResult = await verifyFirebaseToken(authToken); // optional: logged-in users get cloud sync, guests can still chat
 
-  let proPayload = verifyProPass(proPass);
   let isPro = Boolean(proPayload);
 
   // If the signed Pro pass is stale/invalid, fall back to Stripe verification for
@@ -259,11 +266,19 @@ module.exports = async function handler(request, response) {
     } catch {}
   }
 
-  const modelId = resolveModelId(model);
-  const selected = MODELS[modelId];
   const userId = proPayload?.uid || authResult.uid || ipFromRequest(request) || 'unknown';
   const userEmail = authResult.email || '';
-  const isDev = userEmail === 'rayf24241@gmail.com';
+  // Dev recognition. The normal path uses the verified (unexpired) token email.
+  // Fallback: if the token is expired but its EMAIL claim is the dev's, verify the
+  // token's cryptographic signature (ignoring expiry) so the dev stays free even
+  // on a stale token, with no re-login. A forged token fails the signature check.
+  let isDev = userEmail === 'rayf24241@gmail.com';
+  if (!isDev && authToken) {
+    const claim = _decodeJwtPayload(authToken);
+    if (claim && claim.email === 'rayf24241@gmail.com') {
+      isDev = await verifyDevTokenSignature(authToken);
+    }
+  }
 
   // Server-side Pro enforcement - locked models reject without a valid pass.
   if (selected.tier === 'pro' && !isPro && !isDev) {
@@ -389,11 +404,21 @@ module.exports = async function handler(request, response) {
       lastUser.content = `${lastUser.content}\n\n${attachmentPrompt(cleanAttachments, selected.route === 'anthropic-first')}`.slice(0, lastMessageCap + 16000);
     }
   }
+  const robloxAssetContext = isEditor
+    ? await buildRobloxUiAssetContext(lastUser?.content || '')
+    : '';
 
   if (isEditor) {
     cleanMessages.unshift({
       role: 'system',
-      content: buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent),
+      content: buildEditorSystemPrompt(
+        selected,
+        agent,
+        robloxAssetContext ? `${projectContext}\n\n${robloxAssetContext}` : projectContext,
+        isPro,
+        projectMode,
+        superAgent,
+      ),
     });
   } else {
     cleanMessages.unshift({
@@ -433,9 +458,12 @@ module.exports = async function handler(request, response) {
 
   const providerCall = resolveProviderCall(selected, cleanMessages, { agent, superAgent });
   if (!providerCall) {
+    const noProviderText = selected.route === 'tb-thinking'
+      ? 'TexBrain is starting up. Try again in a few seconds.'
+      : 'servers are down';
     response.status(500).json({
       error: 'backend_unavailable',
-      text: 'servers are down',
+      text: noProviderText,
     });
     return;
   }
@@ -501,6 +529,13 @@ module.exports = async function handler(request, response) {
     return;
   }
 
+  // Mint a long-lived Pro pass for the verified dev account so it stays free even
+  // after the Firebase ID token expires (no Stripe). The client persists it and
+  // sends it on later requests, so the dev is recognized as Pro without a live token.
+  const devPass = isDev
+    ? signProPass({ uid: authResult.uid || userId, plan: 'pro', exp: Date.now() + 3650 * 24 * 60 * 60 * 1000 })
+    : '';
+
   try {
     if (stream) {
       await streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens, {
@@ -508,6 +543,7 @@ module.exports = async function handler(request, response) {
         estimate,
         agent,
         superAgent,
+        devPass,
       });
     } else {
       const result = await completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages, {
@@ -516,7 +552,7 @@ module.exports = async function handler(request, response) {
         agent,
         superAgent,
       });
-      response.status(200).json({ model: selected.name, text: result.text, usage: result.usage });
+      response.status(200).json({ model: selected.name, text: result.text, usage: result.usage, devPass });
     }
   } catch (error) {
     console.error('ROTEX backend provider failed', {
@@ -525,7 +561,9 @@ module.exports = async function handler(request, response) {
       message: error?.message || String(error),
     });
     const lowCredit = insufficientCreditsError(error);
-    const publicText = error?.publicText || (lowCredit ? 'Too many requests right now. Please retry later or upgrade/add TexTokens.' : 'servers are down');
+    const publicText = error?.publicText
+      || (lowCredit && selected.route === 'anthropic-first' ? OPENROUTER_OUT_TEXT : '')
+      || (selected.route === 'tb-thinking' ? 'TexBrain is busy for a moment. Try again in a few seconds.' : 'servers are down');
     const publicError = error?.publicError || (lowCredit ? 'provider_credits_empty' : 'backend_unavailable');
     if (stream && response.headersSent) {
       sseWrite(response, {
@@ -870,6 +908,9 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
   const parts = [
     'You are ROTEX AI, the coding assistant inside the ROTEX desktop app chat.',
     `You are running as the **${selected.name}** model (${selected.providerName}).`,
+    'You are a world-class expert Roblox/Luau engineer. Think the whole problem through before you write a single line: what the user actually wants, exactly which Roblox services/instances/events own that behavior, every edge case (respawn, multiple players, exploits, mobile, cleanup), and the simplest correct design. Then write production-quality Luau that runs first try.',
+    'Reason silently, output confidently. Internally plan step by step, but never show that reasoning — only output the final, complete solution. Prefer one correct, complete answer over several half-ideas. If you are unsure of an exact API, use only members you are certain exist; never invent Roblox APIs.',
+    'Quality bar: correct client/server boundaries, RemoteEvents created and WaitForChild-ed, debounces keyed per-player, connections disconnected, task.wait/task.spawn (never the deprecated globals), pcall around DataStore/HttpService, and sensible defaults. Match the existing code style and names from PROJECT CONTEXT.',
     buildEngineSection(projectMode || 'Roblox'),
     'Output only what is needed. No preamble ("Sure!", "Here\'s how...", "Let me help you..."), no closing filler ("Let me know if you need anything else", "Hope this helps!"). Start with the answer — code first, one short explanation line after only if the code alone is not enough.',
     'Do NOT generate code for greetings, casual conversation, or questions that do not ask for code. If the user says "hi", "thanks", or asks a question, respond conversationally in 1-2 sentences. Never attach a code block to a casual message.',
@@ -880,6 +921,8 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'AGENT DECISION PROTOCOL: classify the user request as one of: answer-only, plan-only, create, modify, remove/disable, debug, inspect, or verify. Then perform only that class. Do not drift into a different class. If the user already gave a direct command, execute it instead of asking setup questions that PROJECT CONTEXT can answer.',
     'REASON BEFORE ACTING: silently analyze every request in three steps before answering: (1) INTENT — what does the user actually want? (2) CONTEXT — which existing scripts, events, or instances already own this behavior? (3) IMPACT — what could this change break? Use the answers to pick the smallest correct action.',
     'PROJECT CONTEXT PROTOCOL: scan PROJECT CONTEXT for matching script names, paths, RemoteEvents, ScreenGuis, Tools, camera/input scripts, and previous ROTEX-created scripts. Prefer modifying/removing exact matches over creating new scripts.',
+    'REAL UPDATE RULE: the user judges success by the live Roblox Studio game changing. In Agent/Super Agent, do not only explain or paste code. Output executable file/studio-action/roblox-model blocks that ROTEX can apply through the plugin, then keep visible text short.',
+    'VISIBLE CHAT RULE: In Agent/Super Agent, the user-facing message must NOT contain Lua source code, JSON action payloads, or markdown code fences. Put all code/action/model JSON only inside executable file/studio-action/roblox-model blocks. ROTEX hides those blocks and applies them. Visible text should be a plain sentence like "I am updating the stamina UI now."',
     'ROBLOX PATH PROTOCOL: file paths must start with a real Roblox root: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. For StarterPlayerScripts use StarterPlayer/StarterPlayerScripts/Name.client.lua.',
     'OUTPUT PROTOCOL: In Agent/Super Agent, output hidden executable blocks first. Use file blocks for source changes and studio-action blocks for deletion/property/model actions. Do not output plain code that cannot be applied.',
     'SELF-CHECK PROTOCOL before final output: check whether the blocks actually satisfy the user request, whether removal requests remove/disable instead of recreate, whether client/server placement is correct, whether cleanup exists, and whether all referenced Instances are created or WaitForChild-ed.',
@@ -907,18 +950,22 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'AUTO-FIX OVERRIDE: if the user message starts with "[AUTO-FIX]", the user is asking you to fix a Studio runtime error that was detected automatically. Start your response with exactly "Oh! Roblox sent a error, let me fix it..." on its own line, then diagnose the error using the PROJECT CONTEXT and output the fix. This is the only exception to the no-preamble rule.',
     askMode ? 'ASK MODE HARD RULE: Do not output code blocks, file blocks, patches, commands, or implementation snippets. Ask mode can answer questions and explain concepts only. If the user asks you to make/edit/fix/build something, tell them to switch to Agent or Super Agent mode to edit the game.' : '',
     planMode ? 'PLAN MODE HARD RULE: Do not output code blocks, file blocks, patches, commands, or implementation snippets. Return a concise numbered plan only. Mention that Agent or Super Agent can execute it.' : '',
-    (!askMode && !planMode) ? 'When showing code changes for a specific file, ALWAYS use a file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. The editor shows the user a diff and an Apply button for each file block.' : '',
+    (!askMode && !planMode) ? 'When changing code for a specific file, ALWAYS use a hidden executable file block: start with ```file:relative/path.ext on its own line, then the COMPLETE new file contents, then a closing ``` line. Do not duplicate that code in normal visible chat text.' : '',
     (!askMode && !planMode) ? 'The file block header must contain ONLY the path. Put the code on the next line. Correct:\n```file:ServerScriptService/Example.lua\nprint("hello")\n```\nWrong: ```file:ServerScriptService/Example.lua print("hello")```.' : '',
     (!askMode && !planMode) ? 'For small inline snippets that are not meant to replace a file, use normal ```lang code fences instead.' : '',
     'If PROJECT CONTEXT says the Roblox Studio plugin is CONNECTED, treat Studio as connected even if older chat messages suggest otherwise.',
     (!askMode && !planMode) ? 'When the user asks you to make/create/add/fix anything in Roblox, ALWAYS output the Lua code in a ```file:ServiceName/path/ScriptName.lua block — not a plain ```lua block. Use service names as the root folder: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, StarterPack. ROTEX auto-applies file blocks to Studio when connected, and shows them ready-to-apply when not. Never tell the user to paste code manually.' : '',
     (!askMode && !planMode) ? 'For client scripts under StarterPlayerScripts, use paths like ```file:StarterPlayer/StarterPlayerScripts/FirstPersonCamera.client.lua, not ```file:StarterPlayerScripts/FirstPersonCamera.client.lua.' : '',
     (!askMode && !planMode) ? 'When the user asks to remove, undo, turn off, disable, or get out of a feature, do NOT rewrite the same feature back in. Delete or disable the script that causes it. Use a studio-action block when deletion or property edits are the right operation.' : '',
-    (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
+    (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON, terrain_edit with operation/position/size/radius/material, lighting_set with properties, and create_ui_image with screenGui/name/image/position/size. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
     (!askMode && !planMode) ? 'Common removal examples: "get out of first person" should delete or disable the first-person LocalScript; "remove sprint" should delete/disable the sprint script and any UI it created; "stop the GUI" should disable or delete the ScreenGui/LocalScript, not add another script that fights it.' : '',
     (!askMode && !planMode) ? 'Duplicate UI example: if the user says "there are still 2 bars" after a stamina/sprint change, output delete_instance actions for the extra StaminaUI/SprintUI ScreenGui/LocalScript paths and update the remaining sprint/stamina script so it creates or controls only one bar.' : '',
     (!askMode && !planMode) ? 'After file/studio-action blocks, do not add fake success claims. The desktop app reports Studio results. Keep any human text to one short sentence about what the change is intended to do.' : '',
+    (!askMode && !planMode) ? 'PLUGIN TOOL RULE: for model/geometry requests, use roblox-model or create_model. For terrain requests, use terrain_edit. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. For UI art/images/icons, use ROBLOX UI IMAGE ASSET SEARCH results with create_ui_image or ImageLabel/ImageButton Image = rbxassetid://id. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
+    (!askMode && !planMode) ? 'ROBLOX UI QUALITY RULE: Roblox UI should look polished and game-ready: use a clear hierarchy, consistent spacing, UIScale, UICorner, UIStroke, UIGradient, padding, hover/click feedback where relevant, mobile-safe sizes, readable contrast, and only one owner script. Prefer clean modern panels over raw default Frames. If the user asks for classic/simple/normal, make it restrained but still aligned and readable.' : '',
     'To create 3D models/parts in Studio, use a ```roblox-model block with JSON. Example:\n```roblox-model\n{"name":"Castle","parent":"Workspace","parts":[{"name":"Base","size":[20,1,20],"position":[0,0,0],"color":[128,128,128],"material":"SmoothPlastic","anchored":true},{"name":"Wall","size":[20,10,1],"position":[0,5,-10],"color":[110,110,110],"material":"SmoothPlastic","anchored":true}]}\n```\nROTEX sends this to Studio which creates the real 3D objects. Each part can have: name, size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder), anchored, transparency, cancollide, scripts[{name,source}]. The model can also have a top-level "scripts" array for scripts attached to the Model itself.',
+    'Terrain action example:\n```studio-action\n{"type":"terrain_edit","operation":"fill_block","position":[0,0,0],"size":[80,12,80],"material":"Grass"}\n```\nLighting action example:\n```studio-action\n{"type":"lighting_set","properties":{"ClockTime":18,"Brightness":2,"Ambient":[90,90,110],"OutdoorAmbient":[120,120,140]}}\n```',
+    'UI image action example:\n```studio-action\n{"type":"create_ui_image","screenGui":"MainHud","name":"CoinIcon","image":"rbxassetid://123456789","position":[0,16,0,16],"size":[0,40,0,40]}\n```',
     'The PROJECT CONTEXT below contains the full source of all scripts in the user\'s game (auto-scanned when Studio connected), plus any recent Studio errors or selection data. Read them to understand the existing codebase before suggesting changes. When modifying existing scripts, reference the exact script path from the context and output a file block for it.'
   ].filter(Boolean);
   if (agent) {
@@ -956,6 +1003,45 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
   return parts.join('\n');
 }
 
+async function buildRobloxUiAssetContext(userText) {
+  const text = String(userText || '');
+  if (!/\b(ui|gui|hud|image|icon|button|menu|shop|inventory|health|stamina|coin|gem|logo|thumbnail|picture|asset)\b/i.test(text)) {
+    return '';
+  }
+  const query = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[^\w\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'game ui icon';
+  const urls = [
+    `https://apis.roblox.com/toolbox-service/v1/marketplace/13?keyword=${encodeURIComponent(query)}&limit=8`,
+    `https://apis.roblox.com/toolbox-service/v1/marketplace/13?keyword=${encodeURIComponent(query + ' icon')}&limit=8`,
+  ];
+  const ids = [];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const item of Array.isArray(data?.data) ? data.data : []) {
+        const id = String(item?.id || '').replace(/\D/g, '');
+        if (id && !ids.includes(id)) ids.push(id);
+        if (ids.length >= 8) break;
+      }
+    } catch {}
+    if (ids.length >= 8) break;
+  }
+  if (!ids.length) return '';
+  return [
+    'ROBLOX UI IMAGE ASSET SEARCH:',
+    `Query: ${query}`,
+    'Use these as ImageLabel/ImageButton Image values when helpful. Prefer rbxassetid://<id>.',
+    ids.map((id, index) => `${index + 1}. rbxassetid://${id}`).join('\n'),
+    'If none fit, build a polished UI with Frames/UIStroke/UIGradient/UICorner and do not invent fake asset IDs.',
+  ].join('\n');
+}
+
 function pickTbThinkingModel(selected) {
   return selected.thinkingModel || selected.chatModel || selected.codeModel || selected.testModel;
 }
@@ -963,6 +1049,7 @@ function pickTbThinkingModel(selected) {
 function resolveProviderCall(selected, cleanMessages, opts = {}) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
   const attempts = [];
 
   // Agent / Super Agent run on the strongest available Claude models so they
@@ -977,6 +1064,15 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
       provider: 'anthropic',
       providerModel: smartModel,
       apiKey: anthropicKey,
+    });
+  }
+
+  if (selected.route === 'tb-thinking' && groqKey) {
+    attempts.push({
+      provider: 'groq',
+      providerModel: process.env.TB_GROQ_MODEL || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      apiKey: groqKey,
+      baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
     });
   }
 
@@ -1076,7 +1172,21 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
       }
       if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
+        if (selected.route === 'tb-thinking' && attemptIndex < providerCall.attempts.length - 1) {
+          errors.push(`${attempt.provider}: ${error?.message || error}`);
+          continue;
+        }
+        if (selected.route === 'tb-thinking') {
+          throw publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503);
+        }
         throw publicProviderError('openrouter_credits_empty', OPENROUTER_OUT_TEXT, 503);
+      }
+      if (attempt.provider === 'openrouter' && groqBusyError(error)) {
+        if (attemptIndex < providerCall.attempts.length - 1) {
+          errors.push(`${attempt.provider}: ${error?.message || error}`);
+          continue;
+        }
+        throw publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503);
       }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({
@@ -1106,7 +1216,7 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     Connection: 'keep-alive',
     'Access-Control-Allow-Origin': '*',
   });
-  sseWrite(response, { model: selected.name });
+  sseWrite(response, { model: selected.name, devPass: context.devPass || '' });
 
   const errors = [];
   for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
@@ -1149,7 +1259,21 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
       }
       if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
+        if (selected.route === 'tb-thinking' && attemptIndex < providerCall.attempts.length - 1) {
+          errors.push(`${attempt.provider}: ${error?.message || error}`);
+          continue;
+        }
+        if (selected.route === 'tb-thinking') {
+          throw publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503);
+        }
         throw publicProviderError('openrouter_credits_empty', OPENROUTER_OUT_TEXT, 503);
+      }
+      if (attempt.provider === 'openrouter' && groqBusyError(error)) {
+        if (attemptIndex < providerCall.attempts.length - 1) {
+          errors.push(`${attempt.provider}: ${error?.message || error}`);
+          continue;
+        }
+        throw publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503);
       }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({
@@ -1352,6 +1476,37 @@ function summarizeConnections(computerConnections, pcBridge) {
     `ROTEX connection status: connected services: ${connected.length ? connected.join(', ') : 'none'}.`,
     `Not connected: ${missing.length ? missing.join(', ') : 'none'}.`,
   ].join(' ');
+}
+
+// Decodes a JWT payload without verifying (cheap pre-check).
+function _decodeJwtPayload(token) {
+  try {
+    const p = String(token).split('.')[1];
+    return JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+  } catch { return null; }
+}
+
+// Verifies a Firebase ID token's RS256 signature against Google's public certs,
+// IGNORING expiry. Used only to keep the dev account recognized on a stale token.
+// Checks aud + iss so only tokens minted for this Firebase project pass.
+async function verifyDevTokenSignature(token) {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  if (!projectId) return false;
+  try {
+    const [h, p, s] = String(token).split('.');
+    if (!h || !p || !s) return false;
+    const header = JSON.parse(Buffer.from(h, 'base64url').toString('utf8'));
+    const payload = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+    if (payload.aud !== projectId) return false;
+    if (payload.iss !== `https://securetoken.google.com/${projectId}`) return false;
+    const certsRes = await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com');
+    if (!certsRes.ok) return false;
+    const certs = await certsRes.json();
+    const cert = certs[header.kid];
+    if (!cert) return false;
+    const crypto = require('crypto');
+    return crypto.verify('RSA-SHA256', Buffer.from(`${h}.${p}`), cert, Buffer.from(s, 'base64url'));
+  } catch { return false; }
 }
 
 async function verifyFirebaseToken(authToken) {

@@ -33,6 +33,7 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
 
 async function checkCreditSafety({ selected, provider, model, userId, estimate, texTokensLeft, isPro = false }) {
   const balance = providerBalanceUsd();
+  const providerBusyText = 'AI is busy right now. Please retry in a few seconds.';
   const outText = isPro
     ? "You've used your 1M TexTokens daily limit. Come back tomorrow, or buy more at rrotex.com/tokens."
     : 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.';
@@ -52,12 +53,15 @@ async function checkCreditSafety({ selected, provider, model, userId, estimate, 
       balance,
     };
   }
+  if (selected?.route === 'tb-thinking') {
+    return { ok: true, balance };
+  }
   if (balance < 5) {
     await sendLowCreditEmail({ balance, provider, model, userId, estimatedCost: estimate.providerCostUsd });
     return {
       ok: false,
       error: 'provider_credits_empty',
-      text: 'Too many requests right now. Please retry later or upgrade/add TexTokens.',
+      text: providerBusyText,
       balance,
     };
   }
@@ -66,7 +70,7 @@ async function checkCreditSafety({ selected, provider, model, userId, estimate, 
     return {
       ok: false,
       error: 'provider_credits_low',
-      text: 'AI is busy right now. Please retry later.',
+      text: providerBusyText,
       balance,
     };
   }
@@ -75,7 +79,7 @@ async function checkCreditSafety({ selected, provider, model, userId, estimate, 
     return {
       ok: false,
       error: 'provider_credits_low',
-      text: 'Too many requests right now. Please retry later or upgrade/add TexTokens.',
+      text: providerBusyText,
       balance,
     };
   }

@@ -1,4 +1,4 @@
--- ROTEX Studio Plugin v2.3
+-- ROTEX Studio Plugin v2.5
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
@@ -7,6 +7,8 @@ local HTTP_PORT = PORTS[1]
 local HttpService          = game:GetService("HttpService")
 local Selection            = game:GetService("Selection")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
+local Lighting             = game:GetService("Lighting")
+local Terrain              = workspace.Terrain
 
 -- ── Toolbar ───────────────────────────────────────────────────────────────────
 local toolbar = plugin:CreateToolbar("ROTEX AI")
@@ -72,7 +74,7 @@ local root = Frame(widget, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), C.bg)
 
 local hdr = Frame(root, UDim2.new(1,0,0,48), UDim2.new(0,0,0,0), C.surface)
 Label(hdr, "ROTEX AI", UDim2.new(1,-14,0,20), UDim2.new(0,12,0,8), C.text, 14, true)
-Label(hdr, "Studio Bridge v2.3", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
+Label(hdr, "Studio Bridge v2.5", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
 Frame(root, UDim2.new(1,0,0,1), UDim2.new(0,0,0,48), C.border)
 
 local Y = 58
@@ -274,7 +276,23 @@ local function buildGameContext(includeSelected)
 		local ok, n = pcall(function() return game.Name end)
 		gameName = (ok and n and n ~= "" and n) or "Untitled Experience"
 	end
-	return { project = projectName, gameName = gameName, pluginVersion = "2.3", scripts = scripts, selected = selected }
+	return {
+		project = projectName,
+		gameName = gameName,
+		pluginVersion = "2.5",
+		capabilities = {
+			"apply_files",
+			"create_model geometry",
+			"terrain_edit fill_block/fill_ball/clear",
+			"lighting_set properties",
+			"create_ui_image ImageLabel/ImageButton",
+			"set_property parts/instances",
+			"delete_instance",
+			"select_instances",
+		},
+		scripts = scripts,
+		selected = selected,
+	}
 end
 
 -- ── Instance resolver ─────────────────────────────────────────────────────────
@@ -399,6 +417,119 @@ local function handleCreateModel(action)
 	end
 	ChangeHistoryService:SetWaypoint("ROTEX CreateModel Done")
 	return true, table.concat(msgs, "\n")
+end
+
+local function vectorFromTable(value, default)
+	if type(value) ~= "table" then return default end
+	return Vector3.new(value[1] or default.X, value[2] or default.Y, value[3] or default.Z)
+end
+
+local function vector2FromTable(value, default)
+	if type(value) ~= "table" then return default end
+	return Vector2.new(value[1] or default.X, value[2] or default.Y)
+end
+
+local function udim2FromTable(value, default)
+	if type(value) ~= "table" then return default end
+	return UDim2.new(value[1] or 0, value[2] or 0, value[3] or 0, value[4] or 0)
+end
+
+local function colorFromValue(value)
+	if typeof(value) == "Color3" then return value end
+	if type(value) == "table" then
+		return Color3.fromRGB(value[1] or 255, value[2] or 255, value[3] or 255)
+	end
+	if type(value) == "string" then
+		local ok, brick = pcall(function() return BrickColor.new(value) end)
+		if ok then return brick.Color end
+	end
+	return nil
+end
+
+local function materialFromValue(value, fallback)
+	if not value then return fallback end
+	local ok, material = pcall(function() return Enum.Material[tostring(value)] end)
+	return (ok and material) or fallback
+end
+
+local function handleTerrainEdit(action)
+	ChangeHistoryService:SetWaypoint("ROTEX TerrainEdit")
+	local operation = string.lower(tostring(action.operation or action.mode or "fill_block"))
+	local material = operation == "clear" and Enum.Material.Air or materialFromValue(action.material, Enum.Material.Grass)
+	local position = vectorFromTable(action.position, Vector3.new(0, 0, 0))
+	local size = vectorFromTable(action.size, Vector3.new(32, 16, 32))
+	local radius = tonumber(action.radius) or math.max(size.X, size.Y, size.Z) / 2
+	if operation == "fill_ball" or operation == "ball" then
+		Terrain:FillBall(position, radius, material)
+		ChangeHistoryService:SetWaypoint("ROTEX TerrainEdit Done")
+		return true, "Edited terrain: fill_ball " .. tostring(material.Name)
+	end
+	local cf = CFrame.new(position)
+	if type(action.rotation) == "table" then
+		cf = cf * CFrame.Angles(math.rad(action.rotation[1] or 0), math.rad(action.rotation[2] or 0), math.rad(action.rotation[3] or 0))
+	end
+	Terrain:FillBlock(cf, size, material)
+	ChangeHistoryService:SetWaypoint("ROTEX TerrainEdit Done")
+	return true, "Edited terrain: " .. operation .. " " .. tostring(material.Name)
+end
+
+local function handleLightingSet(action)
+	ChangeHistoryService:SetWaypoint("ROTEX LightingSet")
+	local props = action.properties
+	if type(props) ~= "table" then
+		props = {}
+		if action.property then props[action.property] = action.value end
+	end
+	local changed = {}
+	for prop, value in pairs(props) do
+		local finalValue = value
+		local lower = string.lower(tostring(prop))
+		if lower:find("color") or lower == "ambient" or lower == "outdoorambient" then
+			finalValue = colorFromValue(value) or value
+		end
+		local ok, err = pcall(function() Lighting[prop] = finalValue end)
+		if ok then
+			table.insert(changed, tostring(prop))
+		else
+			table.insert(changed, tostring(prop) .. " failed: " .. tostring(err))
+		end
+	end
+	ChangeHistoryService:SetWaypoint("ROTEX LightingSet Done")
+	return true, "Updated lighting: " .. table.concat(changed, ", ")
+end
+
+local function handleCreateUiImage(action)
+	ChangeHistoryService:SetWaypoint("ROTEX CreateUIImage")
+	local parent = resolveByPath(action.parent or "StarterGui") or game:GetService("StarterGui")
+	local screenGui = parent
+	if not screenGui:IsA("ScreenGui") then
+		local guiName = tostring(action.screenGui or "ROTEXGui")
+		screenGui = parent:FindFirstChild(guiName)
+		if not screenGui or not screenGui:IsA("ScreenGui") then
+			screenGui = Instance.new("ScreenGui")
+			screenGui.Name = guiName
+			screenGui.ResetOnSpawn = false
+			screenGui.IgnoreGuiInset = true
+			screenGui.Parent = parent
+		end
+	end
+	local className = action.className == "ImageButton" and "ImageButton" or "ImageLabel"
+	local image = Instance.new(className)
+	image.Name = tostring(action.name or "ROTEXImage")
+	local imageValue = tostring(action.image or action.assetId or "")
+	if imageValue ~= "" and not imageValue:match("^rbxassetid://") and imageValue:match("^%d+$") then
+		imageValue = "rbxassetid://" .. imageValue
+	end
+	image.Image = imageValue
+	image.BackgroundTransparency = action.backgroundTransparency ~= nil and action.backgroundTransparency or 1
+	image.ImageTransparency = action.imageTransparency or 0
+	image.AnchorPoint = vector2FromTable(action.anchorPoint, Vector2.new(0, 0))
+	image.Position = udim2FromTable(action.position, UDim2.new(0, 16, 0, 16))
+	image.Size = udim2FromTable(action.size, UDim2.new(0, 48, 0, 48))
+	image.ScaleType = Enum.ScaleType.Fit
+	image.Parent = screenGui
+	ChangeHistoryService:SetWaypoint("ROTEX CreateUIImage Done")
+	return true, "Created UI image: " .. screenGui.Name .. "/" .. image.Name
 end
 
 local function handleSetProperty(action)
@@ -590,6 +721,18 @@ task.spawn(function()
 
 		elseif action.type == "create_model" then
 			local ok2, msg = pcall(handleCreateModel, action)
+			success = ok2; addMsg(msg or ok2)
+
+		elseif action.type == "terrain_edit" then
+			local ok2, msg = pcall(handleTerrainEdit, action)
+			success = ok2; addMsg(msg or ok2)
+
+		elseif action.type == "lighting_set" then
+			local ok2, msg = pcall(handleLightingSet, action)
+			success = ok2; addMsg(msg or ok2)
+
+		elseif action.type == "create_ui_image" then
+			local ok2, msg = pcall(handleCreateUiImage, action)
 			success = ok2; addMsg(msg or ok2)
 
 		elseif action.type == "set_property" then

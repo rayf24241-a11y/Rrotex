@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, Menu } = requir
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const { spawn } = require('child_process');
 
 // ─── Auto-updater (electron-updater) ─────────────────────────────────────────
@@ -32,6 +33,7 @@ let heartbeatTimer    = null;
 let pluginConnectedSent = false; // true once plugin-connected has been sent after latest server start/disconnect
 const PLUGIN_HEARTBEAT_TIMEOUT_MS = 2500;
 const PLUGIN_PORTS    = [7878, 7874, 7871, 7870, 7861];
+
 const ROTEX_ICON_PNG  = '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';
 function makeRotexIcon() {
   try {
@@ -42,7 +44,7 @@ function makeRotexIcon() {
   return nativeImage.createFromBuffer(Buffer.from(ROTEX_ICON_PNG, 'base64'));
 }
 
-// ─── Single-instance lock (Windows/Linux deep-link) ──────────────────────────
+
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -796,127 +798,40 @@ ipcMain.handle('get-server-info', () => ({
   token: pluginToken || '',
 }));
 
-// ─── IPC: TexBrain 0.5-β (single Ollama call, engine-aware) ──────────────────
-let _texbrainModel = null; // cached so /api/tags is only called once per session
+// ─── IPC: TexBrain 0.5-β (proxied through ROTEX server to Railway Ollama) ─────
+const TEXBRAIN_API_URL = process.env.TEXBRAIN_API_URL || 'https://www.rrotex.com/api/texbrain';
 
-ipcMain.handle('texbrain-call', async (event, messages, projectMode) => {
-  const http = require('http');
-  const OLLAMA_PORT = 11434;
-
-  // Auto-detect best installed model (cached after first call)
-  if (!_texbrainModel) {
-    try {
-      const tags = await new Promise((resolve, reject) => {
-        http.get(`http://127.0.0.1:${OLLAMA_PORT}/api/tags`, res => {
-          let d = '';
-          res.on('data', c => { d += c; });
-          res.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } });
-        }).on('error', reject);
+function texbrainApiRequest(body) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(TEXBRAIN_API_URL);
+    const postData = JSON.stringify(body);
+    const module = url.protocol === 'https:' ? https : http;
+    const req = module.request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+    }, (res) => {
+      let d = '';
+      res.on('data', c => { d += c; });
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(d) }); }
+        catch { reject(new Error('parse')); }
       });
-      const names = (tags.models || []).map(m => m.name);
-      const preferred = ['llama3.2:3b', 'llama3.2', 'llama3:8b', 'llama3', 'mistral', 'phi3', 'gemma3'];
-      const found = preferred.find(p => names.some(n => n.startsWith(p)));
-      _texbrainModel = found || names[0] || 'llama3.2';
-    } catch {
-      return { error: 'Ollama is not running. Download it from ollama.ai, then run: ollama pull llama3.2' };
-    }
-  }
-  const model = _texbrainModel;
-
-  // Engine-specific focus
-  const engineGuides = {
-    Roblox: `SPECIALTY: Roblox game development — Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, DataStoreService, TweenService, RunService, and Roblox Studio.
-
-KEY RULES FOR ROBLOX:
-- Use task.wait(n) NOT wait(n). Use task.spawn() NOT spawn(). Use task.delay() NOT delay(). The deprecated versions are slow and banned.
-- RemoteEvents MUST be created by a server Script first; LocalScripts use :WaitForChild("EventName", 10) to find them.
-- Always use :WaitForChild("Name", 10) with a timeout before accessing cross-script instances.
-- Wrap every DataStore call in pcall — they fail sometimes and will crash your script if unguarded.
-- LocalScripts CANNOT access ServerScriptService. Use ReplicatedStorage for shared assets.
-- game.Players.LocalPlayer is nil on the server — only use it inside LocalScripts.
-- Touched fires constantly — debounce with a table keyed by player to prevent spam.
-- Character loads async; use player.CharacterAdded:Wait() before accessing the character.
-- Use Humanoid:TakeDamage(amount) not Humanoid.Health = 0 (respects ForceField).
-- Always :Disconnect() connections when done to prevent memory leaks.
-
-For casual or off-topic messages, respond naturally in 1-2 sentences without code.`,
-    Unity:            'SPECIALTY: Unity game development — C# scripting, MonoBehaviour lifecycle (Awake→Start→FixedUpdate→Update→LateUpdate), Unity APIs, GameObjects, Rigidbody physics, Animator, NavMeshAgent, Input System, TextMeshPro. Cache GetComponent in Awake. Use Coroutines for async sequences. Never hallucinate Unity APIs that do not exist. For casual messages, respond naturally in 1-2 sentences without code.',
-    Blender:          'SPECIALTY: Blender 3D — Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering. Use bpy.data over bpy.ops for stability in scripts. bmesh for geometry editing in Edit mode. For casual messages, respond naturally in 1-2 sentences without code.',
-    'Roblox+Blender': 'SPECIALTY: Roblox game development (Luau) and Blender 3D (bpy) for creating assets for Roblox games. Same Roblox rules apply (task.wait, WaitForChild, pcall DataStores). For Blender: apply transforms before FBX export, Y-up, FBX Units Scale. For casual messages, respond naturally in 1-2 sentences without code.',
-    'Unity+Blender':  'SPECIALTY: Unity (C#) and Blender 3D (bpy) for creating assets for Unity projects. Apply all transforms in Blender before export. Normal maps from Blender are OpenGL; Unity HDRP/URP needs DirectX — flip the G channel. For casual messages, respond naturally in 1-2 sentences without code.',
-  };
-  const engine = (projectMode || 'Roblox').trim();
-  const engineFocus = engineGuides[engine] || engineGuides['Roblox'];
-
-  const systemPrompt = [
-    'You are TexBrain 0.5-β, the local ROTEX coding model for game developers. You run on-device through Ollama.',
-    engineFocus,
-    'You cannot see or process images. If asked to look at an image, tell the user to switch to a model with vision support (Claude Haiku).',
-    'CRITICAL RULE: Do NOT generate code for greetings, casual conversation, or questions that do not ask for code. If the user says "hi", "thanks", "how are you", or asks a general question, respond conversationally in 1-2 sentences. Never attach a code block to a casual message.',
-    'DECISION PROTOCOL: classify the user request as answer-only, plan-only, create, modify, remove/disable, debug, inspect, or verify. Then do only that class. If the user gave a direct command, use the available context to act instead of asking questions you can answer from context.',
-    'CONTEXT PROTOCOL: use the recent chat and any project/studio context to identify the exact existing script/path that owns the behavior. Modify/remove exact matches instead of creating duplicates.',
-    'REMOVAL PROTOCOL: if the user says remove, undo, turn off, disable, stop, or get out of something, the correct action is usually delete/disable the owning script or restore default properties. Do not recreate the unwanted feature.',
-    'ROBLOX PATH PROTOCOL: Studio file paths start with ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. StarterPlayerScripts paths must use StarterPlayer/StarterPlayerScripts/Name.client.lua.',
-    'SELF-CHECK before answering: verify the code/action matches the request, client/server placement is correct, cleanup exists, and every referenced Instance is created or accessed with WaitForChild.',
-    'Work like a careful Roblox Studio assistant, not a generic chatbot. First infer the exact user intent: create, modify, remove, disable, debug, explain, or plan. Pick the operation that actually changes the game correctly.',
-    'AGENT SMARTNESS: for normal tasks, make the smallest complete change that solves the request. If an existing script owns the behavior, modify or delete that script instead of creating a duplicate.',
-    'SUPER AGENT SMARTNESS: when the prompt or mode indicates Super Agent, do a deeper pass: find conflicting scripts, remove stale behavior, include required server/client pieces, create missing RemoteEvents, add cleanup, and verify that the final behavior will not fight itself.',
-    'If the user asks to remove, undo, turn off, or get out of a feature, do not rewrite the feature back in. Delete or disable the script that causes it, or clearly say which script should be deleted/disabled.',
-    'Never say a fix is done unless you output the concrete change needed. Avoid vague claims like "fixed it" without an executable script or explicit delete/disable action.',
-    'For Roblox camera, character, UI, and input systems, use LocalScripts in StarterPlayer/StarterPlayerScripts, StarterCharacterScripts, StarterGui, or tools as appropriate. Server Scripts cannot control LocalPlayer camera.',
-    'Preserve existing project structure. If a script already exists, modify that path instead of creating duplicate scripts with similar names.',
-    'Always include cleanup for long-running behavior: disconnect events, handle respawns, restore CameraType and MouseBehavior when disabling camera systems, and avoid leaving players stuck.',
-    'Write COMPLETE, RUNNABLE code every time. Never truncate with placeholders like "-- rest of code", "-- your logic here", or "...". Every function must be fully implemented.',
-    'Only use real, documented APIs. Never invent Roblox service names, events, or properties. If you are unsure whether something exists, say so.',
-    'When writing Roblox Lua scripts, ALWAYS use file blocks so ROTEX can apply them directly to Roblox Studio. Format: start a fenced code block with ```file:ServiceName/path/ScriptName.lua (on its own line), put the complete Lua code inside, then close with ```. Example:\n```file:ServerScriptService/DashSystem.lua\n-- code here\n```\nService roots: ServerScriptService, ReplicatedStorage, StarterPlayer/StarterPlayerScripts, StarterGui, Workspace, ServerStorage, StarterPack. Write the COMPLETE file — no placeholders, no shortcuts.',
-  ].join('\n');
-
-  const ollamaCall = (msgs) => new Promise((resolve, reject) => {
-    const postData = JSON.stringify({ model, stream: false, messages: msgs, options: { temperature: 0.2, top_p: 0.8, repeat_penalty: 1.08 } });
-    const req = http.request(
-      { hostname: '127.0.0.1', port: OLLAMA_PORT, path: '/api/chat', method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
-      r => { let d = ''; r.on('data', c => { d += c; }); r.on('end', () => { try { resolve(JSON.parse(d)); } catch { reject(new Error('parse')); } }); }
-    );
+    });
     req.on('error', reject);
     req.setTimeout(120000, () => { req.destroy(); reject(new Error('timeout')); });
     req.write(postData);
     req.end();
   });
+}
 
+ipcMain.handle('texbrain-call', async (event, messages, projectMode, mode = '', authToken = '') => {
   try {
-    const history = messages.slice(-6).map(m => ({
-      role: m.role,
-      content: Array.isArray(m.content)
-        ? m.content.filter(p => p.type === 'text').map(p => p.text).join('\n')
-        : m.content,
-    }));
-
-    // Task 1: clarifier — expand the last user message into a precise task description
-    const lastUser = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
-    let clarified = lastUser;
-    if (/\b(make|create|add|fix|debug|build|implement|change|update|remove|delete|disable|turn off|get out of|undo|script|camera|gui|ui|tool|system)\b/i.test(lastUser)) {
-      try {
-        const clarifyRes = await ollamaCall([
-          { role: 'system', content: `You are a code task clarifier for a ${engine} developer. Restate the user's request as a precise technical task in 1-2 sentences. Preserve removal/disable/undo intent exactly; never turn "remove/disable/get out of" into "create/add". Do not answer it. Output only the restated task.` },
-          { role: 'user', content: lastUser },
-        ]);
-        clarified = clarifyRes.message?.content?.trim() || lastUser;
-      } catch { /* fallback: use original */ }
+    const res = await texbrainApiRequest({ authToken, messages, projectMode, mode });
+    if (res.status >= 400) {
+      return { error: res.body?.error || `TexBrain server error (${res.status})` };
     }
-
-    // Task 2: worker — generate the actual response
-    const workerHistory = [
-      { role: 'system', content: systemPrompt },
-      ...history.slice(0, -1),
-      { role: 'user', content: clarified },
-    ];
-    const res = await ollamaCall(workerHistory);
-    return { text: res.message?.content || '(no response from local model)', model };
+    return res.body;
   } catch (err) {
-    if (err.message.includes('ECONNREFUSED')) {
-      return { error: 'Ollama is not running. Install from ollama.ai then run: ollama pull llama3.2' };
-    }
     return { error: `TexBrain error: ${err.message}` };
   }
 });

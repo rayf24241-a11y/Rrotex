@@ -15,10 +15,10 @@ Model catalog:
 
 - `api/_lib/catalog.js` is the single source of truth for chat routing, public model names, tiers, and per-message credit costs.
 - `/api/models` returns the public catalog for clients.
-- Two cloud models are enabled: TexBrain Thinking-beta and Claude Haiku.
-- TexBrain Thinking-beta is the merged chat/code/test model. It uses one configured OpenRouter model instead of exposing separate chat, code, and test sub-models.
-- Claude Haiku uses Anthropic first. If Anthropic runs out of credits, ROTEX emails you and switches that request to OpenRouter.
-- If OpenRouter also runs out, users see `ai is being used to much! please purchase pro to bypass this!`
+- In the desktop app, TexBrain Thinking-beta runs on-device via Ollama (free, local). It auto-detects the best installed model and uses a Roblox/Luau-focused system prompt.
+- In the browser, TexBrain Thinking-beta falls back to the cloud OpenRouter model.
+- Claude Haiku is cloud-only and uses Anthropic first. If Anthropic runs out of credits, ROTEX emails you and switches that request to OpenRouter.
+- If OpenRouter also runs out, users see `AI is busy right now. Please retry in a few seconds.`
 - Claude Haiku 4.5 is available to everyone through the Claude Haiku model.
 
 Model access:
@@ -29,8 +29,9 @@ Model access:
 TexToken rates:
 
 - `$1 = 1M TexTokens`
-- TexBrain Thinking-beta: input `0.2x`, output `0.6x`
-- Claude Haiku: input `3.2x`, output `16x`, about `26.7x` TexBrain output cost
+- TexBrain Thinking-beta (cloud/browser only): input `0.2x`, output `0.6x`
+- TexBrain Thinking-beta in the desktop app is free via Ollama and does not consume TexTokens.
+- Claude Haiku: input `3.2x`, output `16x`
 
 ## Firebase Auth
 
