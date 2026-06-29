@@ -185,15 +185,27 @@ function checkRequestRate(ip, opts = {}) {
 }
 
 // ── TexBrain handler (inlined here to stay under Vercel's 12-function limit) ──
-const OR_KEY = process.env.OPENROUTER_API_KEY || '';
+// Strips BOM / non-printable-ASCII and surrounding quotes/whitespace from an API
+// key. A leading BOM (U+FEFF) in an env var makes the HTTP Authorization header
+// throw "Cannot convert argument to a ByteString".
+function cleanKey(v) {
+  return String(v || '').replace(/[^\x21-\x7E]/g, '').replace(/^['"]|['"]$/g, '');
+}
+const OR_KEY = cleanKey(process.env.OPENROUTER_API_KEY);
 const TB_MAX_CONCURRENT = 5;
 let tbActiveCalls = 0;
 
 function tbVerifyToken(authToken) {
-  if (!authToken) return { ok: false };
+  if (!authToken || typeof authToken !== 'string') return { ok: false };
   try {
-    const payload = JSON.parse(Buffer.from(authToken.split('.')[1], 'base64').toString());
-    if (!payload.sub || !payload.aud || !payload.iss?.includes('firebase')) return { ok: false };
+    // Firebase ID tokens: iss = https://securetoken.google.com/<projectId>,
+    // aud = <projectId>, sub = uid. The previous check required iss to contain
+    // "firebase" — which a real Firebase token never does — so it rejected
+    // everyone. Decode as base64url (JWT payloads use base64url).
+    const payload = JSON.parse(Buffer.from(authToken.split('.')[1] || '', 'base64url').toString('utf8'));
+    if (!payload.sub) return { ok: false };
+    const iss = String(payload.iss || '');
+    if (!iss.includes('securetoken.google.com') && !iss.includes('firebase')) return { ok: false };
     return { ok: true, uid: payload.sub };
   } catch { return { ok: false }; }
 }
@@ -266,7 +278,9 @@ async function handleTexBrain(req, res) {
     const history = normalized.filter(m => m.role !== 'system').slice(-8);
     const lastUserMsg = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
     const isCoding = /\b(make|create|add|fix|debug|build|implement|change|update|remove|delete|disable|script|camera|gui|ui|tool|system)\b/i.test(lastUserMsg);
-    const model = (isCoding || mode === 'agent' || mode === 'supreme') ? 'qwen/qwen3-coder:free' : 'mistralai/magistral-medium-2509';
+    const model = (isCoding || mode === 'agent' || mode === 'supreme')
+      ? (process.env.TB_CODE_MODEL || 'qwen/qwen3-coder:free')
+      : (process.env.TB_CHAT_MODEL || 'qwen/qwen3-next-80b-a3b-instruct:free');
 
     let clarified = lastUserMsg;
     if (isCoding) {
@@ -277,13 +291,32 @@ async function handleTexBrain(req, res) {
     }
 
     const workerMessages = [{ role: 'system', content: tbBuildSystemPrompt(projectMode, mode) }, ...contextMsgs, ...history.slice(0, -1), { role: 'user', content: clarified }];
-    let result = await tbOrPost('/chat/completions', { model, temperature: 0.2, top_p: 0.8, max_tokens: 4096, messages: workerMessages });
-    let text = result.choices?.[0]?.message?.content?.trim();
-    if (!text) {
-      result = await tbOrPost('/chat/completions', { model: 'meta-llama/llama-3.3-70b-instruct:free', temperature: 0.2, top_p: 0.8, max_tokens: 4096, messages: workerMessages });
-      text = result.choices?.[0]?.message?.content?.trim() || '(no response)';
+    // Free OpenRouter models get rate-limited (429) upstream. Try several in
+    // order so a throttled model falls through to another instead of failing.
+    const candidates = [
+      model,
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'qwen/qwen3-next-80b-a3b-instruct:free',
+      'qwen/qwen3-coder:free',
+      'openai/gpt-oss-120b:free',
+      'nvidia/nemotron-3-super-120b-a12b:free',
+    ];
+    const tried = new Set();
+    let text = '', usedModel = model, lastErr = null;
+    for (const m of candidates) {
+      if (!m || tried.has(m)) continue;
+      tried.add(m);
+      try {
+        const result = await tbOrPost('/chat/completions', { model: m, temperature: 0.2, top_p: 0.8, max_tokens: 4096, messages: workerMessages });
+        const t = result.choices?.[0]?.message?.content?.trim();
+        if (t) { text = t; usedModel = result.model || m; break; }
+      } catch (e) { lastErr = e; }
     }
-    res.status(200).json({ text, model: result.model || model });
+    if (!text) {
+      res.status(503).json({ error: 'TexBrain models are busy right now (free tier is rate-limited). Try again in a moment, or use Claude Haiku.' });
+      return;
+    }
+    res.status(200).json({ text, model: usedModel });
   } catch (err) {
     res.status(500).json({ error: `TexBrain error: ${err.message}` });
   } finally {
@@ -1206,9 +1239,9 @@ function pickTbThinkingModel(selected) {
 }
 
 function resolveProviderCall(selected, cleanMessages, opts = {}) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
-  const groqKey = process.env.GROQ_API_KEY;
+  const anthropicKey = cleanKey(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY);
+  const openRouterKey = cleanKey(process.env.OPENROUTER_API_KEY);
+  const groqKey = cleanKey(process.env.GROQ_API_KEY);
   const attempts = [];
 
   // Agent / Super Agent run on the strongest available Claude models so they
