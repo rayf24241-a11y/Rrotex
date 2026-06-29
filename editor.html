@@ -1533,6 +1533,18 @@
         .replace(/\s+(?=(game:GetService|workspace\.CurrentCamera|UserInputService|RunService)\b)/g, '\n');
     }
 
+    function _normalizeFilePath(raw) {
+      // Strip leading "game." or "game/" prefix, then convert dots to slashes,
+      // then collapse duplicate slashes.
+      let p = String(raw || '').trim();
+      p = p.replace(/^game[./]/i, '');
+      // If path uses dots as separators (e.g. ServerScriptService.Folder.Script)
+      // and has no slashes, convert dots to slashes.
+      if (!p.includes('/') && !p.includes('\\')) p = p.replace(/\./g, '/');
+      p = p.replace(/\\/g, '/').replace(/\/+/g, '/');
+      return p;
+    }
+
     function _extractStudioFiles(content) {
       const text = String(content || '').replace(/\r\n/g, '\n');
       const files = [];
@@ -1541,14 +1553,14 @@
       const fenceRe = /```\s*file:\s*([^\n`]+)\n([\s\S]*?)```|```\s*file:\s*([^\s`]+)\s+([\s\S]*?)```/g;
       let match;
       while ((match = fenceRe.exec(text))) {
-        const path = String(match[1] || match[3] || '').trim();
+        const path = _normalizeFilePath(match[1] || match[3] || '');
         const body = String(match[2] ?? match[4] ?? '').replace(/^\n+|\n+$/g, '');
         if (VALID_ROOT.test(path) && body) files.push({ path, content: body });
       }
       if (!files.length && /```\s*file:/.test(text)) {
         const loose = text.match(/```\s*file:\s*([^\s`]+)\s+([\s\S]*)$/);
         if (loose) {
-          const path = String(loose[1] || '').trim();
+          const path = _normalizeFilePath(loose[1] || '');
           const body = String(loose[2] || '').replace(/```\s*[\s\S]*$/, '').replace(/^\n+|\n+$/g, '');
           if (VALID_ROOT.test(path) && body) files.push({ path, content: body });
         }
