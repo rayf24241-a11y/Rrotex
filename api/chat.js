@@ -224,17 +224,17 @@ function tbBuildSystemPrompt(projectMode, mode) {
     supreme: 'SUPER AGENT MODE: Deeper multi-step edits. Every code change MUST be in a ```file:ServiceName/path/ScriptName.lua block.',
   };
   return [
-    'You are TexBrain, the ROTEX AI coding assistant.',
+    'You are TexBrain, the ROTEX AI coding assistant embedded inside the ROTEX desktop app.',
     engineFocus,
-    'You receive live ROTEX Studio context. Treat that context as your view of the project.',
-    'Classify every request first: answer-only, plan-only, create, modify, remove/disable, debug, inspect, or verify.',
+    'STUDIO INTEGRATION: You are directly connected to Roblox Studio via the ROTEX plugin. When you output file blocks, they are AUTOMATICALLY applied to the live project — the user does NOT need to copy/paste anything. Always output file blocks for any code change.',
+    'You receive live project context in the system messages above (scripts, selected object, studio state). Use it.',
     'For non-coding greetings or casual chat, reply in 1–2 sentences and never attach code.',
     'ROBLOX QUALITY BAR: correct client/server boundaries, RemoteEvents created server-side, debounces keyed per-player, connections disconnected, task.wait/task.spawn, pcall around DataStore/HttpService. Never invent Roblox members.',
-    'MODIFY-EXISTING RULE: if context already contains the owning script, modify that exact script. No duplicates.',
-    'REMOVAL RULE: if user says remove/disable/turn off/undo, delete or disable the owning script. Never rewrite it back.',
+    'MODIFY-EXISTING RULE: if context already contains the owning script, output the full modified version of that exact script. No duplicates.',
+    'REMOVAL RULE: if user says remove/disable/turn off/undo, output the script with that feature removed.',
     'PATH FORMAT: ServiceName/path/ScriptName.lua. Valid roots: ServerScriptService, ReplicatedStorage, StarterPlayer/StarterPlayerScripts, StarterGui, Workspace, ServerStorage, StarterPack.',
-    'CODE COMPLETENESS: every file must be runnable with no placeholders.',
-    'FILE-BLOCK RULE: EVERY code change MUST be in ```file:ServiceName/path/ScriptName.lua blocks. Do NOT use plain ```lua blocks.',
+    'CODE COMPLETENESS: every file block must be the complete, runnable script. No placeholders, no "-- rest of code here".',
+    'FILE-BLOCK RULE: EVERY code change MUST use ```file:ServiceName/path/ScriptName.lua blocks. Never use plain ```lua blocks.',
     modeInstructions[mode] || '',
   ].filter(Boolean).join('\n');
 }
@@ -272,48 +272,40 @@ async function handleTexBrain(req, res) {
   try {
     const normalized = (messages || []).map(m => ({
       role: m.role,
-      content: Array.isArray(m.content) ? m.content.filter(p => p.type === 'text').map(p => p.text).join('\n') : m.content,
+      content: Array.isArray(m.content) ? m.content.filter(p => p.type === 'text').map(p => p.text).join('\n') : (m.content || ''),
     }));
-    const contextMsgs = normalized.filter(m => m.role === 'system' && /\b(Studio|PROJECT SCRIPTS|CURRENTLY SELECTED|Plugin|Experience)\b/i.test(String(m.content || ''))).slice(-2);
-    const history = normalized.filter(m => m.role !== 'system').slice(-8);
+    // Pass ALL system messages as context (project scripts, studio state, etc.)
+    const contextMsgs = normalized.filter(m => m.role === 'system').slice(-3);
+    const history = normalized.filter(m => m.role !== 'system').slice(-10);
     const lastUserMsg = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
-    const isCoding = /\b(make|create|add|fix|debug|build|implement|change|update|remove|delete|disable|script|camera|gui|ui|tool|system)\b/i.test(lastUserMsg);
-    const model = (isCoding || mode === 'agent' || mode === 'supreme')
-      ? (process.env.TB_CODE_MODEL || 'qwen/qwen3-coder:free')
-      : (process.env.TB_CHAT_MODEL || 'qwen/qwen3-next-80b-a3b-instruct:free');
 
-    let clarified = lastUserMsg;
-    if (isCoding) {
-      try {
-        const cr = await tbOrPost('/chat/completions', { model: 'meta-llama/llama-3.3-70b-instruct:free', temperature: 0.1, max_tokens: 120, messages: [{ role: 'system', content: `Restate the user's request as a precise 1-2 sentence technical task. Preserve removal/disable/undo intent. Output only the restated task.` }, { role: 'user', content: lastUserMsg }] });
-        clarified = cr.choices?.[0]?.message?.content?.trim() || lastUserMsg;
-      } catch { /* fallback */ }
-    }
-
-    const workerMessages = [{ role: 'system', content: tbBuildSystemPrompt(projectMode, mode) }, ...contextMsgs, ...history.slice(0, -1), { role: 'user', content: clarified }];
-    // Free OpenRouter models get rate-limited (429) upstream. Try several in
-    // order so a throttled model falls through to another instead of failing.
+    // Fastest free models first — llama-3.3-70b is significantly quicker than qwen
     const candidates = [
-      model,
       'meta-llama/llama-3.3-70b-instruct:free',
-      'qwen/qwen3-next-80b-a3b-instruct:free',
       'qwen/qwen3-coder:free',
       'openai/gpt-oss-120b:free',
       'nvidia/nemotron-3-super-120b-a12b:free',
     ];
+
+    const workerMessages = [
+      { role: 'system', content: tbBuildSystemPrompt(projectMode, mode) },
+      ...contextMsgs,
+      ...history,
+    ];
+
     const tried = new Set();
-    let text = '', usedModel = model, lastErr = null;
+    let text = '', usedModel = candidates[0];
     for (const m of candidates) {
       if (!m || tried.has(m)) continue;
       tried.add(m);
       try {
-        const result = await tbOrPost('/chat/completions', { model: m, temperature: 0.2, top_p: 0.8, max_tokens: 4096, messages: workerMessages });
+        const result = await tbOrPost('/chat/completions', { model: m, temperature: 0.15, top_p: 0.9, max_tokens: 4096, messages: workerMessages });
         const t = result.choices?.[0]?.message?.content?.trim();
         if (t) { text = t; usedModel = result.model || m; break; }
-      } catch (e) { lastErr = e; }
+      } catch (e) { /* try next */ }
     }
     if (!text) {
-      res.status(503).json({ error: 'TexBrain models are busy right now (free tier is rate-limited). Try again in a moment, or use Claude Haiku.' });
+      res.status(503).json({ error: 'TexBrain models are busy right now. Try again in a moment, or use Claude Haiku.' });
       return;
     }
     res.status(200).json({ text, model: usedModel });
