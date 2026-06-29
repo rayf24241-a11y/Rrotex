@@ -6,17 +6,22 @@ const https = require('https');
 const { spawn } = require('child_process');
 
 // ─── Auto-updater (electron-updater) ─────────────────────────────────────────
-// Only active in packaged builds. In dev (electron .) it is silently skipped.
+const logFile = require('path').join(require('os').homedir(), 'rotex-updater.log');
+function ulog(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  require('fs').appendFileSync(logFile, line);
+}
+
 let autoUpdater = null;
-if (app.isPackaged) {
-  try {
-    autoUpdater = require('electron-updater').autoUpdater;
-    autoUpdater.autoDownload = true;         // download in background as soon as update is found
-    autoUpdater.autoInstallOnAppQuit = true; // install automatically when the user closes the app
-    autoUpdater.logger = null;               // suppress console noise
-  } catch {
-    autoUpdater = null;
-  }
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = null;
+  ulog('electron-updater loaded. isPackaged=' + app.isPackaged);
+} catch(e) {
+  ulog('Failed to load electron-updater: ' + e.message);
+  autoUpdater = null;
 }
 
 let authServer        = null;
@@ -378,29 +383,38 @@ app.whenReady().then(() => {
   // autoDownload is true — download starts automatically in the background.
   // autoInstallOnAppQuit is true — installs silently when the user closes the app.
   if (autoUpdater) {
+    ulog('Scheduling update check in 8s...');
     setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(() => {});
+      ulog('Calling checkForUpdates()');
+      autoUpdater.checkForUpdates().catch((e) => ulog('checkForUpdates error: ' + e.message));
     }, 8000);
 
     autoUpdater.on('update-available', (info) => {
+      ulog('update-available: ' + JSON.stringify(info));
       if (mainWindow) mainWindow.webContents.send('rotex-update-available', info);
     });
-    autoUpdater.on('update-not-available', () => {
+    autoUpdater.on('update-not-available', (info) => {
+      ulog('update-not-available: ' + JSON.stringify(info));
       if (mainWindow) mainWindow.webContents.send('rotex-update-not-available');
     });
-    autoUpdater.on('error', () => {
+    autoUpdater.on('error', (e) => {
+      ulog('updater error: ' + e.message);
       if (mainWindow) mainWindow.webContents.send('rotex-update-error');
     });
     autoUpdater.on('download-progress', (progress) => {
+      ulog('download-progress: ' + Math.round(progress.percent) + '%');
       if (mainWindow) mainWindow.webContents.send('rotex-update-progress', progress);
     });
     autoUpdater.on('update-downloaded', (info) => {
+      ulog('update-downloaded! Installing in 5s...');
       if (mainWindow) mainWindow.webContents.send('rotex-update-ready', info);
-      // Auto-install after 5 seconds — no user action needed.
       setTimeout(() => {
+        ulog('Calling quitAndInstall()');
         autoUpdater.quitAndInstall(false, true);
       }, 5000);
     });
+  } else {
+    ulog('autoUpdater is null — skipping update check');
   }
 });
 
