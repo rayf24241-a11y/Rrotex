@@ -382,6 +382,9 @@ async function handleTexBrain(req, res) {
       return;
     }
 
+    // Normalize: strip spaces after "file:" that some models insert (```file: Path → ```file:Path)
+    text = text.replace(/```\s*file:\s+/g, '```file:');
+
     // Post-process: if the model used plain ```lua blocks instead of ```file: blocks,
     // infer the script path from context and rewrite them so the client can apply them.
     text = tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg);

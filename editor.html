@@ -170,7 +170,7 @@
   <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:52px;">
     <div style="width:76px;height:76px;background:#FFD60A;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#0D0F17;letter-spacing:-0.5px;box-shadow:0 0 56px rgba(255,214,10,0.28);margin-bottom:20px;">RX</div>
     <div style="font-size:30px;font-weight:800;letter-spacing:.06em;color:#fff;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">ROTEX</div>
-    <div id="rxLSVersion" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;letter-spacing:.05em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">v1.16.29</div>
+    <div id="rxLSVersion" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;letter-spacing:.05em;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">v1.16.33</div>
   </div>
 
   <!-- Animated loading bar -->
@@ -554,8 +554,15 @@
     } catch {}
     try { await Promise.race([window.rotexDesktop?.clearDesktopAuth?.(), new Promise(r => setTimeout(r, 2000))]).catch(() => {}); } catch {}
     try { if (reason) sessionStorage.setItem('rotex_login_reason', reason); } catch {}
-    if (window.rotexDesktop?.navigate) await window.rotexDesktop.navigate('login').catch(() => {});
-    else window.location.href = '/login.html';
+    // Try the IPC navigate, but NEVER hang on it — fall back to a direct page
+    // load so the app can never get stuck on the "Signing in..." screen.
+    if (window.rotexDesktop?.navigate) {
+      await Promise.race([
+        window.rotexDesktop.navigate('login').catch(() => {}),
+        new Promise(r => setTimeout(r, 2500)),
+      ]);
+    }
+    try { window.location.href = 'login.html'; } catch { window.location.href = '/login.html'; }
   }
 
   // Returns false (and navigates to login) if the session is expired and there's
@@ -1149,19 +1156,10 @@
       if (!gate) return;
       const _gateStart = Date.now();
 
-      // Force re-login for all users once (v1.5.15) � clears auth only, keeps
-      // chats/tokens, then sends the user to login. Runs at most once per device.
-      const FORCE_LOGOUT_VER = 'v1515c';
-      if (localStorage.getItem('rotex_force_logout_done') !== FORCE_LOGOUT_VER) {
-        localStorage.setItem('rotex_force_logout_done', FORCE_LOGOUT_VER);
-        localStorage.removeItem('rotex_desktop_auth');
-        localStorage.removeItem('rotex_desktop_auth_mirror');
-        // NOTE: do NOT remove rotex_pro_pass � that would wipe a paid Pro subscription.
-        try { await Promise.race([window.rotexDesktop?.clearDesktopAuth?.(), new Promise(r => setTimeout(r, 2000))]).catch(() => {}); } catch {}
-        setLoadStatus('Signing in...');
-        await _goToLogin('force');
-        return;
-      }
+      // Force re-login is permanently DISABLED — it repeatedly stranded users on
+      // the "Signing in..." screen. Mark it done so any legacy check is satisfied
+      // and never clear a logged-in session here again.
+      try { localStorage.setItem('rotex_force_logout_done', 'disabled'); } catch {}
 
       // Status progression during the 10-second loading screen
       setLoadStatus('Signing in...');
@@ -1207,7 +1205,7 @@
       let _pluginConnected = false;
       let _studioConnected = false;
       let _pluginReady = false;
-      let _ver = '1.16.29';
+      let _ver = '1.16.33';
       function displayVersion(ver) { return ver; }
 
       function setLoadStatus(text) {
@@ -1304,8 +1302,8 @@
       checkCanContinue();
       _ver = await Promise.race([
         window.rotexDesktop.getVersion(),
-        new Promise(resolve => setTimeout(() => resolve('1.16.29'), 2000))
-        new Promise(resolve => setTimeout(() => resolve('1.16.29'), 2000))
+        new Promise(resolve => setTimeout(() => resolve('1.16.33'), 2000))
+      ]).catch(() => '1.16.33');
       document.getElementById('rxLSVersion').textContent = 'v' + _ver;
 
       // Show port from server info
@@ -1539,23 +1537,21 @@
     function _extractStudioFiles(content) {
       const text = String(content || '').replace(/\r\n/g, '\n');
       const files = [];
-      const fenceRe = /```file:([^\n`]+)\n([\s\S]*?)```|```file:([^\s`]+)\s+([\s\S]*?)```/g;
+      const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack)(\/|\\)/;
+      // Tolerant fence: allow whitespace after ``` and after "file:".
+      const fenceRe = /```\s*file:\s*([^\n`]+)\n([\s\S]*?)```|```\s*file:\s*([^\s`]+)\s+([\s\S]*?)```/g;
       let match;
       while ((match = fenceRe.exec(text))) {
         const path = String(match[1] || match[3] || '').trim();
         const body = String(match[2] ?? match[4] ?? '').replace(/^\n+|\n+$/g, '');
-        if (/^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterGui|Workspace|ServerStorage|StarterPack)(\/|\\)/.test(path) && body) {
-          files.push({ path, content: body });
-        }
+        if (VALID_ROOT.test(path) && body) files.push({ path, content: body });
       }
-      if (!files.length && text.includes('```file:')) {
-        const loose = text.match(/```file:([^\s`]+)\s+([\s\S]*)$/);
+      if (!files.length && /```\s*file:/.test(text)) {
+        const loose = text.match(/```\s*file:\s*([^\s`]+)\s+([\s\S]*)$/);
         if (loose) {
           const path = String(loose[1] || '').trim();
           const body = String(loose[2] || '').replace(/```\s*[\s\S]*$/, '').replace(/^\n+|\n+$/g, '');
-          if (/^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterGui|Workspace|ServerStorage|StarterPack)(\/|\\)/.test(path) && body) {
-            files.push({ path, content: body });
-          }
+          if (VALID_ROOT.test(path) && body) files.push({ path, content: body });
         }
       }
       return files;
@@ -1599,32 +1595,58 @@
       return visible;
     }
 
+    // Tolerant JSON parse for model output: handles trailing commas, surrounding
+    // prose, and a leading language hint by grabbing the first balanced object/array.
+    function _looseJson(raw) {
+      let s = String(raw || '').trim();
+      try { return JSON.parse(s); } catch {}
+      const start = s.search(/[\[{]/);
+      if (start < 0) return null;
+      const open = s[start];
+      const close = open === '[' ? ']' : '}';
+      const end = s.lastIndexOf(close);
+      if (end <= start) return null;
+      s = s.slice(start, end + 1).replace(/,\s*([}\]])/g, '$1');
+      try { return JSON.parse(s); } catch {}
+      return null;
+    }
+
     function _extractStudioActions(content) {
       const actions = [];
       const text = String(content || '').replace(/\r\n/g, '\n');
-      const re = /```studio-action\n([\s\S]*?)```/g;
+      // Tolerant fences: allow whitespace/language hints after the marker.
+      const re = /```\s*studio-action[^\n]*\n([\s\S]*?)```/g;
       let match;
       while ((match = re.exec(text))) {
-        try {
-          const parsed = JSON.parse(match[1].trim());
-          const list = Array.isArray(parsed) ? parsed : [parsed];
-          for (const action of list) {
-            if (!action || typeof action !== 'object') continue;
-            if (['delete_instance', 'set_property', 'select_instances', 'create_model', 'terrain_edit', 'lighting_set', 'create_ui_image'].includes(action.type)) {
-              actions.push(action);
-            }
+        const parsed = _looseJson(match[1]);
+        if (!parsed) continue;
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        for (const action of list) {
+          if (!action || typeof action !== 'object') continue;
+          if (['delete_instance', 'set_property', 'select_instances', 'create_model', 'terrain_edit', 'lighting_set', 'create_ui_image'].includes(action.type)) {
+            actions.push(action);
           }
-        } catch {}
+        }
       }
-      const modelRe = /```roblox-model\n([\s\S]*?)```/g;
+      const modelRe = /```\s*roblox-model[^\n]*\n([\s\S]*?)```/g;
       while ((match = modelRe.exec(text))) {
-        try {
-          const parsed = JSON.parse(match[1].trim());
-          const list = Array.isArray(parsed) ? parsed : [parsed];
-          for (const model of list) {
-            if (model && typeof model === 'object') actions.push({ type: 'create_model', ...model });
-          }
-        } catch {}
+        const parsed = _looseJson(match[1]);
+        if (!parsed) continue;
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        for (const model of list) {
+          if (model && typeof model === 'object') actions.push({ type: 'create_model', ...model });
+        }
+      }
+      // An EMPTY file block (```file:PATH``` with no body) is how the model signals
+      // "remove this script" — turn it into a delete. Accept dot- or slash-separated
+      // roots (the model often writes StarterPlayer.StarterPlayerScripts/Name.lua).
+      const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack)[./\\]/i;
+      const emptyFileRe = /```\s*file:\s*([^\n`]+)\n\s*```/g;
+      while ((match = emptyFileRe.exec(text))) {
+        const rawPath = String(match[1] || '').trim();
+        if (rawPath && VALID_ROOT.test(rawPath)) {
+          actions.push({ type: 'delete_instance', path: rawPath });
+        }
       }
       return actions;
     }
@@ -2064,7 +2086,7 @@
           }
 
           const full = String(result?.text || '').trim();
-          const hasActions = /\\\(?:file:|studio-action|roblox-model)/.test(full);
+          const hasActions = /```\s*(?:file:|studio-action|roblox-model)/.test(full);
           const codeLike = _looksLikeSourceCode(full);
 
           if (!bubble) bubble = _rxAddMsg('assistant', '');
@@ -2152,7 +2174,7 @@
               if (bubble) {
                 bubble.style.opacity = '';
                 const visible = _safeEditModeText(full, '');
-                const hasActions = /```(?:file:|studio-action|roblox-model)/.test(full);
+                const hasActions = /```\s*(?:file:|studio-action|roblox-model)/.test(full);
                 const codeLike = _looksLikeSourceCode(full);
                 _renderChatMessage(bubble, 'assistant', (hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : full);
                 document.getElementById('rxAiMessages').scrollTop = 999999;
@@ -2176,7 +2198,7 @@
         if (bubble) {
           bubble.style.opacity = '';
           const visible = _safeEditModeText(full, '');
-          const hasActions = /```(?:file:|studio-action|roblox-model)/.test(full);
+          const hasActions = /```\s*(?:file:|studio-action|roblox-model)/.test(full);
           const codeLike = _looksLikeSourceCode(full);
           _renderChatMessage(bubble, 'assistant', (hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : (full || 'No response.'));
         }
