@@ -1537,7 +1537,7 @@
     function _extractStudioFiles(content) {
       const text = String(content || '').replace(/\r\n/g, '\n');
       const files = [];
-      const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack)(\/|\\)/;
+      const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack|Lighting|SoundService|Teams|Players|TextChatService|Chat)(\/|\\)/;
       // Tolerant fence: allow whitespace after ``` and after "file:".
       const fenceRe = /```\s*file:\s*([^\n`]+)\n([\s\S]*?)```|```\s*file:\s*([^\s`]+)\s+([\s\S]*?)```/g;
       let match;
@@ -2107,8 +2107,8 @@
             const workedBubble = _rxAddMsg('assistant', '');
             _renderTaskStatus(workedBubble, 'Applied to Roblox Studio');
           }
-          if (!appliedToStudio && hasActions && bubble) {
-            _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. Make sure the ROTEX plugin is connected.');
+          if (!appliedToStudio && hasActions && bubble && canEditGame && studioOk) {
+            _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. The file paths may not match a known Roblox service root (e.g. ServerScriptService/Script.lua).');
           }
           if (full) {
             const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
@@ -2201,11 +2201,11 @@
           _renderTaskStatus(statusBubble, full ? 'Finishing task..' : 'Task done');
         }
         if (!bubble) bubble = _rxAddMsg('assistant', '');
+        const hasActions = /```\s*(?:file:|studio-action|roblox-model)/.test(full);
+        const codeLike = _looksLikeSourceCode(full);
         if (bubble) {
           bubble.style.opacity = '';
           const visible = _safeEditModeText(full, '');
-          const hasActions = /```\s*(?:file:|studio-action|roblox-model)/.test(full);
-          const codeLike = _looksLikeSourceCode(full);
           _renderChatMessage(bubble, 'assistant', (hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : (full || 'No response.'));
         }
         const appliedToStudio = full ? await _applyStudioFilesFromResponse(full, bubble, text) : false;
@@ -2214,8 +2214,8 @@
           const workedBubble = _rxAddMsg('assistant', '');
           _renderTaskStatus(workedBubble, 'Worked on Roblox Studio');
         }
-        if (!appliedToStudio && hasActions && bubble) {
-          _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. Make sure the ROTEX plugin is connected, or the file blocks use valid paths like ServerScriptService/ScriptName.lua.');
+        if (!appliedToStudio && hasActions && bubble && canEditGame && studioOk) {
+          _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. The file paths may not match a known Roblox service root (e.g. ServerScriptService/Script.lua).');
         }
         if (full) {
           const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
