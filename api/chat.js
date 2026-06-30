@@ -251,7 +251,14 @@ If modifying an existing script, use the EXACT path shown in the project context
 ${luauRules}${unityRules}${blenderRules}
 
 COMPLETENESS: Full runnable script every time. Zero placeholders. Zero "-- add your code here".
-Only skip the file block if the user is asking a pure question with no coding task — then reply in 1-2 sentences.`;
+Only skip the file block if the user is asking a pure question with no coding task — then reply in 1-2 sentences.
+
+DELETION: If the user asks to delete, remove, or get rid of a script, output a studio-action block instead of a file block:
+One sentence saying what you deleted.
+\`\`\`studio-action
+{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/ScriptName"}
+\`\`\`
+Use the EXACT path from the project context. Do NOT write a file block for deletions.`;
   }
 
   // Ask / Plan mode — no code output expected
