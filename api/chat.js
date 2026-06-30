@@ -211,36 +211,39 @@ function tbVerifyToken(authToken) {
 }
 
 function tbBuildSystemPrompt(projectMode, mode) {
-  const engineGuides = {
-    Roblox: `SPECIALTY: Roblox game development — Luau scripting, LocalScript/Script/ModuleScript, RemoteEvents, RemoteFunctions, DataStoreService, TweenService, RunService, and Roblox Studio.\n\nKEY RULES FOR ROBLOX:\n- Use task.wait(n) NOT wait(n). Use task.spawn() NOT spawn(). Use task.delay() NOT delay().\n- RemoteEvents MUST be created by a server Script first; LocalScripts use :WaitForChild("EventName", 10) to find them.\n- Always use :WaitForChild("Name", 10) with a timeout before accessing cross-script instances.\n- Wrap every DataStore call in pcall.\n- LocalScripts CANNOT access ServerScriptService. Use ReplicatedStorage for shared assets.\n- game.Players.LocalPlayer is nil on the server — only use it inside LocalScripts.\n- Touched fires constantly — debounce with a table keyed by player.\n- Character loads async; use player.CharacterAdded:Wait() before accessing the character.\n- Use Humanoid:TakeDamage(amount) not Humanoid.Health = 0.\n- Always :Disconnect() connections when done.\n\nFor casual or off-topic messages, respond naturally in 1-2 sentences without code.`,
-    Unity: 'SPECIALTY: Unity game development — C# scripting, MonoBehaviour lifecycle, Unity APIs, GameObjects, Rigidbody physics, Animator, NavMeshAgent, Input System, TextMeshPro. Cache GetComponent in Awake. Use Coroutines for async sequences. Never hallucinate Unity APIs.',
-    Blender: 'SPECIALTY: Blender 3D — Python/bpy scripting, modeling, geometry nodes, shaders (Cycles/EEVEE), rigging, animation, and rendering. Use bpy.data over bpy.ops. bmesh for geometry editing.',
-    'Roblox+Blender': 'SPECIALTY: Roblox game development (Luau) and Blender 3D (bpy) for creating assets for Roblox games. Same Roblox rules apply. For Blender: apply transforms before FBX export, Y-up, FBX Units Scale.',
-    'Unity+Blender': 'SPECIALTY: Unity (C#) and Blender 3D (bpy) for creating assets for Unity projects. Apply all transforms in Blender before export. Normal maps from Blender are OpenGL; Unity needs DirectX — flip the G channel.',
-  };
-  const engineFocus = engineGuides[(projectMode || 'Roblox').trim()] || engineGuides['Roblox'];
-  const modeInstructions = {
-    agent: 'AGENT MODE: Output the smallest complete fix. Every code change MUST be in a ```file:ServiceName/path/ScriptName.lua block.',
-    supreme: 'SUPER AGENT MODE: Deeper multi-step edits. Every code change MUST be in a ```file:ServiceName/path/ScriptName.lua block.',
-  };
-  const codeInstruction = (mode === 'agent' || mode === 'supreme')
-    ? `MANDATORY OUTPUT RULE: You MUST output a \`\`\`file:ServiceName/ScriptName.lua code block for EVERY change. No exceptions. Do NOT say "here is the code", "you can add", "I would modify" — just output the block. If you write prose instead of a file block, you have failed. The file block IS the output.`
-    : `OUTPUT RULE: When writing or modifying any script, ALWAYS output it inside a \`\`\`file:ServiceName/ScriptName.lua block. Never show code outside a file block. Never say "paste this" or "add this" — output the block directly.`;
-  return [
-    'You are TexBrain, a senior Roblox game developer AI inside the ROTEX desktop app. You write complete, production-quality Luau code and apply it directly to Roblox Studio.',
-    engineFocus,
-    codeInstruction,
-    'STUDIO LIVE APPLY: File blocks are INSTANTLY written to the open Roblox Studio project. The user never copies anything. Output the block = it gets applied.',
-    'You receive live project context in system messages (script paths, script source, selected objects). Use the EXACT paths from context when modifying existing scripts.',
-    'RESPONSE FORMAT: One short sentence describing the change, then the file block(s). Nothing else. No bullet points, no step-by-step explanations, no "Note:" sections.',
-    'GREETINGS / QUESTIONS ONLY: If the user is just chatting or asking a question with no code needed, reply in 1-2 sentences. No file block.',
-    engineFocus.includes('Roblox') ? 'ROBLOX RULES: task.wait/task.spawn/task.delay (never deprecated versions). RemoteEvents created server-side first. WaitForChild with timeout. pcall on DataStore. Debounce Touched. Disconnect connections when done. LocalPlayer only in LocalScripts.' : '',
-    'MODIFY RULE: If the script already exists in project context, output the COMPLETE modified file at the SAME path. Do not output a partial snippet.',
-    'PATH FORMAT: ServiceName/ScriptName.lua — e.g. ServerScriptService/MyScript.lua, StarterPlayer/StarterPlayerScripts/ClientUI.lua, ReplicatedStorage/Modules/Utils.lua',
-    'FILE BLOCK FORMAT (only valid format):\n```file:ServerScriptService/Example.lua\n-- full script here\n```',
-    'COMPLETENESS: Every file block must be a full, runnable script. Zero placeholders. Zero "-- your code here". Zero "-- etc".',
-    modeInstructions[mode] || '',
-  ].filter(Boolean).join('\n');
+  const isCode = mode === 'agent' || mode === 'supreme';
+  const engine = (projectMode || 'Roblox').trim();
+
+  const luauRules = engine.includes('Roblox') ? `
+LUAU RULES: task.wait/task.spawn/task.delay only. RemoteEvents in ReplicatedStorage, created server-side, accessed with :WaitForChild("Name",10) on client. pcall all DataStore calls. Debounce Touched with a table. LocalPlayer only inside LocalScripts. :Disconnect() when done. Humanoid:TakeDamage(n) not Health=0.` : '';
+
+  const unityRules = engine.includes('Unity') ? `\nUnity C# rules: cache GetComponent in Awake, use Coroutines for async, no missing UnityEngine APIs.` : '';
+  const blenderRules = engine.includes('Blender') ? `\nBlender bpy rules: prefer bpy.data over bpy.ops, bmesh for geometry, apply transforms before export.` : '';
+
+  if (isCode) {
+    // Short, format-first prompt. The concrete example is the most important part.
+    return `You are a code-writing assistant for ${engine} inside ROTEX. Your job: write complete, working scripts and deliver them in a file block.
+
+ALWAYS respond in this exact format — no exceptions:
+One sentence describing what you made or changed.
+\`\`\`file:ServiceName/ScriptName.lua
+-- full working code here
+\`\`\`
+
+FILE PATH RULES (${engine} projects):
+- Client GUI / HUD / bars / input / camera → StarterPlayer/StarterPlayerScripts/Name.lua
+- Server game logic / datastores / admin → ServerScriptService/Name.lua
+- Shared modules / events → ReplicatedStorage/Modules/Name.lua
+- UI ScreenGui scripts → StarterGui/Name.lua
+If modifying an existing script, use the EXACT path shown in the project context above.
+${luauRules}${unityRules}${blenderRules}
+
+COMPLETENESS: Full runnable script every time. Zero placeholders. Zero "-- add your code here".
+Only skip the file block if the user is asking a pure question with no coding task — then reply in 1-2 sentences.`;
+  }
+
+  // Ask / Plan mode — no code output expected
+  return `You are a helpful ${engine} game development assistant inside ROTEX. Answer questions, explain concepts, and help plan features. Keep responses short and direct. Do not output code blocks unless the user specifically asks to see code.${luauRules}${unityRules}${blenderRules}`;
 }
 
 const GROQ_KEY = cleanKey(process.env.GROQ_API_KEY);
@@ -373,26 +376,31 @@ async function handleTexBrain(req, res) {
       ...history,
     ];
 
+    // Models ranked by instruction-following quality for code output.
+    // Kimi K2 is Moonshot's 1T MoE — best at format adherence on Groq.
+    const KIMI   = 'moonshotai/kimi-k2-instruct';
     const MAVERICK = 'meta-llama/llama-4-maverick-17b-128e-instruct';
-    const FAST = 'llama-3.3-70b-versatile';
+    const FAST   = 'llama-3.3-70b-versatile';
     const isCodeMode = mode === 'agent' || mode === 'supreme';
-    // A response is "usable" in code mode only if it actually contains code to apply.
-    const hasCodeBlock = (t) => /```\s*file:/i.test(t) || /```(?:lua|luau)\b/i.test(t);
+
+    // Accept any code block: ```file:, ```lua, ```luau, or bare ``` with code inside.
+    const hasCodeBlock = (t) => /```(?:\s*file:|\s*lua\b|\s*luau\b|\s*\n)/i.test(t);
 
     let text = '', usedModel = 'groq/' + FAST;
 
-    // 1. Try Groq. In code mode, lead with the smarter Maverick (it reliably emits
-    //    ```file: blocks); weak/fast 3.3-70b often replies with prose-only and nothing
-    //    gets applied. In plain chat, lead with the fast 3.3-70b.
+    // 1. Groq — ordered by instruction-following quality.
+    //    Code mode: Kimi K2 first (best format adherence), then Maverick, 3.3-70b last resort.
+    //    Chat mode: fast 3.3-70b first since format doesn't matter.
     if (GROQ_KEY) {
       const groqCandidates = isCodeMode
         ? [
-            { model: MAVERICK, timeout: 45000 },
-            { model: FAST, timeout: 22000 },
+            { model: KIMI,     timeout: 30000 },
+            { model: MAVERICK, timeout: 35000 },
+            { model: FAST,     timeout: 20000 },
           ]
         : [
-            { model: FAST, timeout: 25000 },
-            { model: MAVERICK, timeout: 40000 },
+            { model: FAST,     timeout: 20000 },
+            { model: MAVERICK, timeout: 35000 },
           ];
       for (const { model: gm, timeout } of groqCandidates) {
         try {
@@ -400,18 +408,18 @@ async function handleTexBrain(req, res) {
           const t = result.choices?.[0]?.message?.content?.trim();
           if (t) {
             text = t; usedModel = 'groq/' + gm;
-            // In code mode keep trying a smarter model if we only got prose.
             if (!isCodeMode || hasCodeBlock(t)) break;
+            // prose-only — keep looping to try smarter model
           }
         } catch (e) { /* try next */ }
       }
     }
 
-    // 2. OpenRouter free models as fallback
-    if (!text && OR_KEY) {
+    // 2. OpenRouter free models — qwen3-coder first (code-specialized).
+    if ((!text || (isCodeMode && !hasCodeBlock(text))) && OR_KEY) {
       const candidates = [
-        'meta-llama/llama-3.3-70b-instruct:free',
         'qwen/qwen3-coder:free',
+        'meta-llama/llama-3.3-70b-instruct:free',
         'openai/gpt-oss-120b:free',
         'nvidia/nemotron-3-super-120b-a12b:free',
       ];
@@ -428,20 +436,17 @@ async function handleTexBrain(req, res) {
       return;
     }
 
-    // 3. Code mode but the model still only described the change (no code block at all)?
-    //    Force ONE explicit retry that demands ONLY the file block. This is the exact
-    //    failure the user hit ("Adding a stamina bar..." with no script).
+    // 3. Still no code block after all models tried? Force one direct retry with
+    //    a stripped-down prompt that only asks for the file block.
     if (GROQ_KEY && isCodeMode && !hasCodeBlock(text)) {
       try {
-        const retryMessages = [
-          ...workerMessages,
-          { role: 'assistant', content: text },
-          { role: 'user', content: 'You described the change but output NO code. Now output ONLY the complete ```file:Service/Name.lua code block(s) with the full working script inside. No prose, no explanation — just the file block(s).' },
+        const retryPrompt = [
+          { role: 'system', content: `Output ONLY a file block. Nothing else.\nFormat:\n\`\`\`file:ServiceName/ScriptName.lua\n-- code here\n\`\`\`` },
+          { role: 'user', content: lastUserMsg },
         ];
-        const result = await tbGroqPost(MAVERICK, retryMessages, 8192, 38000);
+        const result = await tbGroqPost(KIMI, retryPrompt, 8192, 28000);
         const t = result.choices?.[0]?.message?.content?.trim();
         if (t && hasCodeBlock(t)) {
-          // Keep the original one-line description, then the forced code block(s).
           text = text + '\n\n' + t;
           usedModel += '+retry';
         }
