@@ -2299,7 +2299,7 @@
     });
 
     document.getElementById('rxNewChat')?.addEventListener('click', () => {
-      if (_chatBusy) return;
+      if (_chatBusy && _chatAbort) { _chatAbort.abort(); _chatBusy = false; }
       _chatHistory.length = 0;
       _activeChatId = null;
       localStorage.removeItem('rotex_active_chat');

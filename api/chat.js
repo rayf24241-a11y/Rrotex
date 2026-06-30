@@ -286,21 +286,28 @@ async function tbGroqPost(model, messages, maxTokens, timeoutMs = 30000) {
   }
 }
 
-async function tbOrPost(endpoint, body) {
+async function tbOrPost(endpoint, body, timeoutMs = 25000) {
   const postData = JSON.stringify(body);
-  const res = await fetch(`https://openrouter.ai/api/v1${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OR_KEY}`,
-      'HTTP-Referer': 'https://rrotex.com',
-      'X-Title': 'ROTEX TexBrain',
-    },
-    body: postData,
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}: ${text.slice(0, 300)}`);
-  return JSON.parse(text);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`https://openrouter.ai/api/v1${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OR_KEY}`,
+        'HTTP-Referer': 'https://rrotex.com',
+        'X-Title': 'ROTEX TexBrain',
+      },
+      body: postData,
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}: ${text.slice(0, 300)}`);
+    return JSON.parse(text);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // If the model returned plain ```lua blocks (ignoring the file: format instruction),
@@ -402,7 +409,7 @@ async function handleTexBrain(req, res) {
     //   UI    — strong general model for UI/visual code when CODE1+2 fail
     const TB_TALK  = 'google/gemma-3-27b-it:free';
     const TB_CODE1 = 'qwen/qwen3-coder:free';
-    const TB_CODE2 = 'deepseek/deepseek-r1-0528:free';
+    const TB_CODE2 = 'meta-llama/llama-3.3-70b-instruct:free';
     const TB_UI    = 'deepseek/deepseek-v3-0324:free';
     const isCodeMode = mode === 'agent' || mode === 'supreme';
 
@@ -411,8 +418,8 @@ async function handleTexBrain(req, res) {
 
     let text = '', usedModel = TB_TALK;
 
-    const orCall = (model, msgs, maxTok = 8192) =>
-      tbOrPost('/chat/completions', { model, temperature: 0.15, top_p: 0.9, max_tokens: maxTok, messages: msgs });
+    const orCall = (model, msgs, maxTok = 8192, timeoutMs = 25000) =>
+      tbOrPost('/chat/completions', { model, temperature: 0.15, top_p: 0.9, max_tokens: maxTok, messages: msgs }, timeoutMs);
 
     // Ask/plan mode: single fast talk model — no need for heavy code models.
     if (!isCodeMode) {
