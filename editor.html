@@ -1205,7 +1205,7 @@
       let _pluginConnected = false;
       let _studioConnected = false;
       let _pluginReady = false;
-      let _ver = '1.16.36';
+      let _ver = '1.16.44';
       function displayVersion(ver) { return ver; }
 
       function setLoadStatus(text) {
@@ -2013,7 +2013,9 @@
       out += '\nPROJECT SCRIPTS (live from Roblox Studio � ' + scripts.length + ' scripts). Search these before saying the project is empty:';
       for (const s of scripts) {
         const src = String(s.source || '').slice(0, 3000);
-        out += '\n\n--- ' + (s.path || s.name || 'Script') + ' [' + (s.class || 'Script') + '] ---\n' + src;
+        const rawPath = String(s.path || s.name || 'Script');
+        const displayPath = _normalizeFilePath(rawPath);
+        out += '\n\n--- ' + displayPath + ' [' + (s.class || 'Script') + '] ---\n' + src;
       }
       if (selected.length) {
         out += '\n\nCURRENTLY SELECTED IN STUDIO: ' + selected.map((x) => x.path || x.name).join(', ');

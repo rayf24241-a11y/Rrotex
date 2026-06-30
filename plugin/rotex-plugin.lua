@@ -352,11 +352,13 @@ local function applyStudioFile(file)
 	local source = file.content or ""
 	local action = "Created"
 	local existing = parent:FindFirstChild(scriptName)
+	local existingClass = nil
 	if existing and existing:IsA("LuaSourceContainer") then
+		existingClass = existing.ClassName
 		existing:Destroy()
 		action = "Updated"
 	end
-	local obj = Instance.new(scriptClassFor(parts[#parts], source))
+	local obj = Instance.new(existingClass or scriptClassFor(parts[#parts], source))
 	obj.Name, obj.Source, obj.Parent = scriptName, source, parent
 	return true, action .. " " .. file.path
 end
