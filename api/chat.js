@@ -306,14 +306,26 @@ function tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg) {
 
   // If no path found from context, try to infer from script name mentioned in text or user msg
   if (!inferredPath) {
-    const scriptNameMatch = text.match(/(?:script|Script)\s+[`"']?([\w]+(?:Script|Handler|System|UI|Controller)?)[`"']?/i)
-      || lastUserMsg.match(/\b([\w]+(?:Script|Handler|System|Stamina|Jump|Movement|Player)[\w]*)\b/i);
-    if (scriptNameMatch) {
-      const name = scriptNameMatch[1];
-      // Guess service from name
-      const isLocal = /UI|Client|Player|Stamina|Jump|Camera|Input/i.test(name);
+    // Match compound names like "StaminaSystem", "JumpScript", etc.
+    const compoundMatch = text.match(/(?:script|Script)\s+[`"']?([\w]+(?:Script|Handler|System|UI|Controller|Bar|Manager|GUI)?)[`"']?/i)
+      || lastUserMsg.match(/\b([\w]+(?:Script|Handler|System|UI|Controller|Bar|Manager|GUI|Stamina|Jump|Movement|Player|Leaderboard|Shop|Inventory|Health|Quest|Chat|Kill|Kill|Spawn|Weapon|Tool)[\w]*)\b/i);
+    if (compoundMatch) {
+      const name = compoundMatch[1];
+      const isLocal = /UI|Client|Player|Stamina|Jump|Camera|Input|Bar|GUI|Inventory|Shop|Health/i.test(name);
       const service = isLocal ? 'StarterPlayer/StarterPlayerScripts' : 'ServerScriptService';
       inferredPath = `${service}/${name}.lua`;
+    }
+  }
+
+  // Last resort: extract any noun phrase from "make/create/add/build a <name>" pattern
+  if (!inferredPath) {
+    const makeMatch = lastUserMsg.match(/(?:make|create|add|build|write|give me)\s+(?:a\s+|an\s+)?([a-z][\w\s]{1,30}?)(?:\s+script|\s+system|\s+ui|\s+bar|\s+gui|\s+leaderboard)?(?:\s+for|\s+that|\s+which|$)/i);
+    if (makeMatch) {
+      const rawName = makeMatch[1].trim().replace(/\s+/g, '');
+      const Name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+      const isLocal = /stamina|health|bar|gui|ui|shop|inventory|camera|client|jump|sprint|speed/i.test(rawName);
+      const service = isLocal ? 'StarterPlayer/StarterPlayerScripts' : 'ServerScriptService';
+      inferredPath = `${service}/${Name}.lua`;
     }
   }
 
