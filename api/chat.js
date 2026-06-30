@@ -227,41 +227,86 @@ One sentence describing what you made or changed.
 \`\`\`
 
 FILE PATHS:
-- Client (GUI / HUD / bars / input / sprint / camera) → StarterPlayer/StarterPlayerScripts/Name.lua
+- Client (GUI / HUD / bars / input / sprint / stamina / camera) → StarterPlayer/StarterPlayerScripts/Name.lua
 - Server (game logic / datastores / kills / admin) → ServerScriptService/Name.lua
 - Shared (modules / events) → ReplicatedStorage/Modules/Name.lua
 If modifying an existing script, use the EXACT path from the project context above.
 One file per feature. Do NOT split a client feature into separate UI + logic files.
 
-MANDATORY LOCALSCRIPT PATTERN — copy this exactly for any LocalScript needing the character:
+REWRITE RULE: If the existing script in project context is missing the player.Character pre-check OR has a nil-check error in RunService, rewrite it completely from scratch using the correct pattern below. Do not preserve broken lifecycle code.
+
+COMPLETE REFERENCE IMPLEMENTATION — stamina/sprint bar (copy this pattern for ALL client movement/UI scripts):
 \`\`\`lua
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
-local humanoid
+local humanoid = nil
 
+local MAX_STAMINA = 100
+local DRAIN = 20
+local REGEN = 10
+local SPRINT_SPEED = 24
+local WALK_SPEED = 16
+local stamina = MAX_STAMINA
+local sprinting = false
+local exhausted = false
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "StaminaGui"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+local bg = Instance.new("Frame", gui)
+bg.Size = UDim2.new(0, 200, 0, 14)
+bg.Position = UDim2.new(0, 20, 1, -40)
+bg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+bg.BorderSizePixel = 0
+Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 7)
+local fill = Instance.new("Frame", bg)
+fill.Size = UDim2.new(1, 0, 1, 0)
+fill.BackgroundColor3 = Color3.fromRGB(60, 200, 80)
+fill.BorderSizePixel = 0
+Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 7)
+
+-- CORRECT character pattern: check existing character FIRST
 local function onCharacter(char)
     humanoid = char:WaitForChild("Humanoid")
-    -- reset state here on every respawn
+    humanoid.WalkSpeed = WALK_SPEED
+    stamina = MAX_STAMINA
+    exhausted = false
 end
 if player.Character then onCharacter(player.Character) end
 player.CharacterAdded:Connect(onCharacter)
 
+-- Input (never disconnect inside these handlers)
+UserInputService.InputBegan:Connect(function(i, gp) if not gp and i.KeyCode == Enum.KeyCode.LeftShift then sprinting = true end end)
+UserInputService.InputEnded:Connect(function(i) if i.KeyCode == Enum.KeyCode.LeftShift then sprinting = false end end)
+
 RunService.Heartbeat:Connect(function(dt)
-    if not humanoid then return end  -- ALWAYS nil-check before using humanoid
-    -- game logic here
+    if not humanoid then return end  -- ALWAYS nil-check
+    local isSprinting = sprinting and not exhausted
+    if isSprinting then
+        stamina = math.max(0, stamina - DRAIN * dt)
+        if stamina == 0 then exhausted = true end
+    else
+        stamina = math.min(MAX_STAMINA, stamina + REGEN * dt)
+        if stamina >= 20 then exhausted = false end
+    end
+    humanoid.WalkSpeed = isSprinting and SPRINT_SPEED or WALK_SPEED
+    local r = stamina / MAX_STAMINA
+    fill.Size = UDim2.new(r, 0, 1, 0)
+    fill.BackgroundColor3 = exhausted and Color3.fromRGB(200,50,50) or r < 0.3 and Color3.fromRGB(220,150,30) or Color3.fromRGB(60,200,80)
 end)
 \`\`\`
 
 LUAU RULES:
 - task.wait / task.spawn / task.delay only — never wait() / spawn() / delay()
 - RemoteEvents: create on server in ReplicatedStorage, access on client with :WaitForChild("Name", 10)
-- pcall all DataStore calls
-- Humanoid:TakeDamage(n) not Health = 0
-- Never disconnect InputBegan/InputEnded inside those same handlers — only in PlayerRemoving
-- Zero placeholders. Zero "-- add your code here". Full runnable script every time.
+- pcall all DataStore calls. Humanoid:TakeDamage(n) not Health = 0.
+- Zero placeholders. Full runnable script every time.
 
-DELETION: If asked to delete/remove a script, use a studio-action block:
+DELETION: If asked to delete/remove a script:
 \`\`\`studio-action
 {"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/ScriptName"}
 \`\`\`
