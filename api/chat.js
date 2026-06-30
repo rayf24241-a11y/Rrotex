@@ -395,80 +395,61 @@ async function handleTexBrain(req, res) {
       ...history,
     ];
 
-    // Models ranked by instruction-following quality for code output.
-    // Kimi K2 is Moonshot's 1T MoE — best at format adherence on Groq.
-    const KIMI   = 'moonshotai/kimi-k2-instruct';
-    const MAVERICK = 'meta-llama/llama-4-maverick-17b-128e-instruct';
-    const FAST   = 'llama-3.3-70b-versatile';
+    // 4 dedicated OpenRouter free models:
+    //   TALK  — fast conversational model for ask/plan mode
+    //   CODE1 — primary code model (best format adherence)
+    //   CODE2 — reasoning fallback coder
+    //   UI    — strong general model for UI/visual code when CODE1+2 fail
+    const TB_TALK  = 'google/gemma-3-27b-it:free';
+    const TB_CODE1 = 'qwen/qwen3-coder:free';
+    const TB_CODE2 = 'deepseek/deepseek-r1-0528:free';
+    const TB_UI    = 'deepseek/deepseek-v3-0324:free';
     const isCodeMode = mode === 'agent' || mode === 'supreme';
 
     // Accept any code block: ```file:, ```lua, ```luau, or bare ``` with code inside.
     const hasCodeBlock = (t) => /```(?:\s*file:|\s*lua\b|\s*luau\b|\s*\n)/i.test(t);
 
-    let text = '', usedModel = 'groq/' + FAST;
+    let text = '', usedModel = TB_TALK;
 
-    // 1. Groq — ordered by instruction-following quality.
-    //    Code mode: Kimi K2 first (best format adherence), then Maverick, 3.3-70b last resort.
-    //    Chat mode: fast 3.3-70b first since format doesn't matter.
-    if (GROQ_KEY) {
-      const groqCandidates = isCodeMode
-        ? [
-            { model: KIMI,     timeout: 30000 },
-            { model: MAVERICK, timeout: 35000 },
-            { model: FAST,     timeout: 20000 },
-          ]
-        : [
-            { model: FAST,     timeout: 20000 },
-            { model: MAVERICK, timeout: 35000 },
-          ];
-      for (const { model: gm, timeout } of groqCandidates) {
-        try {
-          const result = await tbGroqPost(gm, workerMessages, 8192, timeout);
-          const t = result.choices?.[0]?.message?.content?.trim();
-          if (t) {
-            text = t; usedModel = 'groq/' + gm;
-            if (!isCodeMode || hasCodeBlock(t)) break;
-            // prose-only — keep looping to try smarter model
-          }
-        } catch (e) { /* try next */ }
-      }
+    const orCall = (model, msgs, maxTok = 8192) =>
+      tbOrPost('/chat/completions', { model, temperature: 0.15, top_p: 0.9, max_tokens: maxTok, messages: msgs });
+
+    // Ask/plan mode: single fast talk model — no need for heavy code models.
+    if (!isCodeMode) {
+      try {
+        const result = await orCall(TB_TALK, workerMessages, 4096);
+        text = result.choices?.[0]?.message?.content?.trim() || '';
+        usedModel = TB_TALK;
+      } catch (e) { /* fall through to code cascade */ }
     }
 
-    // 2. OpenRouter free models — qwen3-coder first (code-specialized).
-    if ((!text || (isCodeMode && !hasCodeBlock(text))) && OR_KEY) {
-      const candidates = [
-        'qwen/qwen3-coder:free',
-        'meta-llama/llama-3.3-70b-instruct:free',
-        'openai/gpt-oss-120b:free',
-        'nvidia/nemotron-3-super-120b-a12b:free',
-      ];
-      for (const m of candidates) {
+    // Code mode (or talk fallback): cascade CODE1 → CODE2 → UI until we get a file block.
+    if (!text || (isCodeMode && !hasCodeBlock(text))) {
+      const codeCandidates = [TB_CODE1, TB_CODE2, TB_UI];
+      for (const m of codeCandidates) {
         try {
-          const result = await tbOrPost('/chat/completions', { model: m, temperature: 0.15, top_p: 0.9, max_tokens: 4096, messages: workerMessages });
+          const result = await orCall(m, workerMessages);
           const t = result.choices?.[0]?.message?.content?.trim();
           if (t) { text = t; usedModel = m; if (!isCodeMode || hasCodeBlock(t)) break; }
         } catch (e) { /* try next */ }
       }
     }
+
     if (!text) {
       res.status(503).json({ error: 'TexBrain models are busy right now. Try again in a moment, or use Claude Haiku.' });
       return;
     }
 
-    // 3. Still no code block after all models tried? Force one direct retry with
-    //    a stripped-down prompt that only asks for the file block.
-    if (GROQ_KEY && isCodeMode && !hasCodeBlock(text)) {
+    // Still no code block? Force a stripped retry with the best coder.
+    if (isCodeMode && !hasCodeBlock(text)) {
       try {
         const retryPrompt = [
           { role: 'system', content: `Output ONLY a file block. Nothing else.\nFormat:\n\`\`\`file:ServiceName/ScriptName.lua\n-- code here\n\`\`\`` },
           { role: 'user', content: lastUserMsg },
         ];
-        const result = await tbGroqPost(KIMI, retryPrompt, 8192, 28000);
+        const result = await orCall(TB_CODE1, retryPrompt, 8192);
         const t = result.choices?.[0]?.message?.content?.trim();
-        if (t && hasCodeBlock(t)) {
-          text = text + '\n\n' + t;
-          usedModel += '+retry';
-        }
+        if (t && hasCodeBlock(t)) { text = text + '\n\n' + t; usedModel += '+retry'; }
       } catch (e) { /* keep original text */ }
     }
 
@@ -1020,7 +1001,19 @@ ROBLOX-SPECIFIC GOTCHAS:
 - LocalScripts CANNOT access ServerScriptService. Put shared assets in ReplicatedStorage.
 - ModuleScript state is per-VM: one shared instance for all server Scripts, one for all LocalScripts. Key per-player data by player object, not globals.
 - Touched fires multiple times per second — debounce with a table keyed by player: local db = {}; part.Touched:Connect(function(hit) local p = Players:GetPlayerFromCharacter(hit.Parent); if not p or db[p] then return end; db[p] = true; task.delay(1, function() db[p] = nil end) end).
-- Character loads async. After PlayerAdded fires, character may not exist yet. Always use player.CharacterAdded:Wait() before accessing the character model.
+- Character loads async. After PlayerAdded fires, character may not exist yet. ALWAYS use this pattern at the top of every LocalScript that needs the character:
+  ```lua
+  local function onCharacter(char)
+      local humanoid = char:WaitForChild("Humanoid")
+      -- setup here
+  end
+  if player.Character then onCharacter(player.Character) end
+  player.CharacterAdded:Connect(onCharacter)
+  ```
+  Never hook CharacterAdded alone — the character is already loaded when a LocalScript first runs.
+- Always nil-check humanoid/character before accessing properties in RunService loops: `if not humanoid then return end`.
+- Never disconnect InputBegan/InputEnded connections inside those same handlers — only disconnect in CharacterRemoving or PlayerRemoving.
+- CharacterAdded fires every respawn — reset all state variables inside the handler, not at the top of the script.
 - Humanoid.Health = 0 kills instantly and ignores ForceField. Use Humanoid:TakeDamage(amount) instead.
 - Destroy() removes AND disconnects everything. Never reference a destroyed instance.
 - task.wait / task.spawn / task.delay are correct modern APIs. wait() / spawn() / delay() are deprecated — never use them.
