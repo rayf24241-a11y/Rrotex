@@ -245,16 +245,23 @@ function tbBuildSystemPrompt(projectMode, mode) {
 
 const GROQ_KEY = cleanKey(process.env.GROQ_API_KEY);
 
-async function tbGroqPost(model, messages, maxTokens) {
+async function tbGroqPost(model, messages, maxTokens, timeoutMs = 30000) {
   const postData = JSON.stringify({ model, messages, temperature: 0.1, max_tokens: maxTokens || 8192, stream: false });
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
-    body: postData,
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Groq HTTP ${res.status}: ${text.slice(0, 200)}`);
-  return JSON.parse(text);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
+      body: postData,
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`Groq HTTP ${res.status}: ${text.slice(0, 200)}`);
+    return JSON.parse(text);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function tbOrPost(endpoint, body) {
@@ -354,18 +361,18 @@ async function handleTexBrain(req, res) {
       ...history,
     ];
 
-    let text = '', usedModel = 'groq/llama-4-maverick';
+    let text = '', usedModel = 'groq/llama-3.3-70b-versatile';
 
     // 1. Try Groq first — fastest by far (sub-2s)
     if (GROQ_KEY) {
-      // Try Llama 4 Maverick first (smarter), fall back to 3.3 70B
+      // llama-3.3-70b is fast (~1.5s). Maverick is smarter but slower — try it only if 70b fails.
       const groqCandidates = [
-        'meta-llama/llama-4-maverick-17b-128e-instruct',
-        'llama-3.3-70b-versatile',
+        { model: 'llama-3.3-70b-versatile', timeout: 25000 },
+        { model: 'meta-llama/llama-4-maverick-17b-128e-instruct', timeout: 40000 },
       ];
-      for (const gm of groqCandidates) {
+      for (const { model: gm, timeout } of groqCandidates) {
         try {
-          const result = await tbGroqPost(gm, workerMessages, 8192);
+          const result = await tbGroqPost(gm, workerMessages, 8192, timeout);
           const t = result.choices?.[0]?.message?.content?.trim();
           if (t) { text = t; usedModel = 'groq/' + gm; break; }
         } catch (e) { /* try next */ }
