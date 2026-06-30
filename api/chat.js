@@ -215,7 +215,19 @@ function tbBuildSystemPrompt(projectMode, mode) {
   const engine = (projectMode || 'Roblox').trim();
 
   const luauRules = engine.includes('Roblox') ? `
-LUAU RULES: task.wait/task.spawn/task.delay only. RemoteEvents in ReplicatedStorage, created server-side, accessed with :WaitForChild("Name",10) on client. pcall all DataStore calls. Debounce Touched with a table. LocalPlayer only inside LocalScripts. :Disconnect() when done. Humanoid:TakeDamage(n) not Health=0.` : '';
+LUAU RULES:
+- task.wait/task.spawn/task.delay only (never wait()/spawn()/delay()).
+- RemoteEvents in ReplicatedStorage, created server-side, accessed with :WaitForChild("Name",10) on client.
+- pcall all DataStore calls. Debounce Touched with a table. LocalPlayer only inside LocalScripts.
+- Humanoid:TakeDamage(n) not Health=0.
+CHARACTER LIFECYCLE (critical — get this wrong and nothing works):
+- At the top of every LocalScript that needs the character: check player.Character first, THEN hook CharacterAdded. Example:
+    local function onCharacter(char) humanoid = char:WaitForChild("Humanoid") end
+    if player.Character then onCharacter(player.Character) end
+    player.CharacterAdded:Connect(onCharacter)
+- Never access humanoid or character members inside RunService loops without a nil check (if not humanoid then return end).
+- Never disconnect input connections (InputBegan/InputEnded) inside those same event handlers — disconnect them in CharacterRemoving or PlayerRemoving only.
+- CharacterAdded fires every respawn — reset state variables inside the handler, not at the top of the script.` : '';
 
   const unityRules = engine.includes('Unity') ? `\nUnity C# rules: cache GetComponent in Awake, use Coroutines for async, no missing UnityEngine APIs.` : '';
   const blenderRules = engine.includes('Blender') ? `\nBlender bpy rules: prefer bpy.data over bpy.ops, bmesh for geometry, apply transforms before export.` : '';
