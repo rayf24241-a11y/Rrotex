@@ -410,7 +410,7 @@ async function handleTexBrain(req, res) {
     }));
     // Pass ALL system messages as context (project scripts, studio state, etc.)
     const contextMsgs = normalized.filter(m => m.role === 'system').slice(-3);
-    const history = normalized.filter(m => m.role !== 'system').slice(-10);
+    const history = normalized.filter(m => m.role !== 'system').slice(-20);
     const lastUserMsg = history.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
 
     const workerMessages = [
@@ -426,8 +426,8 @@ async function handleTexBrain(req, res) {
     //   UI    — strong general model for UI/visual code when CODE1+2 fail
     const TB_TALK  = 'google/gemma-3-27b-it:free';
     const TB_CODE1 = 'qwen/qwen3-coder:free';
-    const TB_CODE2 = 'meta-llama/llama-3.3-70b-instruct:free';
-    const TB_UI    = 'deepseek/deepseek-v3-0324:free';
+    const TB_CODE2 = 'deepseek/deepseek-v3-0324:free';
+    const TB_UI    = 'meta-llama/llama-3.3-70b-instruct:free';
     const isCodeMode = mode === 'agent' || mode === 'supreme';
 
     // Accept any code block: ```file:, ```lua, ```luau, or bare ``` with code inside.
@@ -435,13 +435,13 @@ async function handleTexBrain(req, res) {
 
     let text = '', usedModel = TB_TALK;
 
-    const orCall = (model, msgs, maxTok = 8192, timeoutMs = 25000) =>
-      tbOrPost('/chat/completions', { model, temperature: 0.15, top_p: 0.9, max_tokens: maxTok, messages: msgs }, timeoutMs);
+    const orCall = (model, msgs, maxTok = 12000, timeoutMs = 25000) =>
+      tbOrPost('/chat/completions', { model, temperature: 0.2, top_p: 0.95, max_tokens: maxTok, messages: msgs }, timeoutMs);
 
     // Ask/plan mode: single fast talk model — no need for heavy code models.
     if (!isCodeMode) {
       try {
-        const result = await orCall(TB_TALK, workerMessages, 4096);
+        const result = await orCall(TB_TALK, workerMessages, 6000);
         text = result.choices?.[0]?.message?.content?.trim() || '';
         usedModel = TB_TALK;
       } catch (e) { /* fall through to code cascade */ }

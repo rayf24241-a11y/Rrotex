@@ -2104,7 +2104,7 @@
         if ((selectedModel || 'texbrain-thinking') === 'texbrain-thinking' && window.rotexDesktop?.callTexBrain) {
           const localMessages = [
             { role: 'system', content: projectContextText },
-            ..._chatHistory.slice(-14),
+            ..._chatHistory.slice(-20),
           ];
           // TexBrain is always a code assistant — use agent/code mode when studio
           // is connected, so the server builds the code-writing prompt and applies files.
@@ -2165,7 +2165,7 @@
           body: JSON.stringify({
             authToken,
             model: selectedModel || 'texbrain-thinking',
-            messages: _chatHistory.slice(-14),
+            messages: _chatHistory.slice(-20),
             mode: 'editor',
             projectMode: projMode,
             projectContext: projectContextText,
