@@ -1761,8 +1761,8 @@
       return aliases;
     }
 
-    async function _applyStudioFilesFromResponse(full, bubble, originalText) {
-      if (currentMode !== 'agent' && currentMode !== 'supreme') return false;
+    async function _applyStudioFilesFromResponse(full, bubble, originalText, forceApply = false) {
+      if (!forceApply && currentMode !== 'agent' && currentMode !== 'supreme') return false;
       const files = _extractStudioFiles(full);
       const studioActions = _extractStudioActions(full);
       if ((!files.length && !studioActions.length) || !window.rotexDesktop?.queueStudioActions) return false;
@@ -2106,7 +2106,9 @@
             { role: 'system', content: projectContextText },
             ..._chatHistory.slice(-14),
           ];
-          const localMode = currentMode === 'agent' || currentMode === 'supreme' ? currentMode : '';
+          // TexBrain is always a code assistant — use agent/code mode when studio
+          // is connected, so the server builds the code-writing prompt and applies files.
+          const localMode = currentMode === 'supreme' ? 'supreme' : (studioOk || currentMode === 'agent') ? 'agent' : '';
           const result = await window.rotexDesktop.callTexBrain(localMessages, projMode, localMode, authToken);
           if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
           if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
@@ -2130,7 +2132,7 @@
             _renderChatMessage(bubble, 'assistant', (hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : (full || 'No response.'));
           }
 
-          const appliedToStudio = full ? await _applyStudioFilesFromResponse(full, bubble, text) : false;
+          const appliedToStudio = full ? await _applyStudioFilesFromResponse(full, bubble, text, true) : false;
 
           // Always clear task status after TexBrain responds — never leave 'On hold'
           if (isTaskStatus && statusBubble) {
