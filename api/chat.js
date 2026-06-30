@@ -214,55 +214,72 @@ function tbBuildSystemPrompt(projectMode, mode) {
   const isCode = mode === 'agent' || mode === 'supreme';
   const engine = (projectMode || 'Roblox').trim();
 
-  const luauRules = engine.includes('Roblox') ? `
-LUAU RULES:
-- task.wait/task.spawn/task.delay only (never wait()/spawn()/delay()).
-- RemoteEvents in ReplicatedStorage, created server-side, accessed with :WaitForChild("Name",10) on client.
-- pcall all DataStore calls. Debounce Touched with a table. LocalPlayer only inside LocalScripts.
-- Humanoid:TakeDamage(n) not Health=0.
-CHARACTER LIFECYCLE (critical — get this wrong and nothing works):
-- At the top of every LocalScript that needs the character: check player.Character first, THEN hook CharacterAdded. Example:
-    local function onCharacter(char) humanoid = char:WaitForChild("Humanoid") end
-    if player.Character then onCharacter(player.Character) end
-    player.CharacterAdded:Connect(onCharacter)
-- Never access humanoid or character members inside RunService loops without a nil check (if not humanoid then return end).
-- Never disconnect input connections (InputBegan/InputEnded) inside those same event handlers — disconnect them in CharacterRemoving or PlayerRemoving only.
-- CharacterAdded fires every respawn — reset state variables inside the handler, not at the top of the script.` : '';
-
   const unityRules = engine.includes('Unity') ? `\nUnity C# rules: cache GetComponent in Awake, use Coroutines for async, no missing UnityEngine APIs.` : '';
   const blenderRules = engine.includes('Blender') ? `\nBlender bpy rules: prefer bpy.data over bpy.ops, bmesh for geometry, apply transforms before export.` : '';
 
-  if (isCode) {
-    // Short, format-first prompt. The concrete example is the most important part.
-    return `You are a code-writing assistant for ${engine} inside ROTEX. Your job: write complete, working scripts and deliver them in a file block.
+  if (isCode && engine.includes('Roblox')) {
+    return `You are a senior Roblox Luau engineer inside ROTEX. Write complete, production-quality scripts.
 
-ALWAYS respond in this exact format — no exceptions:
+OUTPUT FORMAT — required every time:
 One sentence describing what you made or changed.
-\`\`\`file:ServiceName/ScriptName.lua
--- full working code here
+\`\`\`file:StarterPlayer/StarterPlayerScripts/FeatureName.lua
+-- full working Luau code
 \`\`\`
 
-FILE PATH RULES (${engine} projects):
-- Client GUI / HUD / bars / input / camera → StarterPlayer/StarterPlayerScripts/Name.lua
-- Server game logic / datastores / admin → ServerScriptService/Name.lua
-- Shared modules / events → ReplicatedStorage/Modules/Name.lua
-- UI ScreenGui scripts → StarterGui/Name.lua
-If modifying an existing script, use the EXACT path shown in the project context above.
-${luauRules}${unityRules}${blenderRules}
+FILE PATHS:
+- Client (GUI / HUD / bars / input / sprint / camera) → StarterPlayer/StarterPlayerScripts/Name.lua
+- Server (game logic / datastores / kills / admin) → ServerScriptService/Name.lua
+- Shared (modules / events) → ReplicatedStorage/Modules/Name.lua
+If modifying an existing script, use the EXACT path from the project context above.
+One file per feature. Do NOT split a client feature into separate UI + logic files.
 
-COMPLETENESS: Full runnable script every time. Zero placeholders. Zero "-- add your code here".
-Only skip the file block if the user is asking a pure question with no coding task — then reply in 1-2 sentences.
+MANDATORY LOCALSCRIPT PATTERN — copy this exactly for any LocalScript needing the character:
+\`\`\`lua
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local humanoid
 
-DELETION: If the user asks to delete, remove, or get rid of a script, output a studio-action block instead of a file block:
-One sentence saying what you deleted.
+local function onCharacter(char)
+    humanoid = char:WaitForChild("Humanoid")
+    -- reset state here on every respawn
+end
+if player.Character then onCharacter(player.Character) end
+player.CharacterAdded:Connect(onCharacter)
+
+RunService.Heartbeat:Connect(function(dt)
+    if not humanoid then return end  -- ALWAYS nil-check before using humanoid
+    -- game logic here
+end)
+\`\`\`
+
+LUAU RULES:
+- task.wait / task.spawn / task.delay only — never wait() / spawn() / delay()
+- RemoteEvents: create on server in ReplicatedStorage, access on client with :WaitForChild("Name", 10)
+- pcall all DataStore calls
+- Humanoid:TakeDamage(n) not Health = 0
+- Never disconnect InputBegan/InputEnded inside those same handlers — only in PlayerRemoving
+- Zero placeholders. Zero "-- add your code here". Full runnable script every time.
+
+DELETION: If asked to delete/remove a script, use a studio-action block:
 \`\`\`studio-action
 {"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/ScriptName"}
 \`\`\`
-Use the EXACT path from the project context. Do NOT write a file block for deletions.`;
+
+Only skip the file block if the user asks a pure question — then reply in 1-2 sentences.`;
+  }
+
+  if (isCode) {
+    return `You are a code-writing assistant for ${engine} inside ROTEX. Write complete, working scripts in file blocks.
+\`\`\`file:ServiceName/ScriptName.lua
+-- full working code
+\`\`\`
+${unityRules}${blenderRules}
+Full runnable code every time. Zero placeholders.`;
   }
 
   // Ask / Plan mode — no code output expected
-  return `You are a helpful ${engine} game development assistant inside ROTEX. Answer questions, explain concepts, and help plan features. Keep responses short and direct. Do not output code blocks unless the user specifically asks to see code.${luauRules}${unityRules}${blenderRules}`;
+  return `You are a helpful ${engine} game development assistant inside ROTEX. Answer questions, explain concepts, and help plan features. Keep responses short and direct. Do not output code blocks unless the user specifically asks to see code.`;
 }
 
 const GROQ_KEY = cleanKey(process.env.GROQ_API_KEY);
