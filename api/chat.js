@@ -373,20 +373,36 @@ async function handleTexBrain(req, res) {
       ...history,
     ];
 
-    let text = '', usedModel = 'groq/llama-3.3-70b-versatile';
+    const MAVERICK = 'meta-llama/llama-4-maverick-17b-128e-instruct';
+    const FAST = 'llama-3.3-70b-versatile';
+    const isCodeMode = mode === 'agent' || mode === 'supreme';
+    // A response is "usable" in code mode only if it actually contains code to apply.
+    const hasCodeBlock = (t) => /```\s*file:/i.test(t) || /```(?:lua|luau)\b/i.test(t);
 
-    // 1. Try Groq first — fastest by far (sub-2s)
+    let text = '', usedModel = 'groq/' + FAST;
+
+    // 1. Try Groq. In code mode, lead with the smarter Maverick (it reliably emits
+    //    ```file: blocks); weak/fast 3.3-70b often replies with prose-only and nothing
+    //    gets applied. In plain chat, lead with the fast 3.3-70b.
     if (GROQ_KEY) {
-      // llama-3.3-70b is fast (~1.5s). Maverick is smarter but slower — try it only if 70b fails.
-      const groqCandidates = [
-        { model: 'llama-3.3-70b-versatile', timeout: 25000 },
-        { model: 'meta-llama/llama-4-maverick-17b-128e-instruct', timeout: 40000 },
-      ];
+      const groqCandidates = isCodeMode
+        ? [
+            { model: MAVERICK, timeout: 45000 },
+            { model: FAST, timeout: 22000 },
+          ]
+        : [
+            { model: FAST, timeout: 25000 },
+            { model: MAVERICK, timeout: 40000 },
+          ];
       for (const { model: gm, timeout } of groqCandidates) {
         try {
           const result = await tbGroqPost(gm, workerMessages, 8192, timeout);
           const t = result.choices?.[0]?.message?.content?.trim();
-          if (t) { text = t; usedModel = 'groq/' + gm; break; }
+          if (t) {
+            text = t; usedModel = 'groq/' + gm;
+            // In code mode keep trying a smarter model if we only got prose.
+            if (!isCodeMode || hasCodeBlock(t)) break;
+          }
         } catch (e) { /* try next */ }
       }
     }
@@ -403,13 +419,33 @@ async function handleTexBrain(req, res) {
         try {
           const result = await tbOrPost('/chat/completions', { model: m, temperature: 0.15, top_p: 0.9, max_tokens: 4096, messages: workerMessages });
           const t = result.choices?.[0]?.message?.content?.trim();
-          if (t) { text = t; usedModel = m; break; }
+          if (t) { text = t; usedModel = m; if (!isCodeMode || hasCodeBlock(t)) break; }
         } catch (e) { /* try next */ }
       }
     }
     if (!text) {
       res.status(503).json({ error: 'TexBrain models are busy right now. Try again in a moment, or use Claude Haiku.' });
       return;
+    }
+
+    // 3. Code mode but the model still only described the change (no code block at all)?
+    //    Force ONE explicit retry that demands ONLY the file block. This is the exact
+    //    failure the user hit ("Adding a stamina bar..." with no script).
+    if (GROQ_KEY && isCodeMode && !hasCodeBlock(text)) {
+      try {
+        const retryMessages = [
+          ...workerMessages,
+          { role: 'assistant', content: text },
+          { role: 'user', content: 'You described the change but output NO code. Now output ONLY the complete ```file:Service/Name.lua code block(s) with the full working script inside. No prose, no explanation — just the file block(s).' },
+        ];
+        const result = await tbGroqPost(MAVERICK, retryMessages, 8192, 38000);
+        const t = result.choices?.[0]?.message?.content?.trim();
+        if (t && hasCodeBlock(t)) {
+          // Keep the original one-line description, then the forced code block(s).
+          text = text + '\n\n' + t;
+          usedModel += '+retry';
+        }
+      } catch (e) { /* keep original text */ }
     }
 
     // Normalize: strip spaces after "file:" that some models insert (```file: Path → ```file:Path)
