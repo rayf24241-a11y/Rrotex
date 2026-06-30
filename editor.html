@@ -1977,12 +1977,28 @@
 
     // Track the experience name, plugin version, and the live scanned scripts
     // the Studio plugin reports (auto-sent on connect and every 10s).
+    window.__rotexStudioErrors = []; // last N errors/warnings from Studio output
     window.rotexDesktop?.onPluginContext?.((ctx) => {
       if (ctx?.gameName) window.__rotexGameName = ctx.gameName;
       if (ctx?.pluginVersion) window.__rotexPluginVersion = ctx.pluginVersion;
       if (Array.isArray(ctx?.capabilities)) window.__rotexPluginCapabilities = ctx.capabilities;
       if (Array.isArray(ctx?.scripts)) window.__rotexScripts = ctx.scripts;
       if (Array.isArray(ctx?.selected)) window.__rotexSelected = ctx.selected;
+      if (ctx?.studioError) {
+        const msg = String(ctx.studioError.message || ctx.studioError || '').trim();
+        const type = String(ctx.studioError.type || '').includes('Warning') ? 'Warning' : 'Error';
+        if (msg) {
+          window.__rotexStudioErrors.push({ msg, type, t: Date.now() });
+          window.__rotexStudioErrors = window.__rotexStudioErrors.slice(-5); // keep last 5
+          // Show error as a small inline notice in chat so user sees it
+          const errBubble = _rxAddMsg('assistant', '');
+          if (errBubble) {
+            errBubble.style.borderLeft = type === 'Warning' ? '3px solid #F59E0B' : '3px solid #EF4444';
+            errBubble.style.paddingLeft = '10px';
+            _renderChatMessage(errBubble, 'assistant', `Studio ${type}: ${msg}`);
+          }
+        }
+      }
     });
 
     // Build the project-source context the AI reads to find/search existing scripts.
@@ -2001,6 +2017,10 @@
       }
       if (selected.length) {
         out += '\n\nCURRENTLY SELECTED IN STUDIO: ' + selected.map((x) => x.path || x.name).join(', ');
+      }
+      const recentErrors = (window.__rotexStudioErrors || []).filter(e => Date.now() - e.t < 60000);
+      if (recentErrors.length) {
+        out += '\n\nRECENT STUDIO OUTPUT (errors/warnings from the last 60s):\n' + recentErrors.map(e => `[${e.type}] ${e.msg}`).join('\n');
       }
       return out;
     }
