@@ -1,4 +1,4 @@
--- ROTEX Studio Plugin v2.5
+-- ROTEX Studio Plugin v2.6
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
@@ -74,7 +74,7 @@ local root = Frame(widget, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), C.bg)
 
 local hdr = Frame(root, UDim2.new(1,0,0,48), UDim2.new(0,0,0,0), C.surface)
 Label(hdr, "ROTEX AI", UDim2.new(1,-14,0,20), UDim2.new(0,12,0,8), C.text, 14, true)
-Label(hdr, "Studio Bridge v2.5", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
+Label(hdr, "Studio Bridge v2.6", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
 Frame(root, UDim2.new(1,0,0,1), UDim2.new(0,0,0,48), C.border)
 
 local Y = 58
@@ -279,7 +279,7 @@ local function buildGameContext(includeSelected)
 	return {
 		project = projectName,
 		gameName = gameName,
-		pluginVersion = "2.5",
+		pluginVersion = "2.6",
 		capabilities = {
 			"apply_files",
 			"create_model geometry",
@@ -576,10 +576,7 @@ local function tryConnect()
 	for _, port in ipairs(PORTS) do
 		local data, err = getJSON(port, "/ping", 2)
 		if data and data.ok then return port, data end
-		if err then
-			lastErr = err
-			appendLog("[ROTEX] port " .. port .. " → " .. err)
-		end
+		if err then lastErr = err end
 	end
 	return nil, nil, lastErr
 end
