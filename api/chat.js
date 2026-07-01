@@ -315,20 +315,38 @@ If the user reports a visual bug (a bar/GUI appears late, flickers, or a second 
 \`\`\`
 Each part: name, class (Part/MeshPart/SpawnLocation — default Part), size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder, Part class only), anchored, transparency, cancollide. This creates real Instances in Studio — never fake this with a Lua script that runs Instance.new at runtime unless the user specifically wants it spawned dynamically at play time.
 
-STARTING ITEMS ("spawn with a sword", "give everyone a tool", "start with X in inventory"): a Tool placed directly in StarterPack automatically clones into every player's Backpack on spawn — this is the correct pattern, not a PlayerAdded script unless the user wants conditional/one-time granting. Build it with a server Script (ServerScriptService) that runs once and constructs the Tool + Handle, since Tool/Handle hierarchy isn't expressible with roblox-model's flat parts list:
+STARTING ITEMS / TOOL MODELS ("make a model for a sword", "spawn with a sword", "give everyone a tool"): NEVER use roblox-model/create_model for a Tool — it always wraps its parts inside a generic Model instance, not a Tool, so the result is a decorative object in StarterPack that is NOT equippable and nothing appears in the player's hand or Backpack. A Tool MUST be built with Instance.new("Tool") in a Lua script, with a part literally named "Handle" as its direct child (required for grip). To make it actually look like the requested item instead of a plain block, add extra visual parts welded to the Handle: use Instance.new("WeldConstraint") between Handle and each extra part, and CFrame the extra parts relative to Handle's CFrame BEFORE parenting them.
 \`\`\`lua
 local tool = Instance.new("Tool")
 tool.Name = "Sword"
 tool.RequiresHandle = true
 tool.CanBeDropped = true
+
 local handle = Instance.new("Part")
 handle.Name = "Handle"
-handle.Size = Vector3.new(1, 4, 1)
-handle.Color = Color3.fromRGB(150, 150, 150)
+handle.Size = Vector3.new(0.4, 3, 0.4)
+handle.Color = Color3.fromRGB(60, 60, 60)
+handle.Material = Enum.Material.Metal
+handle.CanCollide = false
 handle.Parent = tool
+
+local blade = Instance.new("Part")
+blade.Name = "Blade"
+blade.Size = Vector3.new(0.2, 3.5, 0.6)
+blade.Color = Color3.fromRGB(200, 200, 210)
+blade.Material = Enum.Material.Metal
+blade.CanCollide = false
+blade.CFrame = handle.CFrame * CFrame.new(0, 3, 0)
+blade.Parent = tool
+
+local weld = Instance.new("WeldConstraint")
+weld.Part0 = handle
+weld.Part1 = blade
+weld.Parent = handle
+
 tool.Parent = game:GetService("StarterPack")
 \`\`\`
-Give the Tool a real behavior (Equipped/Activated handlers) matching what the user asked for — never leave it as an empty Handle with no function.
+A Tool placed directly (not nested inside anything) in StarterPack automatically clones into every player's Backpack on spawn — do not use a PlayerAdded script unless the user wants conditional/one-time granting. Give the Tool real Equipped/Activated behavior matching what the user asked for (swing animation, damage on touch, etc.) — never leave it as a static prop with no function.
 
 DELETION: If asked to delete/remove a script:
 \`\`\`studio-action
@@ -1459,10 +1477,10 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     (!askMode && !planMode) ? 'Common removal examples: "get out of first person" should delete or disable the first-person LocalScript; "remove sprint" should delete/disable the sprint script and any UI it created; "stop the GUI" should disable or delete the ScreenGui/LocalScript, not add another script that fights it.' : '',
     (!askMode && !planMode) ? 'Duplicate UI example: if the user says "there are still 2 bars" after a stamina/sprint change, output delete_instance actions for the extra StaminaUI/SprintUI ScreenGui/LocalScript paths and update the remaining sprint/stamina script so it creates or controls only one bar.' : '',
     (!askMode && !planMode) ? 'After file/studio-action blocks, do not add fake success claims. The desktop app reports Studio results. Keep any human text to one short sentence about what the change is intended to do.' : '',
-    (!askMode && !planMode) ? 'PLUGIN TOOL RULE: for model/geometry requests, use roblox-model or create_model. For terrain requests, use terrain_edit. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. For UI art/images/icons, use ROBLOX UI IMAGE ASSET SEARCH results with create_ui_image or ImageLabel/ImageButton Image = rbxassetid://id. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
+    (!askMode && !planMode) ? 'PLUGIN TOOL RULE: for static decoration/geometry requests (buildings, terrain props, environment pieces), use roblox-model or create_model. EXCEPTION: never use roblox-model/create_model for a Tool/weapon/item the player equips or spawns with -- it wraps everything in a Model, not a Tool, producing a non-equippable prop. Build Tools with an Instance.new("Tool") Lua script instead (see STARTING ITEMS / TOOL MODELS rule). For terrain requests, use terrain_edit. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. For UI art/images/icons, use ROBLOX UI IMAGE ASSET SEARCH results with create_ui_image or ImageLabel/ImageButton Image = rbxassetid://id. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
     (!askMode && !planMode) ? 'ROBLOX UI QUALITY RULE: Roblox UI should look polished and game-ready: use a clear hierarchy, consistent spacing, UIScale, UICorner, UIStroke, UIGradient, padding, hover/click feedback where relevant, mobile-safe sizes, readable contrast, and only one owner script. Prefer clean modern panels over raw default Frames. If the user asks for classic/simple/normal, make it restrained but still aligned and readable.' : '',
     'To create 3D models/parts in Studio, use a ```roblox-model block with JSON. Example:\n```roblox-model\n{"name":"Castle","parent":"Workspace","parts":[{"name":"Base","size":[20,1,20],"position":[0,0,0],"color":[128,128,128],"material":"SmoothPlastic","anchored":true},{"name":"Wall","size":[20,10,1],"position":[0,5,-10],"color":[110,110,110],"material":"SmoothPlastic","anchored":true}]}\n```\nROTEX sends this to Studio which creates the real 3D objects. Each part can have: name, size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder), anchored, transparency, cancollide, scripts[{name,source}]. The model can also have a top-level "scripts" array for scripts attached to the Model itself.',
-    'STARTING ITEMS ("spawn with a sword", "give everyone a tool", "start with X in inventory"): a Tool placed directly in StarterPack automatically clones into every player\'s Backpack on spawn -- this is the correct pattern, not a PlayerAdded script unless the user wants conditional/one-time granting. Build it with a server Script (ServerScriptService) that runs once and constructs the Tool + Handle programmatically, since Tool/Handle hierarchy is not expressible with roblox-model\'s flat parts list:\n```lua\nlocal tool = Instance.new("Tool")\ntool.Name = "Sword"\ntool.RequiresHandle = true\ntool.CanBeDropped = true\nlocal handle = Instance.new("Part")\nhandle.Name = "Handle"\nhandle.Size = Vector3.new(1, 4, 1)\nhandle.Color = Color3.fromRGB(150, 150, 150)\nhandle.Parent = tool\ntool.Parent = game:GetService("StarterPack")\n```\nGive the Tool real Equipped/Activated behavior matching what the user asked for -- never leave it as an empty Handle with no function.',
+    'STARTING ITEMS / TOOL MODELS ("make a model for a sword", "spawn with a sword", "give everyone a tool"): NEVER use roblox-model/create_model for a Tool -- it always wraps its parts inside a generic Model instance, not a Tool, so the result is a decorative object in StarterPack that is NOT equippable and nothing appears in the player\'s hand or Backpack. A Tool MUST be built with Instance.new("Tool") in a Lua script, with a part literally named "Handle" as its direct child (required for grip). To make it actually look like the requested item instead of a plain block, add extra visual parts welded to the Handle:\n```lua\nlocal tool = Instance.new("Tool")\ntool.Name = "Sword"\ntool.RequiresHandle = true\ntool.CanBeDropped = true\n\nlocal handle = Instance.new("Part")\nhandle.Name = "Handle"\nhandle.Size = Vector3.new(0.4, 3, 0.4)\nhandle.Color = Color3.fromRGB(60, 60, 60)\nhandle.Material = Enum.Material.Metal\nhandle.CanCollide = false\nhandle.Parent = tool\n\nlocal blade = Instance.new("Part")\nblade.Name = "Blade"\nblade.Size = Vector3.new(0.2, 3.5, 0.6)\nblade.Color = Color3.fromRGB(200, 200, 210)\nblade.Material = Enum.Material.Metal\nblade.CanCollide = false\nblade.CFrame = handle.CFrame * CFrame.new(0, 3, 0)\nblade.Parent = tool\n\nlocal weld = Instance.new("WeldConstraint")\nweld.Part0 = handle\nweld.Part1 = blade\nweld.Parent = handle\n\ntool.Parent = game:GetService("StarterPack")\n```\nA Tool placed directly (not nested inside anything) in StarterPack automatically clones into every player\'s Backpack on spawn -- do not use a PlayerAdded script unless the user wants conditional/one-time granting. Give the Tool real Equipped/Activated behavior matching what the user asked for (swing animation, damage on touch, etc.) -- never leave it as a static prop with no function.',
     'Terrain action example:\n```studio-action\n{"type":"terrain_edit","operation":"fill_block","position":[0,0,0],"size":[80,12,80],"material":"Grass"}\n```\nLighting action example:\n```studio-action\n{"type":"lighting_set","properties":{"ClockTime":18,"Brightness":2,"Ambient":[90,90,110],"OutdoorAmbient":[120,120,140]}}\n```',
     'UI image action example:\n```studio-action\n{"type":"create_ui_image","screenGui":"MainHud","name":"CoinIcon","image":"rbxassetid://123456789","position":[0,16,0,16],"size":[0,40,0,40]}\n```',
     'The PROJECT CONTEXT below contains the full source of all scripts in the user\'s game (auto-scanned when Studio connected), plus any recent Studio errors or selection data. Read them to understand the existing codebase before suggesting changes. When modifying existing scripts, reference the exact script path from the context and output a file block for it.'
