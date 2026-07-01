@@ -1551,20 +1551,12 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
   const groqKey = cleanKey(process.env.GROQ_API_KEY);
   const attempts = [];
 
-  // Agent / Super Agent run on the strongest available Claude models so they
-  // reason and plan far better than the base chat models. Super Agent uses the
-  // most capable model (Opus); Agent uses a strong, faster model (Sonnet).
-  // These are tried first; the model's normal attempts below act as fallback.
-  if (anthropicKey && (opts.agent || opts.superAgent)) {
-    const smartModel = opts.superAgent
-      ? (process.env.ROTEX_SUPERAGENT_MODEL || 'claude-opus-4-8')
-      : (process.env.ROTEX_AGENT_MODEL || 'claude-sonnet-4-6');
-    attempts.push({
-      provider: 'anthropic',
-      providerModel: smartModel,
-      apiKey: anthropicKey,
-    });
-  }
+  // The user's selected model is authoritative in every mode, including
+  // Agent/Super Agent. There used to be a silent override here that tried
+  // Claude Sonnet/Opus first whenever Agent mode was on, regardless of which
+  // model was selected -- meaning picking "Google Flash" in Agent mode
+  // actually ran (and billed) Claude Sonnet, never touching Gemini. Removed:
+  // whatever model is picked is what runs, in every mode.
 
   if (selected.route === 'tb-thinking' && groqKey) {
     attempts.push({
