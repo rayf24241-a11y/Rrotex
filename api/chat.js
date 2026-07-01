@@ -306,6 +306,9 @@ LUAU RULES:
 - pcall all DataStore calls. Humanoid:TakeDamage(n) not Health = 0.
 - Zero placeholders. Full runnable script every time.
 
+DUPLICATE/BUG-REPORT RULE — critical for "buggy", "late", "two of them", "another one" reports:
+If the user reports a visual bug (a bar/GUI appears late, flickers, or a second copy shows up underneath/behind the first), the cause is almost always TWO scripts creating the same GUI. Scan the project context for EVERY script whose name or created ScreenGui overlaps with the reported feature (e.g. "Stamina", "StaminaUI", "StaminaSystem", "StaminaBar" are all the same feature under different names). Keep exactly ONE owner script, output its corrected file block, and output a studio-action delete_instance block for every other one — even names that don't look identical. "It spawns in late" from an old duplicate still running its own WaitForChild chain is a symptom of this, not something to patch with more waiting.
+
 DELETION: If asked to delete/remove a script:
 \`\`\`studio-action
 {"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/ScriptName"}
