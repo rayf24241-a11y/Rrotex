@@ -442,10 +442,26 @@ async function handleTexBrain(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ error: 'method not allowed' }); return; }
 
-  const { authToken, messages = [], projectMode = 'Roblox', mode = '' } = req.body || {};
+  const { authToken, messages = [], projectMode = 'Roblox', mode = '', proPass = '' } = req.body || {};
   if (!tbVerifyToken(authToken).ok) { res.status(401).json({ error: 'Please sign in to use TexBrain.' }); return; }
   if (!OR_KEY && !GROQ_KEY) { res.status(500).json({ error: 'TexBrain is not configured.' }); return; }
   if (tbActiveCalls >= TB_MAX_CONCURRENT) { res.status(429).json({ error: 'Too many people are using TexBrain right now (beta). Try again in a moment!' }); return; }
+
+  // Free-plan daily request cap (distinct from the TexToken budget): this handler
+  // is a separate code path from the main /api/chat handler's freeDailyCap check
+  // above, so texbrain-thinking needs its own enforcement here. Pro subscribers
+  // and the dev account are exempt.
+  const tbIsPro = Boolean(verifyProPass(proPass));
+  const tbEmail = _decodeJwtPayload(authToken)?.email || '';
+  const tbIsDev = tbEmail === 'rayf24241@gmail.com';
+  const tbCap = MODELS['texbrain-thinking'].freeDailyCap;
+  if (!tbIsPro && !tbIsDev && tbCap) {
+    const tbUsed = bumpCounter(proCounters, `${ipFromRequest(req)}:texbrain-thinking`);
+    if (tbUsed > tbCap) {
+      res.status(429).json({ error: `You've used your ${tbCap} free TexBrain requests today. Come back tomorrow, or upgrade to Pro at rrotex.com/pro.` });
+      return;
+    }
+  }
 
   tbActiveCalls++;
   try {

@@ -768,7 +768,7 @@
 
   /* -- Model selector ---------------------------------------- */
   const MODELS = [
-    { id: 'texbrain-thinking', name: 'TexBrain Thinking-beta', role: 'Balanced', subtitle: '1.5x', svg: TB_THINKING_SVG, pro: false, localOnly: false, localCapable: true, vision: true  },
+    { id: 'texbrain-thinking', name: 'TexBrain Thinking-beta', role: 'Balanced', subtitle: '4.8x', svg: TB_THINKING_SVG, pro: false, localOnly: false, localCapable: true, vision: true  },
     { id: 'google-flash',      name: 'Google Flash',          role: 'Code + chat',  subtitle: '', svg: GOOGLE_SVG,      pro: false, localOnly: false, vision: false },
     { id: 'pro-smart',         name: 'Claude Haiku',          role: 'Premium', subtitle: 'best',  svg: CLAUDE_SVG,      pro: false, localOnly: false, vision: true  },
   ];
@@ -2137,7 +2137,7 @@
           // TexBrain is always a code assistant — use agent/code mode when studio
           // is connected, so the server builds the code-writing prompt and applies files.
           const localMode = currentMode === 'supreme' ? 'supreme' : (studioOk || currentMode === 'agent') ? 'agent' : '';
-          const result = await window.rotexDesktop.callTexBrain(localMessages, projMode, localMode, authToken);
+          const result = await window.rotexDesktop.callTexBrain(localMessages, projMode, localMode, authToken, proPass);
           if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
           if (result?.error) {
             if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'On hold');

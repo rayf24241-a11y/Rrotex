@@ -41,7 +41,7 @@ contextBridge.exposeInMainWorld('rotexDesktop', {
   getPluginStatus: () => ipcRenderer.invoke('get-plugin-status'),
   getServerInfo:   () => ipcRenderer.invoke('get-server-info'),
   queueStudioActions: (actions) => ipcRenderer.invoke('queue-studio-actions', actions),
-  callTexBrain: (messages, projectMode, mode, authToken) => ipcRenderer.invoke('texbrain-call', messages, projectMode, mode, authToken),
+  callTexBrain: (messages, projectMode, mode, authToken, proPass) => ipcRenderer.invoke('texbrain-call', messages, projectMode, mode, authToken, proPass),
   getApiBase: () => ipcRenderer.invoke('get-api-base'),
   onPluginConnected: (fn) => ipcRenderer.on('plugin-connected', fn),
   onPluginDisconnected: (fn) => ipcRenderer.on('plugin-disconnected', fn),

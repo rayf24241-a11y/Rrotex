@@ -867,9 +867,9 @@ function texbrainApiRequest(body) {
   });
 }
 
-ipcMain.handle('texbrain-call', async (event, messages, projectMode, mode = '', authToken = '') => {
+ipcMain.handle('texbrain-call', async (event, messages, projectMode, mode = '', authToken = '', proPass = '') => {
   try {
-    const res = await texbrainApiRequest({ authToken, messages, projectMode, mode });
+    const res = await texbrainApiRequest({ authToken, messages, projectMode, mode, proPass });
     if (res.status >= 400) {
       return { error: res.body?.error || `TexBrain server error (${res.status})` };
     }
