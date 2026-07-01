@@ -1596,6 +1596,13 @@
         .replace(/```studio-action\n([\s\S]*?)```/g, '')
         .replace(/```roblox-model\n([\s\S]*?)```/g, '')
         .replace(/```file:([^\s`]+)\s+([\s\S]*?)```/g, '')
+        // During streaming, a file/studio-action/roblox-model fence that has
+        // started but not yet closed (no matching ``` at the end) would
+        // otherwise pass through un-stripped, trip _looksLikeSourceCode, and
+        // replace the model's already-visible intro sentence with the
+        // "Working in Roblox Studio..." placeholder mid-stream. Truncate any
+        // trailing unclosed fence so the intro sentence stays stable.
+        .replace(/```[\s\S]*$/, '')
         .trim();
     }
 
