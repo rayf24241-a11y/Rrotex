@@ -482,7 +482,7 @@ async function handleTexBrain(req, res) {
     // Accept any code block: ```file:, ```lua, ```luau, or bare ``` with code inside.
     const hasCodeBlock = (t) => /```(?:\s*file:|\s*lua\b|\s*luau\b|\s*\n)/i.test(t);
 
-    let text = '', usedModel = '';
+    let text = '', usedModel = '', usedUsage = null;
     const tbErrors = [];
 
     // 8000 max_tokens (not 12000): several free-tier providers hard-cap
@@ -501,7 +501,7 @@ async function handleTexBrain(req, res) {
         try {
           const result = await groqCall(m, workerMessages, isCodeMode ? 8000 : 6000);
           const t = result.choices?.[0]?.message?.content?.trim();
-          if (t) { text = t; usedModel = 'groq/' + m; if (!isCodeMode || hasCodeBlock(t)) break; }
+          if (t) { text = t; usedModel = 'groq/' + m; usedUsage = result.usage || null; if (!isCodeMode || hasCodeBlock(t)) break; }
         } catch (e) { tbErrors.push(`groq/${m}: ${e?.message || e}`); }
       }
     }
@@ -513,7 +513,7 @@ async function handleTexBrain(req, res) {
         try {
           const result = await orCall(TB_TALK, workerMessages, 6000);
           const t = result.choices?.[0]?.message?.content?.trim();
-          if (t) { text = t; usedModel = TB_TALK; }
+          if (t) { text = t; usedModel = TB_TALK; usedUsage = result.usage || null; }
         } catch (e) { tbErrors.push(`or/${TB_TALK}: ${e?.message || e}`); }
       } else {
         const codeCandidates = [TB_CODE1, TB_CODE2, TB_UI];
@@ -521,7 +521,7 @@ async function handleTexBrain(req, res) {
           try {
             const result = await orCall(m, workerMessages);
             const t = result.choices?.[0]?.message?.content?.trim();
-            if (t) { text = t; usedModel = m; if (hasCodeBlock(t)) break; }
+            if (t) { text = t; usedModel = m; usedUsage = result.usage || null; if (hasCodeBlock(t)) break; }
           } catch (e) { tbErrors.push(`or/${m}: ${e?.message || e}`); }
         }
       }
@@ -556,8 +556,20 @@ async function handleTexBrain(req, res) {
     // infer the script path from context and rewrite them so the client can apply them.
     text = tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg);
 
-    // Estimate token cost so the client can deduct TexTokens accurately
-    const tbCost = Math.max(1, Math.ceil((text.length + lastUserMsg.length) / 400));
+    // TexToken cost: use the SAME (input*inputTexTokens + output*outputTexTokens)*multiplier
+    // formula as the main /api/chat endpoint (see credit-safety.js estimateTexTokens /
+    // logProviderUsage), driven by texbrain-thinking's catalog pricing. Prefer real
+    // prompt/completion token counts from the provider response over a rough character
+    // estimate. A meaningful floor (not the old chars/400 formula, which charged single
+    // digits per request) ensures usage actually draws down the daily TexToken budget.
+    const tbModel = MODELS['texbrain-thinking'];
+    const inputCharsEstimate = workerMessages.map(m => String(m.content || '')).join('\n').length;
+    const realInputTok = usedUsage?.prompt_tokens ?? Math.max(1, Math.ceil(inputCharsEstimate / 4));
+    const realOutputTok = usedUsage?.completion_tokens ?? Math.max(1, Math.ceil(text.length / 4));
+    let tbCost = (realInputTok * (tbModel.inputTexTokens || 1) + realOutputTok * (tbModel.outputTexTokens || 1)) * (tbModel.multiplier || 1);
+    if (mode === 'agent') tbCost *= 2;
+    if (mode === 'supreme') tbCost *= 4;
+    tbCost = Math.max(isCodeMode ? 5000 : 3000, Math.ceil(tbCost));
     res.status(200).json({ text, model: usedModel, usage: { textokens_charged: tbCost } });
   } catch (err) {
     res.status(500).json({ error: `TexBrain error: ${err.message}` });

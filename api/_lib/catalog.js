@@ -9,7 +9,7 @@ const MODELS = {
     tier: 'free',
     access: 'Free',
     inputTexTokens: 0.8,
-    outputTexTokens: 2.4,
+    outputTexTokens: 1.5,
     multiplier: 1,
     route: 'tb-thinking',
     vision: true,

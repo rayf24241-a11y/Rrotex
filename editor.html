@@ -768,7 +768,7 @@
 
   /* -- Model selector ---------------------------------------- */
   const MODELS = [
-    { id: 'texbrain-thinking', name: 'TexBrain Thinking-beta', role: 'Balanced', subtitle: '2.4x', svg: TB_THINKING_SVG, pro: false, localOnly: false, localCapable: true, vision: true  },
+    { id: 'texbrain-thinking', name: 'TexBrain Thinking-beta', role: 'Balanced', subtitle: '1.5x', svg: TB_THINKING_SVG, pro: false, localOnly: false, localCapable: true, vision: true  },
     { id: 'google-flash',      name: 'Google Flash',          role: 'Code + chat',  subtitle: '', svg: GOOGLE_SVG,      pro: false, localOnly: false, vision: false },
     { id: 'pro-smart',         name: 'Claude Haiku',          role: 'Premium', subtitle: 'best',  svg: CLAUDE_SVG,      pro: false, localOnly: false, vision: true  },
   ];
@@ -2184,9 +2184,11 @@
             _chatHistory.push({ role: 'assistant', content: storedContent });
             _saveMessages();
           }
-          // Deduct TexTokens for TexBrain usage (estimate from text length)
+          // Deduct TexTokens for TexBrain usage. Server always returns a real
+          // usage.textokens_charged; the fallback here only fires if that's
+          // somehow missing, and matches the server's floor (see api/chat.js).
           if (full && window.rotexTokens?.spend) {
-            const tbCost = result?.usage?.textokens_charged || Math.max(1, Math.ceil((full.length + 500) / 400));
+            const tbCost = result?.usage?.textokens_charged || Math.max(3000, Math.ceil((full.length + 500) / 4));
             window.rotexTokens.spend(tbCost);
           }
           return;
