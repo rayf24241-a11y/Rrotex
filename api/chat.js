@@ -483,10 +483,15 @@ async function handleTexBrain(req, res) {
     const hasCodeBlock = (t) => /```(?:\s*file:|\s*lua\b|\s*luau\b|\s*\n)/i.test(t);
 
     let text = '', usedModel = '';
+    const tbErrors = [];
 
-    const orCall = (model, msgs, maxTok = 12000, timeoutMs = 25000) =>
+    // 8000 max_tokens (not 12000): several free-tier providers hard-cap
+    // completion length or total context (prompt + completion) well below
+    // 12000 and error out rather than truncate, which silently failed every
+    // candidate in the cascade at once. 8000 is still generous for one script.
+    const orCall = (model, msgs, maxTok = 8000, timeoutMs = 25000) =>
       tbOrPost('/chat/completions', { model, temperature: 0.2, top_p: 0.95, max_tokens: maxTok, messages: msgs }, timeoutMs);
-    const groqCall = (model, msgs, maxTok = 12000, timeoutMs = 20000) =>
+    const groqCall = (model, msgs, maxTok = 8000, timeoutMs = 20000) =>
       tbGroqPost(model, msgs, maxTok, timeoutMs);
 
     // 1. Groq — fast + smart, tried first whenever a key is configured.
@@ -494,10 +499,10 @@ async function handleTexBrain(req, res) {
       const groqCandidates = isCodeMode ? [GROQ_CODE1, GROQ_CODE2] : [GROQ_TALK];
       for (const m of groqCandidates) {
         try {
-          const result = await groqCall(m, workerMessages, isCodeMode ? 12000 : 6000);
+          const result = await groqCall(m, workerMessages, isCodeMode ? 8000 : 6000);
           const t = result.choices?.[0]?.message?.content?.trim();
           if (t) { text = t; usedModel = 'groq/' + m; if (!isCodeMode || hasCodeBlock(t)) break; }
-        } catch (e) { /* try next */ }
+        } catch (e) { tbErrors.push(`groq/${m}: ${e?.message || e}`); }
       }
     }
 
@@ -509,7 +514,7 @@ async function handleTexBrain(req, res) {
           const result = await orCall(TB_TALK, workerMessages, 6000);
           const t = result.choices?.[0]?.message?.content?.trim();
           if (t) { text = t; usedModel = TB_TALK; }
-        } catch (e) { /* fall through to code cascade */ }
+        } catch (e) { tbErrors.push(`or/${TB_TALK}: ${e?.message || e}`); }
       } else {
         const codeCandidates = [TB_CODE1, TB_CODE2, TB_UI];
         for (const m of codeCandidates) {
@@ -517,10 +522,12 @@ async function handleTexBrain(req, res) {
             const result = await orCall(m, workerMessages);
             const t = result.choices?.[0]?.message?.content?.trim();
             if (t) { text = t; usedModel = m; if (hasCodeBlock(t)) break; }
-          } catch (e) { /* try next */ }
+          } catch (e) { tbErrors.push(`or/${m}: ${e?.message || e}`); }
         }
       }
     }
+
+    if (!text && tbErrors.length) console.error('[TexBrain] all candidates failed:', tbErrors.join(' | '));
 
     if (!text) {
       res.status(503).json({ error: 'TexBrain models are busy right now. Try again in a moment, or use Claude Haiku.' });
