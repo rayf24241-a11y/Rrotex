@@ -417,8 +417,16 @@ async function tbOrPost(endpoint, body, timeoutMs = 25000) {
 // If the model returned plain ```lua blocks (ignoring the file: format instruction),
 // try to infer the correct path from context and upgrade them to ```file: blocks.
 function tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg) {
-  // Already has a file: block — nothing to fix
-  if (/```file:/.test(text)) return text;
+  // Already has a COMPLETE, well-formed file: block — nothing to fix. Must
+  // match the client's actual extraction regex (closing fence required), not
+  // just check for the substring "```file:" anywhere in the text. A model can
+  // ramble into a malformed, unclosed ```file: fragment after an otherwise
+  // valid plain ```lua block (seen live: llama-3.3-70b-versatile trailed off
+  // mid-response into "```file:Path\nOne sentence describing..." with no
+  // closing fence) -- the loose check let that garbage fragment block this
+  // fixer from ever converting the real, complete ```lua block, so nothing
+  // got applied to Studio even though the code itself was correct.
+  if (/```file:[^\n`]+\n[\s\S]*?```/.test(text)) return text;
   // No code block at all — nothing to fix
   if (!/```(?:lua|luau)?\s*\n/.test(text)) return text;
 
@@ -439,8 +447,15 @@ function tbFixPlainLuaBlocks(text, contextMsgs, lastUserMsg) {
 
   // If no path found from context, try to infer from script name mentioned in text or user msg
   if (!inferredPath) {
-    // Match compound names like "StaminaSystem", "JumpScript", etc.
-    const compoundMatch = text.match(/(?:script|Script)\s+[`"']?([\w]+(?:Script|Handler|System|UI|Controller|Bar|Manager|GUI)?)[`"']?/i)
+    // Match compound names like "StaminaSystem", "JumpScript", etc. The
+    // "script <word>" pattern has no required suffix, so on a rambling
+    // sentence like "a script that spawns..." it happily captures the filler
+    // word "that" as the script name (seen live: ServerScriptService/that.lua).
+    // Reject common filler/stop words so it falls through to a better guess.
+    const FILLER_WORDS = /^(?:that|this|it|which|who|what|to|a|an|the|and|for|with|so|is|are|will|can|should)$/i;
+    let compoundMatch = text.match(/(?:script|Script)\s+[`"']?([\w]+(?:Script|Handler|System|UI|Controller|Bar|Manager|GUI)?)[`"']?/i);
+    if (compoundMatch && FILLER_WORDS.test(compoundMatch[1])) compoundMatch = null;
+    compoundMatch = compoundMatch
       || lastUserMsg.match(/\b([\w]+(?:Script|Handler|System|UI|Controller|Bar|Manager|GUI|Stamina|Jump|Movement|Player|Leaderboard|Shop|Inventory|Health|Quest|Chat|Kill|Kill|Spawn|Weapon|Tool)[\w]*)\b/i);
     if (compoundMatch) {
       const name = compoundMatch[1];
