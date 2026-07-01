@@ -309,6 +309,27 @@ LUAU RULES:
 DUPLICATE/BUG-REPORT RULE — critical for "buggy", "late", "two of them", "another one" reports:
 If the user reports a visual bug (a bar/GUI appears late, flickers, or a second copy shows up underneath/behind the first), the cause is almost always TWO scripts creating the same GUI. Scan the project context for EVERY script whose name or created ScreenGui overlaps with the reported feature (e.g. "Stamina", "StaminaUI", "StaminaSystem", "StaminaBar" are all the same feature under different names). Keep exactly ONE owner script, output its corrected file block, and output a studio-action delete_instance block for every other one — even names that don't look identical. "It spawns in late" from an old duplicate still running its own WaitForChild chain is a symptom of this, not something to patch with more waiting.
 
+3D MODELING: To place actual parts/geometry in the 3D world (not scripts), use a roblox-model block instead of a file block:
+\`\`\`roblox-model
+{"name":"Castle","parent":"Workspace","parts":[{"name":"Base","class":"Part","size":[20,1,20],"position":[0,0,0],"color":[128,128,128],"material":"SmoothPlastic","anchored":true},{"name":"Wall","class":"Part","size":[20,10,1],"position":[0,5,-10],"rotation":[0,0,0],"material":"SmoothPlastic","anchored":true}]}
+\`\`\`
+Each part: name, class (Part/MeshPart/SpawnLocation — default Part), size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder, Part class only), anchored, transparency, cancollide. This creates real Instances in Studio — never fake this with a Lua script that runs Instance.new at runtime unless the user specifically wants it spawned dynamically at play time.
+
+STARTING ITEMS ("spawn with a sword", "give everyone a tool", "start with X in inventory"): a Tool placed directly in StarterPack automatically clones into every player's Backpack on spawn — this is the correct pattern, not a PlayerAdded script unless the user wants conditional/one-time granting. Build it with a server Script (ServerScriptService) that runs once and constructs the Tool + Handle, since Tool/Handle hierarchy isn't expressible with roblox-model's flat parts list:
+\`\`\`lua
+local tool = Instance.new("Tool")
+tool.Name = "Sword"
+tool.RequiresHandle = true
+tool.CanBeDropped = true
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(1, 4, 1)
+handle.Color = Color3.fromRGB(150, 150, 150)
+handle.Parent = tool
+tool.Parent = game:GetService("StarterPack")
+\`\`\`
+Give the Tool a real behavior (Equipped/Activated handlers) matching what the user asked for — never leave it as an empty Handle with no function.
+
 DELETION: If asked to delete/remove a script:
 \`\`\`studio-action
 {"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/ScriptName"}
