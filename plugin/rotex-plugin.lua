@@ -1,4 +1,4 @@
--- ROTEX Studio Plugin v2.6
+-- ROTEX Studio Plugin v2.7
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
@@ -74,7 +74,7 @@ local root = Frame(widget, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), C.bg)
 
 local hdr = Frame(root, UDim2.new(1,0,0,48), UDim2.new(0,0,0,0), C.surface)
 Label(hdr, "ROTEX AI", UDim2.new(1,-14,0,20), UDim2.new(0,12,0,8), C.text, 14, true)
-Label(hdr, "Studio Bridge v2.6", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
+Label(hdr, "Studio Bridge v2.7", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
 Frame(root, UDim2.new(1,0,0,1), UDim2.new(0,0,0,48), C.border)
 
 local Y = 58
@@ -279,7 +279,7 @@ local function buildGameContext(includeSelected)
 	return {
 		project = projectName,
 		gameName = gameName,
-		pluginVersion = "2.6",
+		pluginVersion = "2.7",
 		capabilities = {
 			"apply_files",
 			"create_model geometry",
@@ -543,7 +543,11 @@ end
 
 local function handleDeleteInstance(action)
 	local inst = resolveByPath(action.path or "")
-	if not inst then return false, "Not found: " .. tostring(action.path) end
+	-- Deletion is idempotent: if the instance is already gone, the desired
+	-- end state (does not exist) is already true. Treat as success instead
+	-- of a hard failure, so one already-removed duplicate doesn't make the
+	-- whole batch (including real successes) report as failed.
+	if not inst then return true, "Deleted " .. tostring(action.path) .. " (already removed)" end
 	ChangeHistoryService:SetWaypoint("ROTEX Delete")
 	inst:Destroy()
 	ChangeHistoryService:SetWaypoint("ROTEX Delete Done")
