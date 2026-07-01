@@ -1,6 +1,6 @@
 {
   "name": "rotex-editor",
-  "version": "1.16.60",
+  "version": "1.16.69",
   "description": "ROTEX desktop AI agent for Unity, Roblox, Blender, and game dev projects",
   "main": "main.js",
   "scripts": {
@@ -107,6 +107,10 @@
       {
         "from": "../texbrain-logo.png",
         "to": "texbrain-logo.png"
+      },
+      {
+        "from": "../google-flash-logo.png",
+        "to": "google-flash-logo.png"
       }
     ],
     "win": {
@@ -146,12 +150,3 @@
     }
   }
 }
-
-
-
-
-
-
-
-
-

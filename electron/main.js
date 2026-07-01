@@ -828,8 +828,15 @@ ipcMain.handle('get-server-info', () => ({
   token: pluginToken || '',
 }));
 
-// ─── IPC: TexBrain 0.5-β (proxied through ROTEX server to Railway Ollama) ─────
-const TEXBRAIN_API_URL = process.env.TEXBRAIN_API_URL || 'https://www.rrotex.com/api/chat/texbrain';
+// ─── IPC: TexBrain 0.5-β (proxied through ROTEX server) ────────────────────
+// Dev mode: set ROTEX_API_BASE to point the desktop app at a Vercel preview
+// deployment instead of production, to test server-side model changes before
+// they ship. Defaults to production so a normal launch is unaffected.
+const API_BASE = (process.env.ROTEX_API_BASE || 'https://www.rrotex.com').replace(/\/+$/, '');
+const IS_DEV_API = API_BASE !== 'https://www.rrotex.com';
+const TEXBRAIN_API_URL = process.env.TEXBRAIN_API_URL || `${API_BASE}/api/chat/texbrain`;
+
+ipcMain.handle('get-api-base', () => ({ base: API_BASE, isDev: IS_DEV_API }));
 
 function texbrainApiRequest(body) {
   return new Promise((resolve, reject) => {

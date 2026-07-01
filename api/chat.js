@@ -1071,16 +1071,16 @@ ROBLOX-SPECIFIC GOTCHAS:
 - ModuleScript state is per-VM: one shared instance for all server Scripts, one for all LocalScripts. Key per-player data by player object, not globals.
 - Touched fires multiple times per second — debounce with a table keyed by player: local db = {}; part.Touched:Connect(function(hit) local p = Players:GetPlayerFromCharacter(hit.Parent); if not p or db[p] then return end; db[p] = true; task.delay(1, function() db[p] = nil end) end).
 - Character loads async. After PlayerAdded fires, character may not exist yet. ALWAYS use this pattern at the top of every LocalScript that needs the character:
-  ```lua
+  \`\`\`lua
   local function onCharacter(char)
       local humanoid = char:WaitForChild("Humanoid")
       -- setup here
   end
   if player.Character then onCharacter(player.Character) end
   player.CharacterAdded:Connect(onCharacter)
-  ```
+  \`\`\`
   Never hook CharacterAdded alone — the character is already loaded when a LocalScript first runs.
-- Always nil-check humanoid/character before accessing properties in RunService loops: `if not humanoid then return end`.
+- Always nil-check humanoid/character before accessing properties in RunService loops: \`if not humanoid then return end\`.
 - Never disconnect InputBegan/InputEnded connections inside those same handlers — only disconnect in CharacterRemoving or PlayerRemoving.
 - CharacterAdded fires every respawn — reset all state variables inside the handler, not at the top of the script.
 - Humanoid.Health = 0 kills instantly and ignores ForceField. Use Humanoid:TakeDamage(amount) instead.
