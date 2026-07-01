@@ -264,7 +264,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: 'ROTEX',
+    title: app.getName().includes('Dev') ? app.getName() : 'ROTEX',
     icon: appIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -832,11 +832,17 @@ ipcMain.handle('get-server-info', () => ({
 // Dev mode: set ROTEX_API_BASE to point the desktop app at a Vercel preview
 // deployment instead of production, to test server-side model changes before
 // they ship. Defaults to production so a normal launch is unaffected.
+// The "Dev ROTEX" build (npm run build:dev:win) is a separately-branded
+// installer for this same purpose — it installs side by side with the real
+// ROTEX Desktop app so the newest code can be tested locally without
+// disturbing the stable install. Once a build is ready to ship, the normal
+// `build:win` script (no "Dev" branding) is what actually gets released.
+const IS_DEV_BUILD = app.getName().includes('Dev');
 const API_BASE = (process.env.ROTEX_API_BASE || 'https://www.rrotex.com').replace(/\/+$/, '');
 const IS_DEV_API = API_BASE !== 'https://www.rrotex.com';
 const TEXBRAIN_API_URL = process.env.TEXBRAIN_API_URL || `${API_BASE}/api/chat/texbrain`;
 
-ipcMain.handle('get-api-base', () => ({ base: API_BASE, isDev: IS_DEV_API }));
+ipcMain.handle('get-api-base', () => ({ base: API_BASE, isDev: IS_DEV_API || IS_DEV_BUILD, appName: app.getName() }));
 
 function texbrainApiRequest(body) {
   return new Promise((resolve, reject) => {

@@ -796,9 +796,12 @@
     localStorage.setItem('rotex_model', selectedModel);
   }
 
-  // Dev mode: desktop app can be launched with ROTEX_API_BASE set to a Vercel
-  // preview URL to test server-side model changes before they ship to
-  // production. Resolved once at startup and cached; defaults to production.
+  // Dev mode: either (a) the desktop app was launched with ROTEX_API_BASE set
+  // to a Vercel preview URL to test server-side model changes before they
+  // ship, or (b) this is the "Dev ROTEX" build (npm run build:dev:win),
+  // which installs side by side with the real ROTEX Desktop app so the
+  // newest code can be tested locally. Resolved once at startup and cached;
+  // defaults to production for a normal launch/build.
   let _apiBase = 'https://www.rrotex.com';
   (async () => {
     try {
@@ -806,7 +809,7 @@
       if (info?.base) _apiBase = info.base;
       if (info?.isDev) {
         const badge = document.createElement('div');
-        badge.textContent = 'DEV: ' + info.base;
+        badge.textContent = (info.appName || 'DEV') + (info.base !== 'https://www.rrotex.com' ? ' → ' + info.base : '');
         badge.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font:11px/1.6 Consolas,monospace;text-align:center;padding:1px;pointer-events:none;';
         document.body?.appendChild(badge);
       }
@@ -1224,7 +1227,7 @@
       let _pluginConnected = false;
       let _studioConnected = false;
       let _pluginReady = false;
-      let _ver = '1.16.69';
+      let _ver = '1.16.89';
       function displayVersion(ver) { return ver; }
 
       function setLoadStatus(text) {

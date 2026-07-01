@@ -444,7 +444,7 @@ async function handleTexBrain(req, res) {
 
   const { authToken, messages = [], projectMode = 'Roblox', mode = '' } = req.body || {};
   if (!tbVerifyToken(authToken).ok) { res.status(401).json({ error: 'Please sign in to use TexBrain.' }); return; }
-  if (!OR_KEY) { res.status(500).json({ error: 'TexBrain is not configured.' }); return; }
+  if (!OR_KEY && !GROQ_KEY) { res.status(500).json({ error: 'TexBrain is not configured.' }); return; }
   if (tbActiveCalls >= TB_MAX_CONCURRENT) { res.status(429).json({ error: 'Too many people are using TexBrain right now (beta). Try again in a moment!' }); return; }
 
   tbActiveCalls++;
@@ -464,11 +464,15 @@ async function handleTexBrain(req, res) {
       ...history,
     ];
 
-    // 4 dedicated OpenRouter free models:
-    //   TALK  — fast conversational model for ask/plan mode
-    //   CODE1 — primary code model (best format adherence)
-    //   CODE2 — reasoning fallback coder
-    //   UI    — strong general model for UI/visual code when CODE1+2 fail
+    // Groq first: fastest inference available, and openai/gpt-oss-120b is
+    // Groq's current flagship model (Kimi K2 was deprecated on Groq in favor
+    // of it as of March 2026 — do not reintroduce a moonshotai/kimi-k2-*
+    // model id here without checking console.groq.com/docs/deprecations).
+    // OpenRouter free models are the resilience fallback if Groq is
+    // rate-limited, down, or GROQ_API_KEY has no credits.
+    const GROQ_CODE1 = 'openai/gpt-oss-120b';
+    const GROQ_CODE2 = 'llama-3.3-70b-versatile';
+    const GROQ_TALK  = 'llama-3.3-70b-versatile';
     const TB_TALK  = 'google/gemma-3-27b-it:free';
     const TB_CODE1 = 'qwen/qwen3-coder:free';
     const TB_CODE2 = 'deepseek/deepseek-v3-0324:free';
@@ -478,29 +482,43 @@ async function handleTexBrain(req, res) {
     // Accept any code block: ```file:, ```lua, ```luau, or bare ``` with code inside.
     const hasCodeBlock = (t) => /```(?:\s*file:|\s*lua\b|\s*luau\b|\s*\n)/i.test(t);
 
-    let text = '', usedModel = TB_TALK;
+    let text = '', usedModel = '';
 
     const orCall = (model, msgs, maxTok = 12000, timeoutMs = 25000) =>
       tbOrPost('/chat/completions', { model, temperature: 0.2, top_p: 0.95, max_tokens: maxTok, messages: msgs }, timeoutMs);
+    const groqCall = (model, msgs, maxTok = 12000, timeoutMs = 20000) =>
+      tbGroqPost(model, msgs, maxTok, timeoutMs);
 
-    // Ask/plan mode: single fast talk model — no need for heavy code models.
-    if (!isCodeMode) {
-      try {
-        const result = await orCall(TB_TALK, workerMessages, 6000);
-        text = result.choices?.[0]?.message?.content?.trim() || '';
-        usedModel = TB_TALK;
-      } catch (e) { /* fall through to code cascade */ }
+    // 1. Groq — fast + smart, tried first whenever a key is configured.
+    if (GROQ_KEY) {
+      const groqCandidates = isCodeMode ? [GROQ_CODE1, GROQ_CODE2] : [GROQ_TALK];
+      for (const m of groqCandidates) {
+        try {
+          const result = await groqCall(m, workerMessages, isCodeMode ? 12000 : 6000);
+          const t = result.choices?.[0]?.message?.content?.trim();
+          if (t) { text = t; usedModel = 'groq/' + m; if (!isCodeMode || hasCodeBlock(t)) break; }
+        } catch (e) { /* try next */ }
+      }
     }
 
-    // Code mode (or talk fallback): cascade CODE1 → CODE2 → UI until we get a file block.
+    // 2. OpenRouter free models — resilience fallback if Groq failed or
+    //    didn't produce a usable code block.
     if (!text || (isCodeMode && !hasCodeBlock(text))) {
-      const codeCandidates = [TB_CODE1, TB_CODE2, TB_UI];
-      for (const m of codeCandidates) {
+      if (!isCodeMode) {
         try {
-          const result = await orCall(m, workerMessages);
+          const result = await orCall(TB_TALK, workerMessages, 6000);
           const t = result.choices?.[0]?.message?.content?.trim();
-          if (t) { text = t; usedModel = m; if (!isCodeMode || hasCodeBlock(t)) break; }
-        } catch (e) { /* try next */ }
+          if (t) { text = t; usedModel = TB_TALK; }
+        } catch (e) { /* fall through to code cascade */ }
+      } else {
+        const codeCandidates = [TB_CODE1, TB_CODE2, TB_UI];
+        for (const m of codeCandidates) {
+          try {
+            const result = await orCall(m, workerMessages);
+            const t = result.choices?.[0]?.message?.content?.trim();
+            if (t) { text = t; usedModel = m; if (hasCodeBlock(t)) break; }
+          } catch (e) { /* try next */ }
+        }
       }
     }
 
@@ -516,7 +534,9 @@ async function handleTexBrain(req, res) {
           { role: 'system', content: `Output ONLY a file block. Nothing else.\nFormat:\n\`\`\`file:ServiceName/ScriptName.lua\n-- code here\n\`\`\`` },
           { role: 'user', content: lastUserMsg },
         ];
-        const result = await orCall(TB_CODE1, retryPrompt, 8192);
+        const result = GROQ_KEY
+          ? await groqCall(GROQ_CODE1, retryPrompt, 8192)
+          : await orCall(TB_CODE1, retryPrompt, 8192);
         const t = result.choices?.[0]?.message?.content?.trim();
         if (t && hasCodeBlock(t)) { text = text + '\n\n' + t; usedModel += '+retry'; }
       } catch (e) { /* keep original text */ }

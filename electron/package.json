@@ -1,6 +1,6 @@
 {
   "name": "rotex-editor",
-  "version": "1.16.69",
+  "version": "1.16.89",
   "description": "ROTEX desktop AI agent for Unity, Roblox, Blender, and game dev projects",
   "main": "main.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "electron-builder",
     "build:all": "electron-builder --win --mac --linux",
     "build:win": "electron-builder --win",
+    "build:dev:win": "electron-builder --win -c.appId=com.rrotex.editor.dev -c.productName=\"Dev ROTEX\" -c.artifactName=\"Dev-ROTEX-Desktop-${os}.${ext}\" -c.nsis.shortcutName=\"Dev ROTEX\" -c.publish=never",
     "build:win:installer": "node scripts/build-win-installer.js",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
