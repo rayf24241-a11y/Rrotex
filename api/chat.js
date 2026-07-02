@@ -500,7 +500,8 @@ async function handleTexBrain(req, res) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'method not allowed' }); return; }
 
   const { authToken, messages = [], projectMode = 'Roblox', mode = '', proPass = '' } = req.body || {};
-  if (!tbVerifyToken(authToken).ok) { res.status(401).json({ error: 'Please sign in to use TexBrain.' }); return; }
+  const tbAuth = tbVerifyToken(authToken);
+  if (!tbAuth.ok) { res.status(401).json({ error: 'Please sign in to use TexBrain.' }); return; }
   if (!OR_KEY && !GROQ_KEY) { res.status(500).json({ error: 'TexBrain is not configured.' }); return; }
   if (tbActiveCalls >= TB_MAX_CONCURRENT) { res.status(429).json({ error: 'Too many people are using TexBrain right now (beta). Try again in a moment!' }); return; }
 
@@ -643,6 +644,25 @@ async function handleTexBrain(req, res) {
     if (mode === 'agent') tbCost *= 2;
     if (mode === 'supreme') tbCost *= 4;
     tbCost = Math.max(isCodeMode ? 5000 : 3000, Math.ceil(tbCost));
+
+    // Persist this spend server-side (same mechanism the main /api/chat handler
+    // uses) so the client's balance display doesn't get silently overwritten.
+    // The client's window.rotexTokens.spend() only updates localStorage; the
+    // displayed balance actually reads window.__rotexServerUsage (Firestore)
+    // whenever it's populated, and refreshBillingFromCloud() re-fetches it
+    // every 2 minutes / on focus / before the next message. Without writing
+    // TexBrain's cost into that same server-side counter, the next refresh
+    // pulls back the OLD dayUsed value and the balance appears to not move at
+    // all -- exactly "my textokens arent going down".
+    if (!tbIsDev) {
+      const tbIp = ipFromRequest(req);
+      const tbFreeKey = tbAuth.uid ? `uid:${tbAuth.uid}` : `ip:${tbIp}`;
+      addFreeTokensUsed(tbFreeKey, tbCost);
+      const tbIpKey = `ip:${tbIp}`;
+      if (tbIpKey !== tbFreeKey) addFreeTokensUsed(tbIpKey, tbCost);
+      if (tbAuth.uid) addUsage(tbAuth.uid, authToken, tbCost).catch(() => {});
+    }
+
     res.status(200).json({ text, model: usedModel, usage: { textokens_charged: tbCost } });
   } catch (err) {
     res.status(500).json({ error: `TexBrain error: ${err.message}` });
