@@ -557,7 +557,17 @@ async function handleTexBrain(req, res) {
     const TB_CODE1 = 'qwen/qwen3-coder:free';
     const TB_CODE2 = 'deepseek/deepseek-v3-0324:free';
     const TB_UI    = 'meta-llama/llama-3.3-70b-instruct:free';
+    // Super Agent mode's prompt asks for a "5-pass deep workflow", but until
+    // now the underlying model never actually changed from Agent mode's fast
+    // models -- more prompt text on the same fast model doesn't produce
+    // genuinely deeper reasoning. deepseek-r1 is currently the strongest free
+    // reasoning model on OpenRouter; only worth the latency for Supreme mode,
+    // where users already expect a slower, more thorough pass. Timeout is
+    // capped well under the 90s Vercel function limit (see vercel.json) to
+    // leave room for the rest of the cascade if it doesn't pan out.
+    const TB_REASONING = 'deepseek/deepseek-r1:free';
     const isCodeMode = mode === 'agent' || mode === 'supreme';
+    const isSupreme = mode === 'supreme';
 
     // Accept any code block: ```file:, ```lua, ```luau, or bare ``` with code inside.
     const hasCodeBlock = (t) => /```(?:\s*file:|\s*lua\b|\s*luau\b|\s*\n)/i.test(t);
@@ -586,8 +596,19 @@ async function handleTexBrain(req, res) {
       }
     }
 
-    // 2. OpenRouter free models — resilience fallback if Groq failed or
-    //    didn't produce a usable code block.
+    // 1.5. Super Agent only: a genuinely stronger reasoning pass, not just
+    //      more prompt text on the same fast model. Skipped if Groq already
+    //      produced a usable code block (saves the latency when not needed).
+    if (isSupreme && (!text || !hasCodeBlock(text))) {
+      try {
+        const result = await orCall(TB_REASONING, workerMessages, 8000, 45000);
+        const t = result.choices?.[0]?.message?.content?.trim();
+        if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
+      } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
+    }
+
+    // 2. OpenRouter free models — resilience fallback if Groq (or the
+    //    Supreme reasoning pass) failed or didn't produce a usable code block.
     if (!text || (isCodeMode && !hasCodeBlock(text))) {
       if (!isCodeMode) {
         try {
