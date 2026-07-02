@@ -57,6 +57,12 @@ async function addUsage(uid, authToken, amount) {
   } catch { /* fail-open */ }
 }
 
+// 3D modeling (roblox-model / create_model) creates real, persistent geometry
+// in the game rather than just editing a script -- a distinct, higher-value
+// capability that carries a premium on top of normal token-based pricing.
+// Applied uniformly across TexBrain, Claude Haiku, and Google Flash.
+const MODELING_COST_MULTIPLIER = 1.5;
+
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
 const FREE_DAILY_TEXTOKENS = 150_000;
@@ -218,7 +224,7 @@ function tbBuildSystemPrompt(projectMode, mode) {
   const blenderRules = engine.includes('Blender') ? `\nBlender bpy rules: prefer bpy.data over bpy.ops, bmesh for geometry, apply transforms before export.` : '';
 
   if (isCode && engine.includes('Roblox')) {
-    return `You are a senior Roblox Luau engineer inside ROTEX. Write complete, production-quality scripts.
+    return `You are a senior Roblox Luau engineer inside ROTEX. Your job is to build WHATEVER the user asks for -- health bars, mana, XP, inventory, shops, quest systems, NPCs, combat, leaderboards, tools, terrain, vehicles, minigames, admin commands, anything. Do not assume every request is about stamina or sprinting; that only comes up below because it's a compact way to demonstrate the required lifecycle pattern, not because it's the thing you build. Read the user's actual request and build exactly that, with the same quality bar.
 
 OUTPUT FORMAT — required every time:
 One sentence describing what you made or changed.
@@ -227,7 +233,7 @@ One sentence describing what you made or changed.
 \`\`\`
 
 FILE PATHS:
-- Client (GUI / HUD / bars / input / sprint / stamina / camera) → StarterPlayer/StarterPlayerScripts/Name.lua
+- Client (GUI / HUD / bars / input / camera / any player-facing feature) → StarterPlayer/StarterPlayerScripts/Name.lua
 - Server (game logic / datastores / kills / admin) → ServerScriptService/Name.lua
 - Shared (modules / events) → ReplicatedStorage/Modules/Name.lua
 If modifying an existing script, use the EXACT path from the project context above.
@@ -235,7 +241,7 @@ One file per feature. Do NOT split a client feature into separate UI + logic fil
 
 REWRITE RULE: If the existing script in project context is missing the player.Character pre-check OR has a nil-check error in RunService, rewrite it completely from scratch using the correct pattern below. Do not preserve broken lifecycle code.
 
-COMPLETE REFERENCE IMPLEMENTATION — stamina/sprint bar (copy this pattern for ALL client movement/UI scripts):
+LIFECYCLE PATTERN — this example happens to be a stamina bar, but the SAME structure (character pre-check, CharacterAdded hook, nil-guarded Heartbeat, input handling) applies to any client feature: health bars, mana, hunger, cooldown UI, ability meters, whatever the user actually asked for. Copy the STRUCTURE, not the stamina-specific variable names:
 \`\`\`lua
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -643,6 +649,11 @@ async function handleTexBrain(req, res) {
     let tbCost = (realInputTok * (tbModel.inputTexTokens || 1) + realOutputTok * (tbModel.outputTexTokens || 1)) * (tbModel.multiplier || 1);
     if (mode === 'agent') tbCost *= 2;
     if (mode === 'supreme') tbCost *= 4;
+    // 3D modeling (roblox-model / create_model) is a distinct, higher-value
+    // capability -- it creates real, persistent geometry in the game, not just
+    // a script edit -- so it carries a premium on top of the normal token cost
+    // even though bigger models already cost more via output size alone.
+    if (/```\s*roblox-model\b/i.test(text)) tbCost *= MODELING_COST_MULTIPLIER;
     tbCost = Math.max(isCodeMode ? 5000 : 3000, Math.ceil(tbCost));
 
     // Persist this spend server-side (same mechanism the main /api/chat handler
@@ -1083,6 +1094,11 @@ module.exports = async function handler(request, response) {
         agent,
         superAgent,
         devPass,
+        isDev,
+        authToken,
+        authUid: authResult.uid,
+        freeKey: request._freeKey,
+        ipKey: request._ipKey,
       });
     } else {
       const result = await completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages, {
@@ -1473,7 +1489,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'REASON BEFORE ACTING: silently analyze every request in three steps before answering: (1) INTENT — what does the user actually want? (2) CONTEXT — which existing scripts, events, or instances already own this behavior? (3) IMPACT — what could this change break? Use the answers to pick the smallest correct action.',
     'PROJECT CONTEXT PROTOCOL: scan PROJECT CONTEXT for matching script names, paths, RemoteEvents, ScreenGuis, Tools, camera/input scripts, and previous ROTEX-created scripts. Prefer modifying/removing exact matches over creating new scripts.',
     'REAL UPDATE RULE: the user judges success by the live Roblox Studio game changing. In Agent/Super Agent, do not only explain or paste code. Output executable file/studio-action/roblox-model blocks that ROTEX can apply through the plugin, then keep visible text short.',
-    'VISIBLE CHAT RULE: In Agent/Super Agent, the user-facing message must NOT contain Lua source code, JSON action payloads, or markdown code fences. Put all code/action/model JSON only inside executable file/studio-action/roblox-model blocks. ROTEX hides those blocks and applies them. Visible text should be a plain sentence like "I am updating the stamina UI now."',
+    'VISIBLE CHAT RULE: In Agent/Super Agent, the user-facing message must NOT contain Lua source code, JSON action payloads, or markdown code fences. Put all code/action/model JSON only inside executable file/studio-action/roblox-model blocks. ROTEX hides those blocks and applies them. Visible text should be a plain sentence describing the actual change, e.g. "I am updating the inventory UI now." or "I am adding the NPC shop now." -- describe what THIS request needs, not a fixed example.',
     'ROBLOX PATH PROTOCOL: file paths must start with a real Roblox root: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. For StarterPlayerScripts use StarterPlayer/StarterPlayerScripts/Name.client.lua.',
     'OUTPUT PROTOCOL: In Agent/Super Agent, output hidden executable blocks first. Use file blocks for source changes and studio-action blocks for deletion/property/model actions. Do not output plain code that cannot be applied.',
     'SELF-CHECK PROTOCOL before final output: check whether the blocks actually satisfy the user request, whether removal requests remove/disable instead of recreate, whether client/server placement is correct, whether cleanup exists, and whether all referenced Instances are created or WaitForChild-ed.',
@@ -1493,8 +1509,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'ROBLOX PERFORMANCE RULES: avoid busy loops without task.wait(). Disconnect event connections when systems are disabled. Use :WaitForChild with timeouts instead of infinite waits. Cache expensive lookups like GetService or FindFirstChild.',
     'ERROR INTELLIGENCE: when a Studio error is reported, trace it backward from the failing line to the source. Common patterns: nil from LocalPlayer on server → script is a Script, not LocalScript; "attempt to index nil with X" → missing WaitForChild or wrong path; "HTTP 401" → bad plugin token; "not a valid member" → typo or wrong service.',
     'SMART DUPLICATION CHECK: before creating a new script, search PROJECT CONTEXT for existing scripts with similar names or behavior. If found, modify the existing one and use studio-action delete_instance to remove duplicates if necessary.',
-    'DUPLICATE UI/SYSTEM FIX RULE: if the user says there are two bars, duplicate buttons, duplicate stamina/sprint UI, duplicate health UI, or "make only one", do not only edit the newest script. Search PROJECT CONTEXT for every script and ScreenGui that creates that UI, keep exactly one owner, and output studio-action delete_instance blocks for stale UI scripts/ScreenGuis plus the corrected owner file.',
-    'STAMINA/SPRINT SPECIFIC RULE: if fixing duplicate stamina bars, inspect paths containing Stamina, Sprint, Bar, UI, Gui, StarterGui, StarterPlayerScripts, and PlayerGui. Prefer one LocalScript owner under StarterPlayer/StarterPlayerScripts or StarterGui, and delete/disable duplicate StaminaUI/SprintUI scripts or ScreenGuis.',
+    'DUPLICATE UI/SYSTEM FIX RULE: applies to ANY feature -- health, mana, XP, ammo, quest tracker, shop, inventory, minimap, cooldown display, not just stamina/sprint. If the user says there are two bars, duplicate buttons, duplicate UI, or "make only one", do not only edit the newest script. Search PROJECT CONTEXT for every script and ScreenGui that creates that feature under ANY name variant (e.g. Health/HealthUI/HealthSystem/HealthBar are the same feature), keep exactly one owner, and output studio-action delete_instance blocks for stale UI scripts/ScreenGuis plus the corrected owner file. Prefer one LocalScript owner under StarterPlayer/StarterPlayerScripts or StarterGui.',
     'SMART CHANGE SCOPING: only change files that must change. If the user asks for a UI tweak, do not rewrite unrelated game systems. If the user asks for a bug fix, do not add features. Keep diffs minimal and correct.',
     'SMART NAMING: reuse existing variable names, RemoteEvent names, and function names from PROJECT CONTEXT. Do not introduce new naming conventions unless the project is empty.',
     'SMART DEFAULTS: when a value is missing from context, choose sensible, safe defaults. Prefer existing project constants over invented ones. Document defaults only if they materially affect behavior.',
@@ -1510,7 +1525,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     (!askMode && !planMode) ? 'When the user asks to remove, undo, turn off, disable, or get out of a feature, do NOT rewrite the same feature back in. Delete or disable the script that causes it. Use a studio-action block when deletion or property edits are the right operation.' : '',
     (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON, terrain_edit with operation/position/size/radius/material, lighting_set with properties, and create_ui_image with screenGui/name/image/position/size. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
     (!askMode && !planMode) ? 'Common removal examples: "get out of first person" should delete or disable the first-person LocalScript; "remove sprint" should delete/disable the sprint script and any UI it created; "stop the GUI" should disable or delete the ScreenGui/LocalScript, not add another script that fights it.' : '',
-    (!askMode && !planMode) ? 'Duplicate UI example: if the user says "there are still 2 bars" after a stamina/sprint change, output delete_instance actions for the extra StaminaUI/SprintUI ScreenGui/LocalScript paths and update the remaining sprint/stamina script so it creates or controls only one bar.' : '',
+    (!askMode && !planMode) ? 'Duplicate UI example (applies to any feature, not just stamina): if the user says "there are still 2 bars" after a change to ANY meter/HUD element (health, mana, XP, stamina, whatever), output delete_instance actions for the extra ScreenGui/LocalScript paths and update the remaining script so it creates or controls only one instance of that feature.' : '',
     (!askMode && !planMode) ? 'After file/studio-action blocks, do not add fake success claims. The desktop app reports Studio results. Keep any human text to one short sentence about what the change is intended to do.' : '',
     (!askMode && !planMode) ? 'PLUGIN TOOL RULE: for static decoration/geometry requests (buildings, terrain props, environment pieces), use roblox-model or create_model. EXCEPTION: never use roblox-model/create_model for a Tool/weapon/item the player equips or spawns with -- it wraps everything in a Model, not a Tool, producing a non-equippable prop. Build Tools with an Instance.new("Tool") Lua script instead (see STARTING ITEMS / TOOL MODELS rule). For terrain requests, use terrain_edit. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. For UI art/images/icons, use ROBLOX UI IMAGE ASSET SEARCH results with create_ui_image or ImageLabel/ImageButton Image = rbxassetid://id. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
     (!askMode && !planMode) ? 'ROBLOX UI QUALITY RULE: Roblox UI should look polished and game-ready: use a clear hierarchy, consistent spacing, UIScale, UICorner, UIStroke, UIGradient, padding, hover/click feedback where relevant, mobile-safe sizes, readable contrast, and only one owner script. Prefer clean modern panels over raw default Frames. If the user asks for classic/simple/normal, make it restrained but still aligned and readable.' : '',
@@ -1771,10 +1786,11 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
   for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
     const attempt = providerCall.attempts[attemptIndex];
     try {
+      let fullText = '';
       if (attempt.provider === 'anthropic') {
-        await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, maxTokens);
+        fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, maxTokens);
       } else {
-        await streamOpenAiCompatible(response, attempt, cleanMessages, selected, maxTokens);
+        fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, maxTokens);
       }
       logUsage({
         user_id: context.userId,
@@ -1785,6 +1801,20 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         textokens_charged: context.estimate.textokens,
         status: 'completed_stream_estimate',
       });
+      // The base charge above was estimated and persisted BEFORE this response
+      // was generated (see estimateTexTokens's caller), since the estimate has
+      // to run before knowing what the model will produce. It can't know in
+      // advance whether the response includes a roblox-model block, so the
+      // modeling premium (MODELING_COST_MULTIPLIER) has to be applied here,
+      // after streaming, as an additional charge on the DELTA only.
+      if (!context.isDev && /```\s*roblox-model\b/i.test(fullText)) {
+        const extraCharge = Math.ceil(context.estimate.textokens * (MODELING_COST_MULTIPLIER - 1));
+        if (extraCharge > 0) {
+          if (context.freeKey) addFreeTokensUsed(context.freeKey, extraCharge);
+          if (context.ipKey && context.ipKey !== context.freeKey) addFreeTokensUsed(context.ipKey, extraCharge);
+          if (context.authUid && context.authToken) addUsage(context.authUid, context.authToken, extraCharge).catch(() => {});
+        }
+      }
       sseWrite(response, { done: true });
       response.end();
       return;
@@ -1885,14 +1915,16 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
     throw new Error(await providerResponse.text());
   }
 
+  let fullText = '';
   for await (const event of readSseEvents(providerResponse.body)) {
     if (event === '[DONE]') break;
     try {
       const parsed = JSON.parse(event);
       const delta = parsed.choices?.[0]?.delta?.content;
-      if (delta) sseWrite(response, { d: delta });
+      if (delta) { sseWrite(response, { d: delta }); fullText += delta; }
     } catch { /* ignore malformed keep-alive chunks */ }
   }
+  return fullText;
 }
 
 async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens) {
@@ -1912,11 +1944,13 @@ async function streamAnthropic(response, providerCall, messages, attachments, se
     throw new Error(await providerResponse.text());
   }
 
+  let fullText = '';
   for await (const event of readSseEvents(providerResponse.body)) {
     try {
       const parsed = JSON.parse(event);
       if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
         sseWrite(response, { d: parsed.delta.text });
+        fullText += parsed.delta.text;
       }
       if (parsed.type === 'error') {
         throw new Error(parsed.error?.message || 'Anthropic stream error');
@@ -1926,6 +1960,7 @@ async function streamAnthropic(response, providerCall, messages, attachments, se
       throw err;
     }
   }
+  return fullText;
 }
 
 // Parses an upstream SSE byte stream and yields each `data:` payload string.
@@ -2217,6 +2252,8 @@ function logProviderUsage(result, selected, context, status) {
   ) * (selected.multiplier || 1);
   if (context.agent) charged *= 2;
   if (context.superAgent) charged *= 4;
+  // 3D modeling premium (see MODELING_COST_MULTIPLIER) -- same rule as TexBrain.
+  if (/```\s*roblox-model\b/i.test(result.text || '')) charged *= MODELING_COST_MULTIPLIER;
   logUsage({
     user_id: context.userId,
     model: selected.name,
