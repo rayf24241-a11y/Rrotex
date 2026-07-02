@@ -1818,7 +1818,11 @@
       if (files.length) queuedActions.push({ type: 'apply_files', id: actionId, files });
       for (const action of studioActions) queuedActions.push({ ..._actionForPlugin(action), id: actionId });
       await window.rotexDesktop.queueStudioActions(queuedActions).catch(() => null);
-      const results = await _waitForStudioResults(actionId, queuedActions.length);
+      // The plugin processes one queued action per ~1s poll cycle, so a flat
+      // timeout falsely reports "On hold" on larger Super Agent batches that
+      // are still correctly working through the queue. Scale with batch size.
+      const resultsTimeoutMs = Math.max(18000, queuedActions.length * 3000);
+      const results = await _waitForStudioResults(actionId, queuedActions.length, resultsTimeoutMs);
       const messages = (Array.isArray(results) ? results : []).flatMap(result => Array.isArray(result?.messages) ? result.messages : []);
       const anyFailed = (Array.isArray(results) ? results : []).some(result => result?.ok === false);
       const missingResults = queuedActions.length - (Array.isArray(results) ? results.length : 0);
@@ -2177,9 +2181,13 @@
 
           const appliedToStudio = full ? await _applyStudioFilesFromResponse(full, bubble, text, true) : false;
 
-          // Always clear task status after TexBrain responds — never leave 'On hold'
+          // Always clear task status after TexBrain responds — never leave it
+          // stuck on "Working on task..". Only show 'On hold' when there were
+          // actual Studio actions that failed to apply (hasActions true); a
+          // plain prose answer with no code needed (e.g. the message was
+          // classified as a task but was really a question) is correctly done.
           if (isTaskStatus && statusBubble) {
-            _renderTaskStatus(statusBubble, appliedToStudio ? 'Task done' : 'On hold');
+            _renderTaskStatus(statusBubble, (hasActions && !appliedToStudio) ? 'On hold' : 'Task done');
           }
           if (!appliedToStudio && hasActions && bubble && canEditGame && studioOk) {
             _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. The file paths may not match a known Roblox service root (e.g. ServerScriptService/Script.lua).');
@@ -2288,10 +2296,12 @@
           _renderChatMessage(bubble, 'assistant', (hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : safeFull);
         }
         const appliedToStudio = full ? await _applyStudioFilesFromResponse(full, bubble, text) : false;
-        if (appliedToStudio && isTaskStatus && statusBubble) {
-          _renderTaskStatus(statusBubble, 'Task done');
-        } else if (isTaskStatus && statusBubble && hasActions) {
-          _renderTaskStatus(statusBubble, 'On hold');
+        // Only 'On hold' when there were real Studio actions that failed to
+        // apply. A plain prose answer with no actions needed (isTaskStatus
+        // over-classified a question as a task) resolves to 'Task done', not
+        // stuck on "Working on task..".
+        if (isTaskStatus && statusBubble) {
+          _renderTaskStatus(statusBubble, (hasActions && !appliedToStudio) ? 'On hold' : 'Task done');
         }
         if (!appliedToStudio && hasActions && bubble && canEditGame && studioOk) {
           _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. The file paths may not match a known Roblox service root (e.g. ServerScriptService/Script.lua).');
@@ -2302,9 +2312,11 @@
           const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
           _chatHistory.push({ role: 'assistant', content: storedContent });
           _saveMessages();
-          if (isTaskStatus && statusBubble) {
-            _renderTaskStatus(statusBubble, appliedToStudio ? 'Task done' : 'On hold');
-          }
+          // Status is already set correctly above (lines 2295-2299), which
+          // respects hasActions. Do NOT re-set it here unconditionally -- that
+          // duplicate used to flip a normal, correct prose-only response (no
+          // code needed, appliedToStudio naturally false) to "On hold" even
+          // though nothing had actually failed.
         }
       } catch (err) {
         if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
