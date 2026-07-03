@@ -312,6 +312,8 @@ LUAU RULES:
 - pcall all DataStore calls. Humanoid:TakeDamage(n) not Health = 0.
 - Zero placeholders. Full runnable script every time.
 
+MANDATORY PROJECT SEARCH PASS: before writing a single line of code, actually work through the project context in order — (1) does a script already own this feature under ANY name variant (Shop/ShopUI/ShopSystem are the same thing)? (2) what naming conventions, RemoteEvent names, and module structure does this project already use, so new code matches instead of introducing a second style? (3) are there existing modules/services this feature should build on rather than duplicate (an existing DataStore wrapper, an existing RemoteEvents folder, an existing state-management pattern)? Do not skip this because the request seems simple — a fast wrong answer that ignores existing project structure is worse than a slower correct one. Take the time this requires.
+
 ROBLOX SYSTEM PATTERNS — apply the correct idiom for whatever the user actually asks for (combat, economy, NPCs, building, minigames, admin, quests, all equally in scope, not just UI bars):
 - COMBAT/DAMAGE: server owns the hit — client fires a RemoteEvent on swing/shoot, server validates range/cooldown/line-of-sight with a debounce table keyed by attacker, then calls Humanoid:TakeDamage. Never trust a client-reported damage number or hit result.
 - ECONOMY/CURRENCY: a server-side table keyed by player (or a leaderstats IntValue) is the source of truth. Purchases go through a RemoteEvent the server validates (enough currency, item exists) before deducting and granting — never let the client just set its own currency display and assume it's real. Persist with DataStoreService, pcall'd, using UpdateAsync for anything incremented (not overwritten) to survive concurrent saves.
@@ -607,37 +609,32 @@ async function handleTexBrain(req, res) {
     const groqCall = (model, msgs, maxTok = 8000, timeoutMs = 20000) =>
       tbGroqPost(model, msgs, maxTok, timeoutMs);
 
-    // 1. Groq — fast, tried first. Agent mode loops through BOTH Groq
-    //    candidates before reaching for anything slower (speed matters most
-    //    for the common case; a real user report confirmed the earlier
-    //    "try the biggest model early" ordering made ordinary requests feel
-    //    ~2x slower for no benefit most of the time). Supreme mode only
-    //    tries the first Groq candidate before moving to bigger/slower
-    //    models, since Supreme users have already opted into depth over
-    //    speed (4x cost).
+    // 1. Groq — fast first attempt for both Agent and Super Agent. A single
+    //    candidate only (not looping into llama-3.3-70b): the explicit,
+    //    confirmed decision here is that BOTH modes should take real time to
+    //    reach for a genuinely stronger model rather than settling for the
+    //    first fast response, so this is deliberately a quick opening probe,
+    //    not the primary path.
     if (GROQ_KEY) {
-      const groqCandidates = isCodeMode
-        ? (isSupreme ? [GROQ_CODE1] : [GROQ_CODE1, GROQ_CODE2])
-        : [GROQ_TALK];
-      for (const m of groqCandidates) {
-        try {
-          const result = await groqCall(m, workerMessages, isCodeMode ? 8000 : 6000);
-          const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
-          if (t) { text = t; usedModel = 'groq/' + m; usedUsage = result.usage || null; if (!isCodeMode || hasCodeBlock(t)) break; }
-        } catch (e) { tbErrors.push(`groq/${m}: ${e?.message || e}`); }
-      }
+      try {
+        const result = await groqCall(isCodeMode ? GROQ_CODE1 : GROQ_TALK, workerMessages, isCodeMode ? 8000 : 6000);
+        const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
+        if (t) { text = t; usedModel = 'groq/' + (isCodeMode ? GROQ_CODE1 : GROQ_TALK); usedUsage = result.usage || null; }
+      } catch (e) { tbErrors.push(`groq/${GROQ_CODE1}: ${e?.message || e}`); }
     }
 
-    // 1.3/1.5. Supreme mode only: qwen3-coder (the full 480B parameter model,
-    //      confirmed via openrouter.ai/qwen/qwen3-coder:free -- ~4x bigger
-    //      than gpt-oss-120b) then a genuine reasoning pass (deepseek-r1),
-    //      tried early because Supreme users already expect a slower, deeper
-    //      pass. Agent mode does NOT get these early -- they're still
-    //      available as fallbacks in step 2 below, just not jumping ahead of
-    //      the fast path, so ordinary Agent requests stay fast.
-    if (isSupreme && (!text || !hasCodeBlock(text))) {
+    // 1.3/1.5. Agent AND Super Agent: qwen3-coder (the full 480B parameter
+    //      model, confirmed via openrouter.ai/qwen/qwen3-coder:free -- ~4x
+    //      bigger than gpt-oss-120b), then a genuine reasoning pass
+    //      (deepseek-r1). Explicit product decision: both modes should take
+    //      the time to reach for real capability instead of settling for
+    //      whatever the fast Groq attempt produced. Agent gets shorter
+    //      timeouts than Supreme so it isn't waiting as long, but still
+    //      genuinely tries the same bigger models, not just more prompt text
+    //      on a fast one.
+    if (isCodeMode && (!text || !hasCodeBlock(text))) {
       try {
-        const result = await orCall(TB_CODE1, workerMessages, 8000, 30000);
+        const result = await orCall(TB_CODE1, workerMessages, 8000, isSupreme ? 30000 : 22000);
         const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
         if (t && hasCodeBlock(t)) { text = t; usedModel = TB_CODE1; usedUsage = result.usage || null; }
       } catch (e) { tbErrors.push(`or/${TB_CODE1}: ${e?.message || e}`); }
@@ -647,17 +644,18 @@ async function handleTexBrain(req, res) {
     // chain-of-thought BEFORE the final answer. Capping it at the same 8000
     // ceiling as fast models risked truncating mid-thought, before it ever
     // reached the actual code block.
-    if (isSupreme && (!text || !hasCodeBlock(text))) {
+    if (isCodeMode && (!text || !hasCodeBlock(text))) {
       try {
-        const result = await orCall(TB_REASONING, workerMessages, 16000, 45000);
+        const result = await orCall(TB_REASONING, workerMessages, 16000, isSupreme ? 45000 : 32000);
         const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
         if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
       } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
     }
 
-    // 2. Resilience fallbacks. For Agent mode this is where qwen3-coder
-    //    (TB_CODE1) actually lives -- available, just not jumping the fast
-    //    path. For Supreme, TB_CODE1 was already tried above.
+    // 2. Resilience fallbacks -- TB_CODE1 (qwen3-coder) already tried above
+    //    for both modes, not repeated here. GROQ_CODE2 restores a fast
+    //    Groq-based option for when specifically gpt-oss-120b is
+    //    unavailable but Groq itself is fine.
     if (!text || (isCodeMode && !hasCodeBlock(text))) {
       if (!isCodeMode) {
         try {
@@ -666,7 +664,14 @@ async function handleTexBrain(req, res) {
           if (t) { text = t; usedModel = TB_TALK; usedUsage = result.usage || null; }
         } catch (e) { tbErrors.push(`or/${TB_TALK}: ${e?.message || e}`); }
       } else {
-        const codeCandidates = isSupreme ? [TB_CODE2, TB_UI] : [TB_CODE1, TB_CODE2, TB_UI];
+        if (GROQ_KEY) {
+          try {
+            const result = await groqCall(GROQ_CODE2, workerMessages, 8000);
+            const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
+            if (t) { text = t; usedModel = 'groq/' + GROQ_CODE2; usedUsage = result.usage || null; }
+          } catch (e) { tbErrors.push(`groq/${GROQ_CODE2}: ${e?.message || e}`); }
+        }
+        const codeCandidates = [TB_CODE2, TB_UI];
         for (const m of codeCandidates) {
           try {
             const result = await orCall(m, workerMessages);
@@ -675,18 +680,6 @@ async function handleTexBrain(req, res) {
           } catch (e) { tbErrors.push(`or/${m}: ${e?.message || e}`); }
         }
       }
-    }
-
-    // 3. Agent mode true last resort: the reasoning pass, only reachable if
-    //    every faster option above already failed. Rare in practice, so it
-    //    never affects normal-case speed -- Supreme already tried this
-    //    earlier and won't repeat it here.
-    if (mode === 'agent' && !isSupreme && (!text || !hasCodeBlock(text))) {
-      try {
-        const result = await orCall(TB_REASONING, workerMessages, 16000, 30000);
-        const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
-        if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
-      } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
     }
 
     if (!text && tbErrors.length) console.error('[TexBrain] all candidates failed:', tbErrors.join(' | '));
@@ -1598,6 +1591,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'ROBLOX PERFORMANCE RULES: avoid busy loops without task.wait(). Disconnect event connections when systems are disabled. Use :WaitForChild with timeouts instead of infinite waits. Cache expensive lookups like GetService or FindFirstChild.',
     'ERROR INTELLIGENCE: when a Studio error is reported, trace it backward from the failing line to the source. Common patterns: nil from LocalPlayer on server → script is a Script, not LocalScript; "attempt to index nil with X" → missing WaitForChild or wrong path; "HTTP 401" → bad plugin token; "not a valid member" → typo or wrong service.',
     'SMART DUPLICATION CHECK: before creating a new script, search PROJECT CONTEXT for existing scripts with similar names or behavior. If found, modify the existing one and use studio-action delete_instance to remove duplicates if necessary.',
+    'MANDATORY PROJECT SEARCH PASS: before writing a single line of code, actually work through PROJECT CONTEXT in order -- (1) does a script already own this feature under ANY name variant (Shop/ShopUI/ShopSystem are the same thing)? (2) what naming conventions, RemoteEvent names, and module structure does this project already use, so new code matches instead of introducing a second style? (3) are there existing modules/services this feature should build on rather than duplicate (an existing DataStore wrapper, an existing RemoteEvents folder, an existing state-management pattern)? Do not skip this because the request seems simple -- a fast wrong answer that ignores existing project structure is worse than a slower correct one. Take the time this requires.',
     'DUPLICATE UI/SYSTEM FIX RULE: applies to ANY feature -- health, mana, XP, ammo, quest tracker, shop, inventory, minimap, cooldown display, not just stamina/sprint. If the user says there are two bars, duplicate buttons, duplicate UI, or "make only one", do not only edit the newest script. Search PROJECT CONTEXT for every script and ScreenGui that creates that feature under ANY name variant (e.g. Health/HealthUI/HealthSystem/HealthBar are the same feature), keep exactly one owner, and output studio-action delete_instance blocks for stale UI scripts/ScreenGuis plus the corrected owner file. Prefer one LocalScript owner under StarterPlayer/StarterPlayerScripts or StarterGui.',
     '"I CAN\'T SEE IT" / "IT\'S NOT SHOWING UP" RULE: this means an EXISTING feature has a VISIBILITY bug, NOT that it needs to be rebuilt from scratch. NEVER create a new script/GUI in response to this report. Find the EXISTING owner script in PROJECT CONTEXT (by feature name -- Shop/ShopUI/ShopGui/ShopSystem are the same feature) and diagnose the actual cause in that script: ScreenGui.Enabled left false, the Frame/GUI parented somewhere other than PlayerGui, zero Size or an off-screen Position, ZIndex/SiblingIndex buried behind another GUI, ResetOnSpawn wiping it on respawn, or an open/toggle function defined but never connected to a button or keybind so it never runs. Output ONE corrected file block for the existing script with the specific cause fixed, not a second copy of the feature.',
     'SMART CHANGE SCOPING: match the diff size to what the user actually asked for, not always the smallest possible one. "Fix", "tweak", "adjust" -> minimal, surgical diff, do not rewrite unrelated systems. "Revamp", "overhaul", "update", "improve", "make it better", "polish" -> the user explicitly wants a substantial change; a trivial or cosmetic-only diff while claiming you "revamped" or "updated" it is a lie. For those requests, meaningfully improve structure, completeness, visuals, and robustness -- then say what actually changed, not a generic "I updated it".',
