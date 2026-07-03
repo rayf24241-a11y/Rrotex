@@ -147,7 +147,23 @@
   async function init() {
     await syncFromBackup();
     refreshBalanceDisplay();
+    // Watch for UTC day rollover on the existing 30s tick instead of relying
+    // on editor.html's separate 120s refreshBillingFromCloud poll -- without
+    // this, the free-allowance display could show a stale pre-reset value
+    // for up to 2 minutes after midnight UTC before self-correcting. The
+    // moment the day key changes, force an immediate re-fetch of the real
+    // server-side dayUsed value (via window.rotexFetchServerUsage, already
+    // exposed by editor.html) so the reset is visible right away, not on the
+    // next scheduled poll.
+    var lastSeenDayKey = _utcDayKey();
     setInterval(function () {
+      var nowKey = _utcDayKey();
+      if (nowKey !== lastSeenDayKey) {
+        lastSeenDayKey = nowKey;
+        if (typeof window.rotexFetchServerUsage === 'function') {
+          window.rotexFetchServerUsage().catch(function () {});
+        }
+      }
       refreshBalanceDisplay();
     }, 30000);
   }
