@@ -230,14 +230,36 @@ function routeCategory(userText, context = {}) {
   const BROKEN_RE = /\b(broken|bugged|not working|doesn'?t work|stopped working|can'?t turn|won'?t work|glitch(ed|ing)?|fix (it|this|the|my))\b/;
   const ROBLOX_RE = /\b(roblox|luau|studio|gamepass|game ?pass|datastore|remoteevent|remotefunction|tycoon|simulator|obby|leaderstat)|\bnpc\b/;
 
+  // ROTEX already knows which engine the user is working in via the
+  // project's selected engine mode (editor.html's #rxProjectMode /
+  // api/chat.js's projectMode parameter) -- this was previously accepted as
+  // a context parameter but never actually read, which meant a Unity
+  // project with a generic message ("add a flashlight system", "the enemy
+  // AI feels broken" -- no literal "unity"/"c#"/"broken"-defaults-to-Roblox
+  // override) silently never routed to Unity Builder at all.
+  const isUnityProject = String(context.projectMode || '').toLowerCase() === 'unity';
+  const isRobloxProject = String(context.projectMode || '').toLowerCase() === 'roblox';
+
   let category = 'general-coding';
   if (has(PROMPT_MAKER_RE)) category = 'prompt-maker';
   else if (has(EXPLAIN_RE)) category = 'explain-compare';
   else if (has(ROTEX_RE)) category = 'rotex-app-mode';
   else if (has(UNITY_RE)) category = 'unity-builder';
   else if (has(WEBSITE_RE)) category = 'web-app-builder';
-  else if (has(BROKEN_RE) && (has(ROBLOX_RE) || !has(WEBSITE_RE))) category = 'roblox-bugfix';
-  else if (has(ROBLOX_RE)) category = 'roblox-builder';
+  // Explicit Roblox keyword present: bug-fix language wins over plain
+  // builder (checked together, not as two separate branches, so the
+  // "no explicit keyword at all" fallback below can't accidentally get
+  // short-circuited by the old, broader !has(WEBSITE_RE) check).
+  else if (has(ROBLOX_RE)) category = has(BROKEN_RE) ? 'roblox-bugfix' : 'roblox-builder';
+  // No explicit domain keyword anywhere -- fall back to the project's own
+  // known engine. Unity Builder covers both build and fix for Unity (no
+  // separate "Unity Bug Fix" category exists). Roblox is still the
+  // assumed default for bare "broken" language when the project mode
+  // itself isn't known to be Unity, since this is a Roblox-first app and
+  // Roblox Bug Fix is the only dedicated bug-fix category.
+  else if (isUnityProject) category = 'unity-builder';
+  else if (has(BROKEN_RE)) category = 'roblox-bugfix';
+  else if (isRobloxProject) category = 'roblox-builder';
 
   const cat = CATEGORIES[category];
   const riskyRe = /\b(datastore|money|currency|robux|purchase|gamepass|admin|payment|credit card|api key|secret)\b/;

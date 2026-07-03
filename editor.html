@@ -396,18 +396,6 @@
             <small id="rxSelectedRole" style="font-size:11px;color:var(--rx-muted);margin-left:auto;">2.4x</small>
           </button>
 
-          <!-- Category dropdown (Google Flash Smart Mode) -- only shown when
-               Google Flash is the selected model, see applyModelVision's
-               sibling toggle. Auto is default; the label updates to show
-               what the router auto-detected once a message has been sent. -->
-          <div style="position:relative;" id="rxCategoryWrap">
-            <button id="rxCategoryBtn" type="button" style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:rgba(255,255,255,0.04);border:1px solid var(--rx-border);border-radius:7px;cursor:pointer;color:var(--rx-text);font:600 12px/1 inherit;white-space:nowrap;">
-              <span id="rxCategoryLabel">Google Flash Smart</span>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div id="rxCategoryMenu" hidden style="position:absolute;bottom:calc(100% + 6px);left:0;background:var(--rx-surface);border:1px solid var(--rx-border);border-radius:10px;padding:5px;min-width:220px;max-height:340px;overflow-y:auto;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,0.5);"></div>
-          </div>
-
           <input type="hidden" id="rxProjectMode" value="Roblox">
 
           <button class="agent-toggle danger" id="rxStopBtn" type="button">Stop</button>
@@ -816,89 +804,6 @@
     localStorage.setItem('rotex_model', selectedModel);
   }
 
-  /* -- Google Flash Smart Mode: category selector ---------------------- */
-  // UI labels here match the ones specified for the feature exactly. Note
-  // several UI labels intentionally differ from the internal category id's
-  // natural name (rotex-app-mode -> "ROTEX App Builder", explain-compare ->
-  // "Fast Explain") -- keep this list, not the id itself, as the source of
-  // truth for what's shown to the user; api/_lib/categories.js's `uiLabel`
-  // field mirrors these same strings server-side for consistency.
-  const CATEGORY_LIST = [
-    { id: 'auto', label: 'Google Flash Smart', subtitle: 'Auto-detects the right category' },
-    { id: 'roblox-builder', label: 'Roblox Builder', subtitle: 'Game systems, NPCs, UI, shops' },
-    { id: 'roblox-bugfix', label: 'Roblox Bug Fix', subtitle: 'Fix something broken' },
-    { id: 'unity-builder', label: 'Unity Builder', subtitle: 'C#, VR/XR, scenes, prefabs' },
-    { id: 'web-app-builder', label: 'Website/App Builder', subtitle: 'Websites, APIs, Stripe' },
-    { id: 'rotex-app-mode', label: 'ROTEX App Builder', subtitle: 'Improve ROTEX itself' },
-    { id: 'prompt-maker', label: 'Prompt Maker', subtitle: 'Write a prompt for another AI' },
-    { id: 'explain-compare', label: 'Fast Explain', subtitle: 'Quick, direct answers' },
-    { id: 'general-coding', label: 'General Coding', subtitle: 'Python, JS, and other non-game code' },
-  ];
-
-  let selectedCategory = localStorage.getItem('rotex_category') || 'auto';
-  if (!CATEGORY_LIST.some(c => c.id === selectedCategory)) selectedCategory = 'auto';
-  // Set by the server (via the SSE stream's initial event) after Auto
-  // resolves a category for the most recent message -- purely for display,
-  // never sent back to the server (the server re-routes each message itself
-  // when selectedCategory is 'auto', this is just so the button shows what
-  // it picked last time).
-  let lastDetectedCategoryId = null;
-
-  function categoryDisplayLabel() {
-    if (selectedCategory !== 'auto') {
-      return CATEGORY_LIST.find(c => c.id === selectedCategory)?.label || 'Google Flash Smart';
-    }
-    const detected = lastDetectedCategoryId && CATEGORY_LIST.find(c => c.id === lastDetectedCategoryId);
-    return detected ? `Auto → ${detected.label}` : 'Google Flash Smart';
-  }
-
-  function refreshCategoryLabel() {
-    const el = document.getElementById('rxCategoryLabel');
-    if (el) el.textContent = categoryDisplayLabel();
-  }
-
-  function buildCategoryMenu() {
-    const menu = document.getElementById('rxCategoryMenu');
-    if (!menu) return;
-    menu.innerHTML = CATEGORY_LIST.map(c => `
-      <div class="rx-category-opt" data-id="${c.id}" style="padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;${c.id === selectedCategory ? 'background:rgba(255,255,255,0.07)' : ''}">
-        <strong>${c.label}</strong><span style="font-size:11px;color:var(--rx-muted);">${c.subtitle}</span>
-      </div>`).join('');
-    menu.querySelectorAll('.rx-category-opt').forEach(el => {
-      el.addEventListener('click', () => {
-        selectedCategory = el.dataset.id;
-        localStorage.setItem('rotex_category', selectedCategory);
-        if (selectedCategory !== 'auto') lastDetectedCategoryId = null;
-        refreshCategoryLabel();
-        menu.hidden = true;
-        buildCategoryMenu();
-      });
-    });
-  }
-
-  document.getElementById('rxCategoryBtn')?.addEventListener('click', () => {
-    const menu = document.getElementById('rxCategoryMenu');
-    if (!menu) return;
-    menu.hidden = !menu.hidden;
-    if (!menu.hidden) buildCategoryMenu();
-  });
-
-  document.addEventListener('click', e => {
-    if (!e.target.closest('#rxCategoryBtn') && !e.target.closest('#rxCategoryMenu')) {
-      const menu = document.getElementById('rxCategoryMenu');
-      if (menu) menu.hidden = true;
-    }
-  });
-
-  // The whole category system is Google Flash Smart Mode -- only relevant
-  // when Google Flash is the selected model. Claude Haiku has no categories.
-  function applyCategoryVisibility(modelId) {
-    const wrap = document.getElementById('rxCategoryWrap');
-    if (wrap) wrap.style.display = modelId === 'google-flash' ? 'block' : 'none';
-  }
-  applyCategoryVisibility(selectedModel);
-  refreshCategoryLabel();
-
   // Dev mode: either (a) the desktop app was launched with ROTEX_API_BASE set
   // to a Vercel preview URL to test server-side model changes before they
   // ship, or (b) this is the "Dev ROTEX" build (npm run build:dev:win),
@@ -954,7 +859,6 @@
         document.getElementById('rxSelectedRole').innerHTML = m.subtitle ? `${m.role}<br><span style="font-size:10px;opacity:0.55">${m.subtitle}</span>` : m.role;
         menu.hidden = true;
         applyModelVision(selectedModel);
-        applyCategoryVisibility(selectedModel);
         buildMenu();
       });
     });
@@ -2414,7 +2318,6 @@
             texTokensLeft: texTok,
             agent: currentMode === 'agent' || currentMode === 'supreme',
             superAgent: currentMode === 'supreme',
-            category: selectedCategory,
             stream: true,
           }),
         });
@@ -2447,14 +2350,6 @@
             // Dev account: persist the server-issued long-lived Pro pass so it
             // stays free even after the Firebase token expires.
             if (p.devPass) { try { localStorage.setItem('rotex_pro_pass', p.devPass); window.updateSidebarPlan?.(); } catch {} }
-            // Only relevant when Auto is selected -- shows what the server's
-            // keyword router actually picked for this message, purely for
-            // display (the server re-routes every message itself, this
-            // never gets sent back).
-            if (p.category && selectedCategory === 'auto') {
-              lastDetectedCategoryId = p.category;
-              refreshCategoryLabel();
-            }
             if (p.d) {
               full += p.d;
               if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
