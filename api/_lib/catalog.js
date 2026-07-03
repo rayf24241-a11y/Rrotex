@@ -51,17 +51,28 @@ const MODELS = {
   },
   'google-flash': {
     name: 'Google Flash',
-    providerName: 'Gemini 2.5 Flash',
+    providerName: 'Gemini 3.5 Flash',
     maker: 'google',
     logo: 'G',
     tier: 'free',
     access: 'Free',
-    inputTexTokens: 2.4,
-    outputTexTokens: 9.6,
+    // Scaled 5x/3.6x from the old 2.4/9.6 to match gemini-3.5-flash's real
+    // OpenRouter price ratio vs gemini-2.5-flash ($1.50 vs $0.30 per 1M
+    // input, $9.00 vs $2.50 per 1M output -- confirmed live against
+    // OpenRouter's model metadata, not estimated). Keeps freeDailyCap
+    // meaning roughly the same real-dollar ceiling it meant before the
+    // model swap, instead of silently permitting ~5x more spend per free
+    // user per day at the old rate.
+    inputTexTokens: 12,
+    outputTexTokens: 35,
     multiplier: 1,
     freeDailyCap: 15,
     route: 'openrouter',
-    orModel: process.env.GOOGLE_FLASH_MODEL || process.env.GEMINI_FLASH_MODEL || 'google/gemini-2.5-flash',
+    // Primary: gemini-3.5-flash (confirmed live via OpenRouter's public
+    // model API -- released 2026-05-19, real model, not a guess). Fallback
+    // to 2.5 Flash is handled as a second attempt in resolveProviderCall,
+    // not here -- this env-overridable default is only the PRIMARY attempt.
+    orModel: process.env.GOOGLE_FLASH_MODEL || process.env.GEMINI_FLASH_MODEL || 'google/gemini-3.5-flash',
     blurb: 'Google Gemini Flash for smart code and chat.',
     vision: false,
     temperature: 0.35,
@@ -85,6 +96,7 @@ const MODEL_ALIASES = {
   'google-flash': 'google-flash',
   'gemini-flash': 'google-flash',
   'gemini-2.5-flash': 'google-flash',
+  'gemini-3.5-flash': 'google-flash',
   claude: 'pro-smart',
   haiku: 'pro-smart',
   'claude-haiku': 'pro-smart',

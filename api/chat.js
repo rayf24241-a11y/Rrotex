@@ -2,6 +2,7 @@ const AdmZip = require('adm-zip');
 const { verifyProPass, signProPass } = require('./_lib/propass.js');
 const { MODELS, resolveModelId } = require('./_lib/catalog.js');
 const { userHasActiveProSubscription } = require('./_lib/stripe.js');
+const { CATEGORIES, routeCategory, THINKING_LEVEL_TO_EFFORT } = require('./_lib/categories.js');
 const {
   checkCreditSafety,
   estimateTexTokens,
@@ -854,6 +855,7 @@ module.exports = async function handler(request, response) {
     projectMode = '',
     texTokensLeft = null,
     superAgent = false,
+    category: categoryOverride = 'auto',
   } = request.body || {};
 
   const modelId = resolveModelId(model);
@@ -1046,6 +1048,16 @@ module.exports = async function handler(request, response) {
     ? await buildRobloxUiAssetContext(lastUser?.content || '')
     : '';
 
+  // Google Flash Smart Mode: category routing, scoped to google-flash only
+  // (Claude Haiku and the hidden TexBrain model are untouched). Auto uses
+  // the deterministic keyword router (routeCategory); an explicit override
+  // from the client skips routing and uses that category directly.
+  const resolvedCategory = isEditor && modelId === 'google-flash'
+    ? (categoryOverride !== 'auto' && CATEGORIES[categoryOverride]
+        ? CATEGORIES[categoryOverride]
+        : CATEGORIES[routeCategory(lastUser?.content || '', { projectMode }).category])
+    : null;
+
   if (isEditor) {
     cleanMessages.unshift({
       role: 'system',
@@ -1057,6 +1069,7 @@ module.exports = async function handler(request, response) {
         projectMode,
         superAgent,
         projectMemory,
+        resolvedCategory,
       ),
     });
   } else {
@@ -1182,6 +1195,7 @@ module.exports = async function handler(request, response) {
         estimate,
         agent,
         superAgent,
+        category: resolvedCategory,
         devPass,
         isDev,
         authToken,
@@ -1195,8 +1209,9 @@ module.exports = async function handler(request, response) {
         estimate,
         agent,
         superAgent,
+        category: resolvedCategory,
       });
-      response.status(200).json({ model: selected.name, text: result.text, usage: result.usage, devPass });
+      response.status(200).json({ model: selected.name, category: resolvedCategory?.id || null, text: result.text, usage: result.usage, devPass });
     }
   } catch (error) {
     console.error('ROTEX backend provider failed', {
@@ -1557,11 +1572,44 @@ COMMON SCRIPTING PATTERNS:
   return guides[mode] || `ENGINE FOCUS: You are specialized in ${mode}. Focus your answers on ${mode} topics and game development. Redirect unrelated questions.`;
 }
 
-function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false, projectMemory = '') {
+// Gemini's real context window is >1M tokens (confirmed live against
+// OpenRouter's model metadata) -- shared by both buildEditorSystemPrompt's
+// normal 'inject' path and the leaner category 'replace' path below, so a
+// future tuning of these tiers can't update one and silently miss the
+// other.
+function projectContextCap(agent, superAgent, isPro) {
+  return superAgent ? (isPro ? 160000 : 60000)
+    : agent ? (isPro ? 110000 : 42000)
+    : (isPro ? 64000 : 24000);
+}
+
+function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false, projectMemory = '', category = null) {
   const projectContextText = String(projectContext || '');
   const projectMemoryText = String(projectMemory || '').trim().slice(0, 4000);
   const askMode = /ROTEX UI MODE:\s*ASK/i.test(projectContextText);
   const planMode = /ROTEX UI MODE:\s*PLAN/i.test(projectContextText);
+
+  // Google Flash Smart Mode 'replace' categories (Prompt Maker,
+  // Explain/Compare): their own rules directly contradict the shared
+  // "always use ```file: blocks" instructions built below (Prompt Maker
+  // explicitly must not emit file blocks; Explain/Compare is a discussion
+  // answer, not an edit). Mixing the two would leave two contradictory
+  // instructions in the same prompt, so 'replace' categories skip the
+  // whole shared-rules build and get a leaner, category-only prompt
+  // instead -- still with PROJECT MEMORY/CONTEXT (both still useful for a
+  // good prompt or a grounded comparison) and the one universal rule that
+  // has nothing to do with code output.
+  if (category && category.promptMode === 'replace') {
+    const leanParts = [
+      category.systemPrompt,
+      category.responseFormat?.length ? `Structure your response with these sections in order: ${category.responseFormat.join(', ')}.` : '',
+      'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final answer.',
+      projectMemoryText ? `PROJECT MEMORY (durable facts you already learned about this project/user across earlier sessions):\n${projectMemoryText}` : '',
+      projectContext ? `PROJECT CONTEXT:\n${String(projectContext).slice(0, projectContextCap(agent, superAgent, isPro))}` : '',
+    ];
+    return leanParts.filter(Boolean).join('\n\n');
+  }
+
   const parts = [
     'You are ROTEX AI, the coding assistant inside the ROTEX desktop app chat.',
     `You are running as the **${selected.name}** model (${selected.providerName}).`,
@@ -1668,9 +1716,9 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     );
   }
   if (projectContext) {
-    // Gemini 2.5 Flash's real context window is >1M tokens (confirmed live
-    // against OpenRouter's model metadata) -- the old 16k/48k character caps
-    // here were chopping most non-trivial projects (each script alone can
+    // Gemini's real context window is >1M tokens (confirmed live against
+    // OpenRouter's model metadata) -- the old 16k/48k character caps here
+    // were chopping most non-trivial projects (each script alone can
     // already eat 3-8k characters) down to a handful of scripts before the
     // model ever saw the rest, directly undermining the "MANDATORY PROJECT
     // SEARCH PASS" instruction above: it can't search context that was
@@ -1678,10 +1726,18 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     // Agent/Super Agent specifically, since that's exactly when a full view
     // of the project matters most (finding the real owner script, existing
     // patterns to reuse, everything the search-pass rule asks for).
-    const contextCap = superAgent ? (isPro ? 160000 : 60000)
-      : agent ? (isPro ? 110000 : 42000)
-      : (isPro ? 64000 : 24000);
-    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, contextCap)}`);
+    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, projectContextCap(agent, superAgent, isPro))}`);
+  }
+  // Google Flash Smart Mode 'inject' categories (everything except Prompt
+  // Maker/Explain-Compare, see the 'replace' branch above): add the
+  // category's own purpose + rules on top of everything already built --
+  // the shared file-block format, safety, and quality rules above still
+  // apply, this only adds what's specific to the detected task.
+  if (category && category.promptMode !== 'replace') {
+    parts.push(category.systemPrompt);
+    if (category.responseFormat?.length) {
+      parts.push(`Structure your response with these sections in order: ${category.responseFormat.join(', ')}.`);
+    }
   }
   return parts.join('\n');
 }
@@ -1829,25 +1885,46 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
       providerModel: selected.orModel,
       apiKey: openRouterKey,
       baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-      // google/gemini-2.5-flash is a real hybrid-reasoning model with a
+      // google/gemini-3.5-flash is a real hybrid-reasoning model with a
       // controllable thinking budget -- confirmed live against OpenRouter's
       // /models/.../endpoints metadata, which lists "reasoning" in
       // supported_parameters for every provider endpoint of this model.
-      // Scoped to exactly this attempt (not the qwen3-coder fallback, which
-      // isn't confirmed to support it) so reasoningFor() only ever applies
-      // where it's known to work.
+      // Scoped to exactly THIS attempt, not the fallback attempts below --
+      // see the timeout-budget note on the 2.5 Flash fallback for why.
       reasoningCapable: selected.route === 'openrouter',
     });
   }
 
-  // Resilience fallback for Google Flash: its route ('openrouter') previously
-  // resolved to exactly ONE attempt (the paid google/gemini-2.5-flash model),
-  // unlike tb-thinking's multi-model cascade or anthropic-first's 2 attempts.
-  // Since Google Flash is now the default, everyone-sees-it model, a single
-  // transient OpenRouter/Gemini failure (rate limit, brief outage, or that
-  // paid route running low on balance) took the whole model down with no
-  // fallback. Add one free-tier model as a safety net so a single-provider
-  // hiccup doesn't fail the request outright.
+  // Google Flash: 3.5 Flash primary (above) -> 2.5 Flash fallback -> free
+  // resilience fallback. 2.5 Flash exists as a distinct attempt (not just
+  // relying on the free-tier fallback below) because it's still a real,
+  // paid, capable model -- a step down from 3.5 Flash, not a full downgrade
+  // to a generic free model.
+  //
+  // Deliberately reasoningCapable: false here, even though 2.5 Flash also
+  // supports reasoning: with 3 attempts, Agent/Super Agent probes every
+  // non-final attempt (see streamResponse), and a reasoning-active probe
+  // gets a 55s timeout. Two reasoning-active probes (55+55=110s) already
+  // exceeds the 90s Vercel function ceiling before the third, final attempt
+  // even starts. Keeping only the primary reasoning-capable budgets to
+  // 55s (primary) + 28s (this fallback, fast non-reasoning probe) + the
+  // final qwen attempt (unbounded but historically fast) -- fits inside
+  // 90s with real margin. Do not flip this to true without re-budgeting
+  // every attempt's timeout.
+  if (selected.route === 'openrouter' && openRouterKey) {
+    attempts.push({
+      provider: 'openrouter',
+      providerModel: process.env.GOOGLE_FLASH_SECONDARY_MODEL || 'google/gemini-2.5-flash',
+      apiKey: openRouterKey,
+      baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+      reasoningCapable: false,
+    });
+  }
+
+  // Resilience fallback for Google Flash: without this, a transient
+  // OpenRouter/Gemini failure across BOTH paid attempts above (rate limit,
+  // brief outage, or a paid route running low on balance) took the whole
+  // model down with no fallback. This free-tier model is the last resort.
   if (selected.route === 'openrouter' && openRouterKey) {
     attempts.push({
       provider: 'openrouter',
@@ -1870,7 +1947,7 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
     const attempt = providerCall.attempts[attemptIndex];
     const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
     const acceptable = (result) => isLastAttempt || !wantsCode || hasStudioCodeBlock(result.text);
-    const reasoning = reasoningFor(attempt, context.agent, context.superAgent);
+    const reasoning = reasoningFor(attempt, context.agent, context.superAgent, context.category);
     try {
       if (attempt.provider === 'anthropic') {
         const anthropicRequest = {
@@ -2022,8 +2099,8 @@ function hasStudioCodeBlock(text) {
 // a request that used most of its budget thinking could be cut off before
 // ever completing a ```file: block, which reads identically to "the model
 // didn't try"). Give reasoning-active attempts a much larger ceiling so
-// thinking can never crowd out the actual output; Gemini 2.5 Flash supports
-// up to 65535 completion tokens, confirmed live via OpenRouter's model
+// thinking can never crowd out the actual output; Gemini 3.5 Flash supports
+// up to 65536 completion tokens, confirmed live via OpenRouter's model
 // metadata, so there's plenty of headroom below that hard limit.
 function effectiveMaxTokens(attempt, maxTokens, reasoning) {
   if (/:free\b/i.test(attempt.providerModel || '')) return Math.min(maxTokens, 8000);
@@ -2033,7 +2110,7 @@ function effectiveMaxTokens(attempt, maxTokens, reasoning) {
 }
 
 // Requests real thinking/reasoning tokens from a reasoning-capable attempt
-// (currently just google/gemini-2.5-flash, see resolveProviderCall's
+// (currently just google/gemini-3.5-flash, see resolveProviderCall's
 // reasoningCapable flag) instead of a single fast pass -- confirmed live
 // against OpenRouter's model metadata that "reasoning" is a supported
 // parameter for this model. exclude:true means the thinking tokens are
@@ -2043,10 +2120,18 @@ function effectiveMaxTokens(attempt, maxTokens, reasoning) {
 // Scoped to Agent/Super Agent: plain chat doesn't need the extra latency
 // or the real per-token reasoning cost (billed by OpenRouter separately
 // from completion tokens) for a quick question.
-function reasoningFor(attempt, agent, superAgent) {
+// category is optional (Google Flash Smart Mode) -- when present, its
+// thinkingLevel drives reasoning REGARDLESS of Agent/Super Agent mode, on
+// top of the existing agent/superAgent-driven reasoning below (whichever is
+// stronger wins). This is a deliberate behavior change: thinking level is
+// about what the TASK needs, not which editing-mode toggle is active -- a
+// hard Roblox debugging question asked in plain Ask mode should still get
+// real reasoning even though Ask mode won't emit file edits.
+function reasoningFor(attempt, agent, superAgent, category) {
   if (!attempt.reasoningCapable) return undefined;
-  if (superAgent) return { effort: 'high', exclude: true };
-  if (agent) return { effort: 'medium', exclude: true };
+  const categoryEffort = category ? THINKING_LEVEL_TO_EFFORT[category.thinkingLevel] : undefined;
+  if (superAgent || categoryEffort === 'high') return { effort: 'high', exclude: true };
+  if (agent || categoryEffort === 'medium') return { effort: 'medium', exclude: true };
   return undefined;
 }
 
@@ -2070,7 +2155,7 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     Connection: 'keep-alive',
     'Access-Control-Allow-Origin': '*',
   });
-  sseWrite(response, { model: selected.name, devPass: context.devPass || '' });
+  sseWrite(response, { model: selected.name, category: context.category?.id || null, devPass: context.devPass || '' });
 
   // Agent/Super Agent expect an actual file/studio-action edit, not just a
   // reply. The editor UI already hides raw streamed text behind a static
@@ -2091,7 +2176,7 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
     try {
       let fullText = '';
-      const reasoning = reasoningFor(attempt, context.agent, context.superAgent);
+      const reasoning = reasoningFor(attempt, context.agent, context.superAgent, context.category);
       const attemptMaxTokens = effectiveMaxTokens(attempt, maxTokens, reasoning);
       const temperature = codeTemperature(selected, context.agent, context.superAgent);
       // A reasoning-active attempt has a much bigger maxTokens ceiling (see
