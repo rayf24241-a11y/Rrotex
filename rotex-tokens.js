@@ -5,6 +5,18 @@
   var FREE_DAILY_BASE = 150000;
   var PRO_DAILY_BASE = 1000000;
 
+  // Matches the server's _dayKey()/_today() exactly (api/chat.js): UTC
+  // calendar date, not the browser's local timezone. This local fallback
+  // path (used only when window.__rotexServerUsage isn't populated yet)
+  // previously used toDateString() -- local time -- which rolls over at a
+  // different moment than the server's UTC-based reset, so the free
+  // allowance could appear to refill at an inconsistent time depending on
+  // the user's timezone instead of a single, predictable clock time for
+  // everyone.
+  function _utcDayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
   function isProUser() {
     try {
       var pass = localStorage.getItem('rotex_pro_pass') || '';
@@ -43,7 +55,7 @@
   function getSpentToday() {
     var su = getServerUsage();
     if (su) return Math.max(0, Math.floor(Number(su.dayUsed) || 0));
-    var today = new Date().toDateString();
+    var today = _utcDayKey();
     var spentDate = localStorage.getItem('rotex_textokens_spent_date');
     return spentDate === today ? Math.max(0, Math.floor(Number(localStorage.getItem('rotex_textokens_spent_today') || 0))) : 0;
   }
@@ -80,7 +92,7 @@
       return { charged: 0, freeSpent: 0, purchasedSpent: 0, purchased: getPurchased(), freeRemaining: getFreeRemaining() };
     }
 
-    var today = new Date().toDateString();
+    var today = _utcDayKey();
     var currentSpent = getSpentToday();
     var dailyAllowance = getDailyAllowance();
     var freeRemaining = Math.max(0, dailyAllowance - currentSpent);
