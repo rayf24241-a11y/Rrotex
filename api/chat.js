@@ -598,12 +598,15 @@ async function handleTexBrain(req, res) {
       }
     }
 
-    // 1.5. Super Agent only: a genuinely stronger reasoning pass, not just
-    //      more prompt text on the same fast model. Skipped if Groq already
-    //      produced a usable code block (saves the latency when not needed).
-    if (isSupreme && (!text || !hasCodeBlock(text))) {
+    // 1.5. Agent and Super Agent: a genuinely stronger reasoning pass, not
+    //      just more prompt text on the same fast model. Skipped if Groq
+    //      already produced a usable code block (saves the latency when not
+    //      needed -- the common case stays fast). Agent gets a shorter
+    //      timeout than Supreme so it stays relatively responsive; Supreme
+    //      users have already opted into a slower, deeper pass (4x cost).
+    if (isCodeMode && (!text || !hasCodeBlock(text))) {
       try {
-        const result = await orCall(TB_REASONING, workerMessages, 8000, 45000);
+        const result = await orCall(TB_REASONING, workerMessages, 8000, isSupreme ? 45000 : 35000);
         const t = result.choices?.[0]?.message?.content?.trim();
         if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
       } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
@@ -628,22 +631,6 @@ async function handleTexBrain(req, res) {
           } catch (e) { tbErrors.push(`or/${m}: ${e?.message || e}`); }
         }
       }
-    }
-
-    // Regular Agent mode: unlike Supreme, this doesn't get the reasoning pass
-    // up front (agent mode should stay fast for the common case where Groq or
-    // an OpenRouter fast model just works). But if every fast candidate has
-    // already failed to produce a code block, that's exactly the situation
-    // where a genuinely stronger model is worth the extra latency -- the fast
-    // path already failed, so there's nothing left to lose by trying harder
-    // before giving up. Uses the full workerMessages (real context), unlike
-    // the stripped-context retry further down.
-    if (mode === 'agent' && (!text || !hasCodeBlock(text))) {
-      try {
-        const result = await orCall(TB_REASONING, workerMessages, 8000, 40000);
-        const t = result.choices?.[0]?.message?.content?.trim();
-        if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
-      } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
     }
 
     if (!text && tbErrors.length) console.error('[TexBrain] all candidates failed:', tbErrors.join(' | '));
