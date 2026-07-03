@@ -230,6 +230,12 @@
           <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15 1.65 1.65 0 003 14.08V14a2 2 0 014 0v.09c0 .67.4 1.27 1 1.51"/>
         </svg>
       </button>
+      <button class="rx-hbtn" id="rxProjectMemoryBtn" title="Project memory">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.1 2.2 5.4.6.8 1 1.6 1 2.6v1a1 1 0 0 0 1 1h5.6a1 1 0 0 0 1-1v-1c0-1 .4-1.8 1-2.6C17.8 13.1 19 11.4 19 9a7 7 0 0 0-7-7z"/>
+          <path d="M10 22h4"/>
+        </svg>
+      </button>
       <div class="rx-user-avatar" id="rxUserAvatar" title="Account">R</div>
     </div>
   </header>
@@ -920,6 +926,20 @@
     if (modal) modal.hidden = false;
   });
 
+  document.getElementById('rxProjectMemoryBtn')?.addEventListener('click', () => {
+    const facts = _loadProjectMemory();
+    if (!facts.length) {
+      _rxAddMsg('assistant', 'No project memory saved yet. As you work with Agent/Super Agent, ROTEX remembers durable facts about this project across sessions here.');
+      return;
+    }
+    const list = facts.map((f, i) => (i + 1) + '. ' + f).join('\n');
+    _rxAddMsg('assistant', 'Project memory for ' + (window.__rotexGameName || 'this project') + ' (' + facts.length + ' facts remembered across sessions):\n' + list);
+    if (confirm('Clear all ' + facts.length + ' saved project memory facts for this project? This cannot be undone.')) {
+      _clearProjectMemory();
+      _rxAddMsg('assistant', 'Project memory cleared.');
+    }
+  });
+
   /* -- " " Profile account " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " ---- */
   document.getElementById('rxUserAvatar').addEventListener('click', () => {
     if (window.rotexDesktop) window.rotexDesktop.navigate('projects');
@@ -1229,7 +1249,7 @@
       let _pluginConnected = false;
       let _studioConnected = false;
       let _pluginReady = false;
-      let _ver = '1.17.0';
+      let _ver = '1.17.01';
       function displayVersion(ver) { return ver; }
 
       function setLoadStatus(text) {
@@ -1597,6 +1617,7 @@
         .replace(/```file:([^\n`]+)\n([\s\S]*?)```/g, '')
         .replace(/```studio-action\n([\s\S]*?)```/g, '')
         .replace(/```roblox-model\n([\s\S]*?)```/g, '')
+        .replace(/```project-memory\n([\s\S]*?)```/g, '')
         .replace(/```file:([^\s`]+)\s+([\s\S]*?)```/g, '')
         // During streaming, a file/studio-action/roblox-model fence that has
         // started but not yet closed (no matching ``` at the end) would
@@ -1691,6 +1712,69 @@
         }
       }
       return actions;
+    }
+
+    // ── Project memory: durable facts the AI has learned about THIS project/
+    // user, persisted across sessions (not just within one chat). Populated
+    // from hidden ```project-memory blocks the model appends when it learns
+    // something worth remembering (see the PROJECT MEMORY UPDATES prompt
+    // rule server-side), and fed back into every future request so the AI
+    // isn't starting from zero each session -- makes good on the "Project
+    // memory" feature index.html already advertises.
+    const PROJECT_MEMORY_MAX_FACTS = 24;
+    const PROJECT_MEMORY_MAX_FACT_LEN = 140;
+
+    function _projectMemoryKey() {
+      const name = String(window.__rotexGameName || 'default').trim().toLowerCase().slice(0, 80);
+      return 'rotex_project_memory:' + (name || 'default');
+    }
+
+    function _loadProjectMemory() {
+      try {
+        const raw = localStorage.getItem(_projectMemoryKey());
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x.trim()) : [];
+      } catch { return []; }
+    }
+
+    function _saveProjectMemory(facts) {
+      try { localStorage.setItem(_projectMemoryKey(), JSON.stringify(facts.slice(-PROJECT_MEMORY_MAX_FACTS))); } catch {}
+    }
+
+    function _clearProjectMemory() {
+      try { localStorage.removeItem(_projectMemoryKey()); } catch {}
+    }
+
+    function _extractProjectMemory(content) {
+      const text = String(content || '').replace(/\r\n/g, '\n');
+      const facts = [];
+      const re = /```\s*project-memory[^\n]*\n([\s\S]*?)```/g;
+      let match;
+      while ((match = re.exec(text))) {
+        for (const line of match[1].split('\n')) {
+          const fact = line.replace(/^[\s*-]+/, '').trim();
+          if (fact && fact.length <= PROJECT_MEMORY_MAX_FACT_LEN) facts.push(fact);
+        }
+      }
+      return facts;
+    }
+
+    // Merges newly-learned facts into storage, skipping near-duplicates of
+    // what's already saved (case-insensitive exact match -- good enough to
+    // stop the model re-saving the same fact worded identically every
+    // session without needing real semantic dedup).
+    function _mergeProjectMemory(newFacts) {
+      if (!newFacts.length) return;
+      const existing = _loadProjectMemory();
+      const existingLower = new Set(existing.map((f) => f.toLowerCase()));
+      const merged = existing.slice();
+      for (const fact of newFacts) {
+        if (!existingLower.has(fact.toLowerCase())) {
+          merged.push(fact);
+          existingLower.add(fact.toLowerCase());
+        }
+      }
+      if (merged.length !== existing.length) _saveProjectMemory(merged);
     }
 
     function _pluginPath(path) {
@@ -2229,6 +2313,7 @@
             mode: 'editor',
             projectMode: projMode,
             projectContext: projectContextText,
+            projectMemory: _loadProjectMemory().join('\n'),
             proPass,
             texTokensLeft: texTok,
             agent: currentMode === 'agent' || currentMode === 'supreme',
@@ -2324,6 +2409,7 @@
           const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
           _chatHistory.push({ role: 'assistant', content: storedContent });
           _saveMessages();
+          _mergeProjectMemory(_extractProjectMemory(full));
           // Status is already set correctly above (lines 2295-2299), which
           // respects hasActions. Do NOT re-set it here unconditionally -- that
           // duplicate used to flip a normal, correct prose-only response (no

@@ -845,6 +845,7 @@ module.exports = async function handler(request, response) {
     mode = 'chat',
     agent = false,
     projectContext = '',
+    projectMemory = '',
     projectMode = '',
     texTokensLeft = null,
     superAgent = false,
@@ -1050,6 +1051,7 @@ module.exports = async function handler(request, response) {
         isPro,
         projectMode,
         superAgent,
+        projectMemory,
       ),
     });
   } else {
@@ -1550,8 +1552,9 @@ COMMON SCRIPTING PATTERNS:
   return guides[mode] || `ENGINE FOCUS: You are specialized in ${mode}. Focus your answers on ${mode} topics and game development. Redirect unrelated questions.`;
 }
 
-function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false) {
+function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false, projectMemory = '') {
   const projectContextText = String(projectContext || '');
+  const projectMemoryText = String(projectMemory || '').trim().slice(0, 4000);
   const askMode = /ROTEX UI MODE:\s*ASK/i.test(projectContextText);
   const planMode = /ROTEX UI MODE:\s*PLAN/i.test(projectContextText);
   const parts = [
@@ -1649,6 +1652,14 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'For feature requests, prefer a complete working vertical slice over a tiny partial snippet: include server authority, client feedback, RemoteEvents, validation, cleanup, and sensible defaults when relevant.',
       'Super Agent may touch more files than Agent when needed, but every touched file must be necessary. If safe completion is impossible from context, ask one concise blocking question and name the exact missing fact.',
       'When the user provides a Studio error or runtime output, treat it as the primary signal. Diagnose the exact line and root cause, then produce a fix and verify it cannot happen again with the same inputs.',
+    );
+  }
+  if (projectMemoryText) {
+    parts.push(`PROJECT MEMORY (durable facts you already learned about this project/user across earlier sessions -- trust these, do not re-derive or contradict them without a clear reason):\n${projectMemoryText}`);
+  }
+  if (!askMode && !planMode) {
+    parts.push(
+      'PROJECT MEMORY UPDATES: when you learn something durable and reusable about THIS project or user that is not already listed in PROJECT MEMORY above -- a naming/architecture convention actually in use, a system that already exists and its owner script, the game\'s genre or core loop, or an explicit stated preference about code style/structure -- append a hidden block at the very end of your response:\n```project-memory\n- one short fact per line, under 100 characters each\n```\nUse this RARELY, only for something genuinely worth remembering next session, never for one-off request details, never duplicating a fact already in PROJECT MEMORY. Most responses should have no project-memory block at all. Never mention this block to the user.',
     );
   }
   if (projectContext) {
