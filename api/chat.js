@@ -1609,16 +1609,17 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     (!askMode && !planMode) ? 'When the user asks you to make/create/add/fix anything in Roblox, ALWAYS output the Lua code in a ```file:ServiceName/path/ScriptName.lua block — not a plain ```lua block. Use service names as the root folder: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, StarterPack. ROTEX auto-applies file blocks to Studio when connected, and shows them ready-to-apply when not. Never tell the user to paste code manually.' : '',
     (!askMode && !planMode) ? 'For client scripts under StarterPlayerScripts, use paths like ```file:StarterPlayer/StarterPlayerScripts/FirstPersonCamera.client.lua, not ```file:StarterPlayerScripts/FirstPersonCamera.client.lua.' : '',
     (!askMode && !planMode) ? 'When the user asks to remove, undo, turn off, disable, or get out of a feature, do NOT rewrite the same feature back in. Delete or disable the script that causes it. Use a studio-action block when deletion or property edits are the right operation.' : '',
-    (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON, terrain_edit with operation/position/size/radius/material, lighting_set with properties, and create_ui_image with screenGui/name/image/position/size. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
+    (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON, insert_toolbox_model with assetId/parent/name/position (inserts a REAL community-made asset from ROBLOX TOOLBOX MODEL SEARCH results, requires Studio plugin v3.0+), terrain_edit with operation/position/size/radius/material, lighting_set with properties, and create_ui_image with screenGui/name/image/position/size. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
     (!askMode && !planMode) ? 'Common removal examples: "get out of first person" should delete or disable the first-person LocalScript; "remove sprint" should delete/disable the sprint script and any UI it created; "stop the GUI" should disable or delete the ScreenGui/LocalScript, not add another script that fights it.' : '',
     (!askMode && !planMode) ? 'Duplicate UI example (applies to any feature, not just stamina): if the user says "there are still 2 bars" after a change to ANY meter/HUD element (health, mana, XP, stamina, whatever), output delete_instance actions for the extra ScreenGui/LocalScript paths and update the remaining script so it creates or controls only one instance of that feature.' : '',
     (!askMode && !planMode) ? 'After file/studio-action blocks, do not add fake success claims. The desktop app reports Studio results. Keep any human text to one short sentence about what the change is intended to do.' : '',
-    (!askMode && !planMode) ? 'PLUGIN TOOL RULE: for static decoration/geometry requests (buildings, terrain props, environment pieces), use roblox-model or create_model. EXCEPTION: never use roblox-model/create_model for a Tool/weapon/item the player equips or spawns with -- it wraps everything in a Model, not a Tool, producing a non-equippable prop. Build Tools with an Instance.new("Tool") Lua script instead (see STARTING ITEMS / TOOL MODELS rule). For terrain requests, use terrain_edit. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. For UI art/images/icons, use ROBLOX UI IMAGE ASSET SEARCH results with create_ui_image or ImageLabel/ImageButton Image = rbxassetid://id. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
+    (!askMode && !planMode) ? 'PLUGIN TOOL RULE: if a ROBLOX TOOLBOX MODEL SEARCH result is present in context and it genuinely matches what the user asked for (a real object/prop/character/vehicle, not something that needs custom gameplay logic), PREFER outputting an insert_toolbox_model studio-action with that real assetId over building primitive Part geometry -- it produces a much higher-quality, detailed result than create_model ever can. For static decoration/geometry requests with no good Toolbox match, use roblox-model or create_model instead. EXCEPTION: never use roblox-model/create_model/insert_toolbox_model for a Tool/weapon/item the player equips or spawns with -- Toolbox models and create_model both produce a plain Model, not a Tool, producing a non-equippable prop. Build Tools with an Instance.new("Tool") Lua script instead (see STARTING ITEMS / TOOL MODELS rule). For terrain requests, use terrain_edit. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. For UI art/images/icons, use ROBLOX UI IMAGE ASSET SEARCH results with create_ui_image or ImageLabel/ImageButton Image = rbxassetid://id. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
     (!askMode && !planMode) ? 'ROBLOX UI QUALITY RULE: Roblox UI should look polished and game-ready: use a clear hierarchy, consistent spacing, UIScale, UICorner, UIStroke, UIGradient, padding, hover/click feedback where relevant, mobile-safe sizes, readable contrast, and only one owner script. Prefer clean modern panels over raw default Frames. If the user asks for classic/simple/normal, make it restrained but still aligned and readable.' : '',
     'To create 3D models/parts in Studio, use a ```roblox-model block with JSON. Example:\n```roblox-model\n{"name":"Castle","parent":"Workspace","parts":[{"name":"Base","size":[20,1,20],"position":[0,0,0],"color":[128,128,128],"material":"SmoothPlastic","anchored":true},{"name":"Wall","size":[20,10,1],"position":[0,5,-10],"color":[110,110,110],"material":"SmoothPlastic","anchored":true}]}\n```\nROTEX sends this to Studio which creates the real 3D objects. Each part can have: name, size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder), anchored, transparency, cancollide, scripts[{name,source}]. The model can also have a top-level "scripts" array for scripts attached to the Model itself.',
     'STARTING ITEMS / TOOL MODELS ("make a model for a sword", "spawn with a sword", "give everyone a tool"): NEVER use roblox-model/create_model for a Tool -- it always wraps its parts inside a generic Model instance, not a Tool, so the result is a decorative object in StarterPack that is NOT equippable and nothing appears in the player\'s hand or Backpack. A Tool MUST be built with Instance.new("Tool") in a Lua script, with a part literally named "Handle" as its direct child (required for grip). To make it actually look like the requested item instead of a plain block, add extra visual parts welded to the Handle:\n```lua\nlocal tool = Instance.new("Tool")\ntool.Name = "Sword"\ntool.RequiresHandle = true\ntool.CanBeDropped = true\n\nlocal handle = Instance.new("Part")\nhandle.Name = "Handle"\nhandle.Size = Vector3.new(0.4, 3, 0.4)\nhandle.Color = Color3.fromRGB(60, 60, 60)\nhandle.Material = Enum.Material.Metal\nhandle.CanCollide = false\nhandle.Parent = tool\n\nlocal blade = Instance.new("Part")\nblade.Name = "Blade"\nblade.Size = Vector3.new(0.2, 3.5, 0.6)\nblade.Color = Color3.fromRGB(200, 200, 210)\nblade.Material = Enum.Material.Metal\nblade.CanCollide = false\nblade.CFrame = handle.CFrame * CFrame.new(0, 3, 0)\nblade.Parent = tool\n\nlocal weld = Instance.new("WeldConstraint")\nweld.Part0 = handle\nweld.Part1 = blade\nweld.Parent = handle\n\ntool.Parent = game:GetService("StarterPack")\n```\nA Tool placed directly (not nested inside anything) in StarterPack automatically clones into every player\'s Backpack on spawn -- do not use a PlayerAdded script unless the user wants conditional/one-time granting. Give the Tool real Equipped/Activated behavior matching what the user asked for (swing animation, damage on touch, etc.) -- never leave it as a static prop with no function.',
     'Terrain action example:\n```studio-action\n{"type":"terrain_edit","operation":"fill_block","position":[0,0,0],"size":[80,12,80],"material":"Grass"}\n```\nLighting action example:\n```studio-action\n{"type":"lighting_set","properties":{"ClockTime":18,"Brightness":2,"Ambient":[90,90,110],"OutdoorAmbient":[120,120,140]}}\n```',
     'UI image action example:\n```studio-action\n{"type":"create_ui_image","screenGui":"MainHud","name":"CoinIcon","image":"rbxassetid://123456789","position":[0,16,0,16],"size":[0,40,0,40]}\n```',
+    'Toolbox model insert action example (only use a real assetId from ROBLOX TOOLBOX MODEL SEARCH results, never invent one):\n```studio-action\n{"type":"insert_toolbox_model","assetId":123456789,"parent":"Workspace","name":"Tree","position":[0,5,0]}\n```',
     'The PROJECT CONTEXT below contains the full source of all scripts in the user\'s game (auto-scanned when Studio connected), plus any recent Studio errors or selection data. Read them to understand the existing codebase before suggesting changes. When modifying existing scripts, reference the exact script path from the context and output a file block for it.'
   ].filter(Boolean);
   if (agent) {
@@ -1656,43 +1657,83 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
   return parts.join('\n');
 }
 
+// Roblox toolbox-service marketplace category IDs (Roblox's standard
+// AssetType numeric IDs, confirmed empirically against the live API):
+// 13 = Decal/Image (used for UI icons), 10 = Model (real 3D assets).
+async function toolboxSearch(categoryId, query, limit) {
+  const ids = [];
+  try {
+    const url = `https://apis.roblox.com/toolbox-service/v1/marketplace/${categoryId}?keyword=${encodeURIComponent(query)}&limit=${limit}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
+    if (!res.ok) return ids;
+    const data = await res.json();
+    for (const item of Array.isArray(data?.data) ? data.data : []) {
+      const id = String(item?.id || '').replace(/\D/g, '');
+      if (id && !ids.includes(id)) ids.push(id);
+      if (ids.length >= limit) break;
+    }
+  } catch {}
+  return ids;
+}
+
 async function buildRobloxUiAssetContext(userText) {
   const text = String(userText || '');
-  if (!/\b(ui|gui|hud|image|icon|button|menu|shop|inventory|health|stamina|coin|gem|logo|thumbnail|picture|asset)\b/i.test(text)) {
-    return '';
-  }
+  const wantsImage = /\b(ui|gui|hud|image|icon|button|menu|shop|inventory|health|stamina|coin|gem|logo|thumbnail|picture)\b/i.test(text);
+  // Broader than the old UI-only trigger: also fires for "find/get/insert/
+  // search [for] a <thing>" style requests and generic asset/model nouns,
+  // so a genuine "put a tree in my game" or "insert a car model" request
+  // reaches the Toolbox search too, not just UI icon requests.
+  const wantsModel = /\b(model|mesh|asset|toolbox|insert|find (?:me |us )?an?|search (?:for )?an?|get (?:me |us )?an?)\b/i.test(text)
+    || /\b(sword|car|tree|house|building|weapon|gun|chair|table|vehicle|animal|npc|prop|furniture|plant|rock|statue)\b/i.test(text);
+  if (!wantsImage && !wantsModel) return '';
+
   const query = text
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/[^\w\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 80) || 'game ui icon';
-  const urls = [
-    `https://apis.roblox.com/toolbox-service/v1/marketplace/13?keyword=${encodeURIComponent(query)}&limit=8`,
-    `https://apis.roblox.com/toolbox-service/v1/marketplace/13?keyword=${encodeURIComponent(query + ' icon')}&limit=8`,
-  ];
-  const ids = [];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
-      if (!res.ok) continue;
-      const data = await res.json();
-      for (const item of Array.isArray(data?.data) ? data.data : []) {
-        const id = String(item?.id || '').replace(/\D/g, '');
-        if (id && !ids.includes(id)) ids.push(id);
-        if (ids.length >= 8) break;
-      }
-    } catch {}
-    if (ids.length >= 8) break;
+    .slice(0, 80) || 'game asset';
+
+  const sections = [];
+
+  if (wantsImage) {
+    const imageIds = [
+      ...(await toolboxSearch(13, query, 8)),
+      ...(await toolboxSearch(13, query + ' icon', 8)),
+    ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 8);
+    if (imageIds.length) {
+      sections.push([
+        'ROBLOX UI IMAGE ASSET SEARCH:',
+        `Query: ${query}`,
+        'Use these as ImageLabel/ImageButton Image values when helpful. Prefer rbxassetid://<id>.',
+        imageIds.map((id, i) => `${i + 1}. rbxassetid://${id}`).join('\n'),
+      ].join('\n'));
+    }
   }
-  if (!ids.length) return '';
-  return [
-    'ROBLOX UI IMAGE ASSET SEARCH:',
-    `Query: ${query}`,
-    'Use these as ImageLabel/ImageButton Image values when helpful. Prefer rbxassetid://<id>.',
-    ids.map((id, index) => `${index + 1}. rbxassetid://${id}`).join('\n'),
-    'If none fit, build a polished UI with Frames/UIStroke/UIGradient/UICorner and do not invent fake asset IDs.',
-  ].join('\n');
+
+  if (wantsModel) {
+    const modelIds = await toolboxSearch(10, query, 8);
+    if (modelIds.length) {
+      sections.push([
+        'ROBLOX TOOLBOX MODEL SEARCH (real community-made 3D assets):',
+        `Query: ${query}`,
+        'To insert one of these into the game, use a studio-action block (NOT roblox-model, which only builds primitive Parts):',
+        '```studio-action',
+        `{"type":"insert_toolbox_model","assetId":${modelIds[0]},"parent":"Workspace","position":[0,5,0]}`,
+        '```',
+        'Available asset IDs from this search (pick the one that best matches the request, not necessarily the first):',
+        modelIds.map((id, i) => `${i + 1}. ${id}`).join('\n'),
+        'Content is community-made and unverified -- if the result seems clearly wrong for the request, fall back to building with roblox-model/Instance.new instead of inserting a bad match.',
+      ].join('\n'));
+    }
+  }
+
+  if (!sections.length) {
+    return wantsImage
+      ? 'ROBLOX UI IMAGE ASSET SEARCH: no results found -- build a polished UI with Frames/UIStroke/UIGradient/UICorner and do not invent fake asset IDs.'
+      : '';
+  }
+  return sections.join('\n\n');
 }
 
 function pickTbThinkingModel(selected) {
@@ -1762,13 +1803,36 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
     });
   }
 
+  // Resilience fallback for Google Flash: its route ('openrouter') previously
+  // resolved to exactly ONE attempt (the paid google/gemini-2.5-flash model),
+  // unlike tb-thinking's multi-model cascade or anthropic-first's 2 attempts.
+  // Since Google Flash is now the default, everyone-sees-it model, a single
+  // transient OpenRouter/Gemini failure (rate limit, brief outage, or that
+  // paid route running low on balance) took the whole model down with no
+  // fallback. Add one free-tier model as a safety net so a single-provider
+  // hiccup doesn't fail the request outright.
+  if (selected.route === 'openrouter' && openRouterKey) {
+    attempts.push({
+      provider: 'openrouter',
+      providerModel: process.env.GOOGLE_FLASH_FALLBACK_MODEL || 'qwen/qwen3-coder:free',
+      apiKey: openRouterKey,
+      baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    });
+  }
+
   return attempts.length ? { provider: selected.route, attempts } : null;
 }
 
 async function completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages, context) {
+  // See streamResponse's matching comment: Agent/Super Agent expect an actual
+  // edit, so a non-final attempt that comes back with no file/studio-action
+  // block should be retried against the next attempt rather than accepted.
+  const wantsCode = Boolean(context.agent || context.superAgent);
   const errors = [];
   for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
     const attempt = providerCall.attempts[attemptIndex];
+    const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
+    const acceptable = (result) => isLastAttempt || !wantsCode || hasStudioCodeBlock(result.text);
     try {
       if (attempt.provider === 'anthropic') {
         const anthropicRequest = {
@@ -1781,6 +1845,10 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         };
         try {
           const result = await callAnthropic(anthropicRequest);
+          if (!acceptable(result)) {
+            errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+            continue;
+          }
           logProviderUsage(result, selected, context, 'completed');
           return result;
         } catch (imageError) {
@@ -1788,6 +1856,10 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
             throw imageError;
           }
           const result = await callAnthropic({ ...anthropicRequest, attachments: [] });
+          if (!acceptable(result)) {
+            errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+            continue;
+          }
           logProviderUsage(result, selected, context, 'completed');
           return result;
         }
@@ -1800,6 +1872,10 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         temperature: modelTemperature(selected),
         maxTokens,
       });
+      if (!acceptable(result)) {
+        errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+        continue;
+      }
       logProviderUsage(result, selected, context, 'completed');
       return result;
     } catch (error) {
@@ -1822,7 +1898,11 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
       }
       if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
-        if (selected.route === 'tb-thinking' && attemptIndex < providerCall.attempts.length - 1) {
+        // Try the next attempt whenever one exists, not just for tb-thinking --
+        // google-flash's route now also carries a resilience fallback (see
+        // resolveProviderCall), so a paid-route credit/balance error should
+        // not short-circuit past it.
+        if (attemptIndex < providerCall.attempts.length - 1) {
           errors.push(`${attempt.provider}: ${error?.message || error}`);
           continue;
         }
@@ -1836,7 +1916,9 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
           errors.push(`${attempt.provider}: ${error?.message || error}`);
           continue;
         }
-        throw publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503);
+        throw selected.route === 'tb-thinking'
+          ? publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503)
+          : publicProviderError('provider_busy', `${selected.name} is busy for a moment. Try again in a few seconds.`, 503);
       }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({
@@ -1859,6 +1941,13 @@ function sseWrite(response, payload) {
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
+// Matches the client's own hasActions check (editor.html _extractStudioActions
+// callers) -- a response only counts as "produced an editable change" if it
+// has a file/studio-action/roblox-model block, not just any code fence.
+function hasStudioCodeBlock(text) {
+  return /```\s*(?:file:|studio-action|roblox-model)/i.test(String(text || ''));
+}
+
 async function streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens, context) {
   response.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -1868,12 +1957,36 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
   });
   sseWrite(response, { model: selected.name, devPass: context.devPass || '' });
 
+  // Agent/Super Agent expect an actual file/studio-action edit, not just a
+  // reply. The editor UI already hides raw streamed text behind a static
+  // "Working on task.." placeholder for these requests (see editor.html's
+  // isTaskStatus rendering), so buffering a non-final attempt instead of
+  // streaming it live costs nothing visible -- and it means a response that
+  // came back successfully but with no actual edit (model just chatted) can
+  // be retried against the next attempt instead of being shown as final.
+  // This is the same hasCodeBlock-retry idea TexBrain's cascade already
+  // proved out, now applied on the path Google Flash/Claude Haiku actually
+  // run (TexBrain itself is hidden from the model picker and unreachable by
+  // real users).
+  const wantsCode = Boolean(context.agent || context.superAgent);
+
   const errors = [];
   for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
     const attempt = providerCall.attempts[attemptIndex];
+    const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
     try {
       let fullText = '';
-      if (attempt.provider === 'anthropic') {
+      if (wantsCode && !isLastAttempt) {
+        const probe = attempt.provider === 'anthropic'
+          ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature: modelTemperature(selected), maxTokens, timeoutMs: 28000 })
+          : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature: modelTemperature(selected), maxTokens, timeoutMs: 28000 });
+        if (!hasStudioCodeBlock(probe.text)) {
+          errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+          continue;
+        }
+        sseWrite(response, { d: probe.text });
+        fullText = probe.text;
+      } else if (attempt.provider === 'anthropic') {
         fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, maxTokens);
       } else {
         fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, maxTokens);
@@ -1924,7 +2037,11 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         throw publicProviderError('groq_busy', GROQ_BUSY_TEXT, 429);
       }
       if (attempt.provider === 'openrouter' && insufficientCreditsError(error)) {
-        if (selected.route === 'tb-thinking' && attemptIndex < providerCall.attempts.length - 1) {
+        // Try the next attempt whenever one exists, not just for tb-thinking --
+        // google-flash's route now also carries a resilience fallback (see
+        // resolveProviderCall), so a paid-route credit/balance error should
+        // not short-circuit past it.
+        if (attemptIndex < providerCall.attempts.length - 1) {
           errors.push(`${attempt.provider}: ${error?.message || error}`);
           continue;
         }
@@ -1938,7 +2055,9 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
           errors.push(`${attempt.provider}: ${error?.message || error}`);
           continue;
         }
-        throw publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503);
+        throw selected.route === 'tb-thinking'
+          ? publicProviderError('texbrain_busy', 'TexBrain is busy for a moment. Try again in a few seconds.', 503)
+          : publicProviderError('provider_busy', `${selected.name} is busy for a moment. Try again in a few seconds.`, 503);
       }
       if (insufficientCreditsError(error)) {
         await onInsufficientCredits({
@@ -2203,7 +2322,7 @@ async function verifyFirebaseToken(authToken) {
   }
 }
 
-async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperature = 0.7, maxTokens = 900 }) {
+async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperature = 0.7, maxTokens = 900, timeoutMs }) {
   if (!apiKey) {
     throw new Error('Missing provider key');
   }
@@ -2221,6 +2340,7 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
       temperature,
       max_tokens: maxTokens,
     }),
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   });
 
   if (!providerResponse.ok) {
@@ -2286,7 +2406,7 @@ function buildAnthropicBody(model, messages, attachments, temperature, maxTokens
   return body;
 }
 
-async function callAnthropic({ apiKey, model, messages, attachments = [], temperature = 0.7, maxTokens = 900 }) {
+async function callAnthropic({ apiKey, model, messages, attachments = [], temperature = 0.7, maxTokens = 900, timeoutMs }) {
   if (!apiKey) {
     throw new Error('Missing Anthropic key');
   }
@@ -2301,6 +2421,7 @@ async function callAnthropic({ apiKey, model, messages, attachments = [], temper
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   });
 
   if (!providerResponse.ok) {

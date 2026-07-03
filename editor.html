@@ -1665,7 +1665,7 @@
         const list = Array.isArray(parsed) ? parsed : [parsed];
         for (const action of list) {
           if (!action || typeof action !== 'object') continue;
-          if (['delete_instance', 'set_property', 'select_instances', 'create_model', 'terrain_edit', 'lighting_set', 'create_ui_image'].includes(action.type)) {
+          if (['delete_instance', 'set_property', 'select_instances', 'create_model', 'insert_toolbox_model', 'terrain_edit', 'lighting_set', 'create_ui_image'].includes(action.type)) {
             actions.push(action);
           }
         }

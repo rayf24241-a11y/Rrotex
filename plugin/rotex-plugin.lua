@@ -1,4 +1,4 @@
--- ROTEX Studio Plugin v2.7
+-- ROTEX Studio Plugin v3.0
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
@@ -9,6 +9,7 @@ local Selection            = game:GetService("Selection")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local Lighting             = game:GetService("Lighting")
 local Terrain              = workspace.Terrain
+local InsertService        = game:GetService("InsertService")
 
 -- ── Toolbar ───────────────────────────────────────────────────────────────────
 local toolbar = plugin:CreateToolbar("ROTEX AI")
@@ -74,7 +75,7 @@ local root = Frame(widget, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), C.bg)
 
 local hdr = Frame(root, UDim2.new(1,0,0,48), UDim2.new(0,0,0,0), C.surface)
 Label(hdr, "ROTEX AI", UDim2.new(1,-14,0,20), UDim2.new(0,12,0,8), C.text, 14, true)
-Label(hdr, "Studio Bridge v2.7", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
+Label(hdr, "Studio Bridge v3.0", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
 Frame(root, UDim2.new(1,0,0,1), UDim2.new(0,0,0,48), C.border)
 
 local Y = 58
@@ -279,10 +280,11 @@ local function buildGameContext(includeSelected)
 	return {
 		project = projectName,
 		gameName = gameName,
-		pluginVersion = "2.7",
+		pluginVersion = "3.0",
 		capabilities = {
 			"apply_files",
 			"create_model geometry",
+			"insert_toolbox_model (real Toolbox assets via InsertService)",
 			"terrain_edit fill_block/fill_ball/clear",
 			"lighting_set properties",
 			"create_ui_image ImageLabel/ImageButton",
@@ -419,6 +421,57 @@ local function handleCreateModel(action)
 	end
 	ChangeHistoryService:SetWaypoint("ROTEX CreateModel Done")
 	return true, table.concat(msgs, "\n")
+end
+
+-- Inserts a real Toolbox asset (searched server-side, see ROTEX TOOLBOX
+-- SEARCH context in the AI prompt) via InsertService:LoadAsset, instead of
+-- building primitive Part-based geometry from scratch. Works for any asset
+-- type LoadAsset supports (models are the primary use case here).
+local function handleInsertToolboxModel(action)
+	local assetId = tonumber(action.assetId)
+	if not assetId or assetId <= 0 then
+		return false, "insert_toolbox_model: missing or invalid assetId"
+	end
+	local parentInst = workspace
+	local parentName = action.parent or "Workspace"
+	if string.find(parentName, "[/\\%.]") then
+		parentInst = resolveByPath(parentName) or workspace
+	else
+		local ok, svc = pcall(function() return studioRoot(parentName) end)
+		if ok then parentInst = svc end
+	end
+	ChangeHistoryService:SetWaypoint("ROTEX InsertToolboxModel")
+	local ok, result = pcall(function() return InsertService:LoadAsset(assetId) end)
+	if not ok or not result then
+		return false, "Could not load Toolbox asset " .. tostring(assetId) .. ": " .. tostring(result)
+	end
+	-- LoadAsset always wraps the result in a Model container, even for a
+	-- single mesh/part -- unwrap it if the container has exactly one child,
+	-- so the inserted object isn't needlessly double-nested.
+	local inserted = result
+	local children = result:GetChildren()
+	if #children == 1 then
+		inserted = children[1]
+		inserted.Parent = parentInst
+		result:Destroy()
+	else
+		inserted.Parent = parentInst
+	end
+	if action.name then inserted.Name = action.name end
+	if action.position and inserted:IsA("Model") then
+		local ok2 = pcall(function()
+			if not inserted.PrimaryPart then
+				inserted.PrimaryPart = inserted:FindFirstChildWhichIsA("BasePart", true)
+			end
+			if inserted.PrimaryPart then
+				inserted:SetPrimaryPartCFrame(CFrame.new(action.position[1] or 0, action.position[2] or 5, action.position[3] or 0))
+			end
+		end)
+	elseif action.position and inserted:IsA("BasePart") then
+		inserted.CFrame = CFrame.new(action.position[1] or 0, action.position[2] or 5, action.position[3] or 0)
+	end
+	ChangeHistoryService:SetWaypoint("ROTEX InsertToolboxModel Done")
+	return true, "Inserted Toolbox asset " .. tostring(assetId) .. " as " .. inserted.Name
 end
 
 local function vectorFromTable(value, default)
@@ -725,6 +778,11 @@ task.spawn(function()
 		elseif action.type == "create_model" then
 			local ok2, msg = pcall(handleCreateModel, action)
 			success = ok2; addMsg(msg or ok2)
+
+		elseif action.type == "insert_toolbox_model" then
+			local callOk, modelOk, msg = pcall(handleInsertToolboxModel, action)
+			success = callOk and modelOk
+			addMsg(callOk and (msg or (modelOk and "ok" or "Failed to insert Toolbox asset")) or tostring(modelOk))
 
 		elseif action.type == "terrain_edit" then
 			local ok2, msg = pcall(handleTerrainEdit, action)
