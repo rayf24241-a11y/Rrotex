@@ -729,8 +729,13 @@ async function handleTexBrain(req, res) {
     const realInputTok = usedUsage?.prompt_tokens ?? Math.max(1, Math.ceil(inputCharsEstimate / 4));
     const realOutputTok = usedUsage?.completion_tokens ?? Math.max(1, Math.ceil(text.length / 4));
     let tbCost = (realInputTok * (tbModel.inputTexTokens || 1) + realOutputTok * (tbModel.outputTexTokens || 1)) * (tbModel.multiplier || 1);
-    if (mode === 'agent') tbCost *= 2;
-    if (mode === 'supreme') tbCost *= 4;
+    // Kept in sync with the doubled agent/superAgent multipliers in
+    // estimateTexTokens/logProviderUsage even though this path is currently
+    // unreachable by real users (TexBrain is hidden -- see
+    // project_texbrain_dead_path memory) so it isn't a silent landmine if
+    // ever re-enabled.
+    if (mode === 'agent') tbCost *= 4;
+    if (mode === 'supreme') tbCost *= 8;
     // 3D modeling (roblox-model / create_model) is a distinct, higher-value
     // capability -- it creates real, persistent geometry in the game, not just
     // a script edit -- so it carries a premium on top of the normal token cost
@@ -1865,6 +1870,7 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
     const attempt = providerCall.attempts[attemptIndex];
     const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
     const acceptable = (result) => isLastAttempt || !wantsCode || hasStudioCodeBlock(result.text);
+    const reasoning = reasoningFor(attempt, context.agent, context.superAgent);
     try {
       if (attempt.provider === 'anthropic') {
         const anthropicRequest = {
@@ -1873,7 +1879,7 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
           messages: cleanMessages,
           attachments: cleanAttachments,
           temperature: codeTemperature(selected, context.agent, context.superAgent),
-          maxTokens: effectiveMaxTokens(attempt, maxTokens),
+          maxTokens: effectiveMaxTokens(attempt, maxTokens, reasoning),
         };
         try {
           const result = await callAnthropic(anthropicRequest);
@@ -1902,8 +1908,8 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         model: attempt.providerModel,
         messages: cleanMessages,
         temperature: codeTemperature(selected, context.agent, context.superAgent),
-        maxTokens: effectiveMaxTokens(attempt, maxTokens),
-        reasoning: reasoningFor(attempt, context.agent, context.superAgent),
+        maxTokens: effectiveMaxTokens(attempt, maxTokens, reasoning),
+        reasoning,
       });
       if (!acceptable(result)) {
         errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
@@ -1974,11 +1980,30 @@ function sseWrite(response, payload) {
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-// Matches the client's own hasActions check (editor.html _extractStudioActions
-// callers) -- a response only counts as "produced an editable change" if it
-// has a file/studio-action/roblox-model block, not just any code fence.
+// A studio-action/roblox-model fence existing is a decent enough signal on
+// its own (the client's own JSON/type validation for those is the real gate,
+// and duplicating it here isn't worth the drift risk). A ```file: block is
+// different and worth checking more carefully: the client's
+// _extractStudioFiles additionally requires the path to start with a real
+// Roblox service root (editor.html's VALID_ROOT) before it will apply
+// anything -- a response that "has a file: block" by this function's
+// old definition but used an invalid/invented root (or no root at all)
+// would pass this check, get accepted as final, and then still fail
+// client-side with "did not receive an executable Studio change", which
+// looks identical to the model not trying at all. Mirroring that root
+// check here means a genuinely bad path gets retried against the next
+// attempt instead of being accepted as a false-positive success.
+const VALID_ROBLOX_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack|Lighting|SoundService|Teams|Players|TextChatService|Chat)[./\\]/i;
 function hasStudioCodeBlock(text) {
-  return /```\s*(?:file:|studio-action|roblox-model)/i.test(String(text || ''));
+  const t = String(text || '');
+  if (/```\s*(?:studio-action|roblox-model)/i.test(t)) return true;
+  const fileRe = /```\s*file:\s*([^\n`]+)/gi;
+  let match;
+  while ((match = fileRe.exec(t))) {
+    const path = String(match[1] || '').trim().replace(/^game[./]/i, '');
+    if (VALID_ROBLOX_ROOT.test(path)) return true;
+  }
+  return false;
 }
 
 // Agent/Super Agent push maxTokens up to 12000-16000 (see the maxTokens
@@ -1988,8 +2013,23 @@ function hasStudioCodeBlock(text) {
 // (not truncate) well below that -- the exact bug already diagnosed and
 // fixed for TexBrain's own cascade (see its 8000-not-12000 comment). Apply
 // the same cap here so a fallback attempt doesn't fail for the same reason.
-function effectiveMaxTokens(attempt, maxTokens) {
-  return /:free\b/i.test(attempt.providerModel || '') ? Math.min(maxTokens, 8000) : maxTokens;
+//
+// reasoning !== undefined means this attempt is spending real tokens on
+// internal thinking BEFORE it writes the actual file/studio-action block --
+// those thinking tokens draw from the same max_tokens ceiling as the
+// completion (confirmed by the "On hold: did not receive an executable
+// Studio change" failures that started right after reasoning was enabled --
+// a request that used most of its budget thinking could be cut off before
+// ever completing a ```file: block, which reads identically to "the model
+// didn't try"). Give reasoning-active attempts a much larger ceiling so
+// thinking can never crowd out the actual output; Gemini 2.5 Flash supports
+// up to 65535 completion tokens, confirmed live via OpenRouter's model
+// metadata, so there's plenty of headroom below that hard limit.
+function effectiveMaxTokens(attempt, maxTokens, reasoning) {
+  if (/:free\b/i.test(attempt.providerModel || '')) return Math.min(maxTokens, 8000);
+  if (reasoning?.effort === 'high') return Math.max(maxTokens, 32000);
+  if (reasoning?.effort === 'medium') return Math.max(maxTokens, 24000);
+  return maxTokens;
 }
 
 // Requests real thinking/reasoning tokens from a reasoning-capable attempt
@@ -2051,13 +2091,19 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
     try {
       let fullText = '';
-      const attemptMaxTokens = effectiveMaxTokens(attempt, maxTokens);
       const reasoning = reasoningFor(attempt, context.agent, context.superAgent);
+      const attemptMaxTokens = effectiveMaxTokens(attempt, maxTokens, reasoning);
       const temperature = codeTemperature(selected, context.agent, context.superAgent);
+      // A reasoning-active attempt has a much bigger maxTokens ceiling (see
+      // effectiveMaxTokens) and spends real wall-clock time thinking before
+      // it writes anything -- 28s was tuned for a fast, non-reasoning probe
+      // and was cutting these off mid-generation. Still leaves room for the
+      // fallback attempt afterward within the 90s Vercel function limit.
+      const probeTimeoutMs = reasoning ? 55000 : 28000;
       if (wantsCode && !isLastAttempt) {
         const probe = attempt.provider === 'anthropic'
-          ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature, maxTokens: attemptMaxTokens, timeoutMs: 28000 })
-          : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature, maxTokens: attemptMaxTokens, timeoutMs: 28000, reasoning });
+          ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature, maxTokens: attemptMaxTokens, timeoutMs: probeTimeoutMs })
+          : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature, maxTokens: attemptMaxTokens, timeoutMs: probeTimeoutMs, reasoning });
         if (!hasStudioCodeBlock(probe.text)) {
           errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
           continue;
@@ -2537,8 +2583,12 @@ function logProviderUsage(result, selected, context, status) {
     inputTokens * (selected.inputTexTokens || 1)
     + outputTokens * (selected.outputTexTokens || 1)
   ) * (selected.multiplier || 1);
-  if (context.agent) charged *= 2;
-  if (context.superAgent) charged *= 4;
+  // Doubled (was 2x/4x) -- must stay in sync with estimateTexTokens's
+  // matching *= 4 / *= 8 (api/_lib/credit-safety.js), which is what gates
+  // whether a request is allowed to run at all before this actual charge is
+  // ever computed.
+  if (context.agent) charged *= 4;
+  if (context.superAgent) charged *= 8;
   // 3D modeling premium (see MODELING_COST_MULTIPLIER) -- same rule as TexBrain.
   if (/```\s*roblox-model\b/i.test(result.text || '')) charged *= MODELING_COST_MULTIPLIER;
   logUsage({

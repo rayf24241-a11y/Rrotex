@@ -22,8 +22,15 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
     tokens.inputTokens * (selected.inputTexTokens || 1)
     + tokens.outputTokens * (selected.outputTexTokens || 1)
   ) * (selected.multiplier || 1);
-  if (mode.agent) textokens *= 2;
-  if (mode.superAgent) textokens *= 4;
+  // Doubled (was 2x/4x) -- Agent/Super Agent now do real extra work per
+  // request (retry-until-code-block cascade, real reasoning tokens, a much
+  // larger project context budget), so they cost more to run than when
+  // these multipliers were first set. Must stay in sync with the matching
+  // *= 4 / *= 8 in logProviderUsage (api/chat.js) -- that's the actual
+  // charge logged after the response completes, and this estimate is what
+  // gates whether the request is allowed to run in the first place.
+  if (mode.agent) textokens *= 4;
+  if (mode.superAgent) textokens *= 8;
   return {
     ...tokens,
     textokens: Math.ceil(textokens),
