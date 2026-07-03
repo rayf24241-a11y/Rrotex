@@ -637,11 +637,18 @@ async function handleTexBrain(req, res) {
       return;
     }
 
-    // Still no code block? Force a stripped retry with the best coder.
+    // Still no code block? Force a stripped retry with the best coder. Must
+    // still include contextMsgs (PROJECT CONTEXT / existing scripts) -- a
+    // bare "output a file block" instruction with only the user's raw
+    // message is useless for a context-dependent follow-up like "I can't see
+    // it, fix it": the model has no way to know what "it" even refers to
+    // without the existing script in front of it, so it fails every time,
+    // producing the exact "On hold: nothing was edited" symptom.
     if (isCodeMode && !hasCodeBlock(text)) {
       try {
         const retryPrompt = [
-          { role: 'system', content: `Output ONLY a file block. Nothing else.\nFormat:\n\`\`\`file:ServiceName/ScriptName.lua\n-- code here\n\`\`\`` },
+          { role: 'system', content: `Output ONLY a file block. Nothing else.\nFormat:\n\`\`\`file:ServiceName/ScriptName.lua\n-- code here\n\`\`\`\nUse PROJECT CONTEXT below to identify which existing script the request refers to.` },
+          ...contextMsgs,
           { role: 'user', content: lastUserMsg },
         ];
         const result = GROQ_KEY
