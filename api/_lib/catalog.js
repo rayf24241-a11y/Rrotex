@@ -87,7 +87,10 @@ const MODEL_ALIASES = {
   'claude-haiku-latest': 'pro-smart',
 };
 
-const DEFAULT_MODEL_ID = 'texbrain-thinking';
+// TexBrain hidden from the app (model picker + website) for now -- kept in
+// MODELS below so handleTexBrain's pricing logic and the backend route still
+// work if it's ever re-enabled. Google Flash is the default in the meantime.
+const DEFAULT_MODEL_ID = 'google-flash';
 
 function resolveModelId(id) {
   if (MODELS[id]) return id;

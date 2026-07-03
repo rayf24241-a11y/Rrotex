@@ -767,8 +767,10 @@
   const GOOGLE_SVG      = `<img src="./google-flash-logo.png" width="22" height="22" style="border-radius:5px;object-fit:contain;" draggable="false" alt="Google Flash">`;
 
   /* -- Model selector ---------------------------------------- */
+  // TexBrain Thinking-beta hidden from the picker (kept in the backend/
+  // catalog for later -- see api/chat.js handleTexBrain and
+  // api/_lib/catalog.js). Not deleted, just not selectable right now.
   const MODELS = [
-    { id: 'texbrain-thinking', name: 'TexBrain Thinking-beta', role: 'Balanced', subtitle: '4.8x', svg: TB_THINKING_SVG, pro: false, localOnly: false, localCapable: true, vision: true  },
     { id: 'google-flash',      name: 'Google Flash',          role: 'Code + chat',  subtitle: '', svg: GOOGLE_SVG,      pro: false, localOnly: false, vision: false },
     { id: 'pro-smart',         name: 'Claude Haiku',          role: 'Premium', subtitle: 'best',  svg: CLAUDE_SVG,      pro: false, localOnly: false, vision: true  },
   ];
@@ -790,9 +792,9 @@
     }
   }
 
-  let selectedModel = localStorage.getItem('rotex_model') || 'texbrain-thinking';
+  let selectedModel = localStorage.getItem('rotex_model') || 'google-flash';
   if (!MODELS.some(m => m.id === selectedModel)) {
-    selectedModel = 'texbrain-thinking';
+    selectedModel = 'google-flash';
     localStorage.setItem('rotex_model', selectedModel);
   }
 
@@ -2217,7 +2219,7 @@
           signal: _chatAbort.signal,
           body: JSON.stringify({
             authToken,
-            model: selectedModel || 'texbrain-thinking',
+            model: selectedModel || 'google-flash',
             messages: _chatHistory.slice(-20),
             mode: 'editor',
             projectMode: projMode,
