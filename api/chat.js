@@ -592,7 +592,7 @@ async function handleTexBrain(req, res) {
       for (const m of groqCandidates) {
         try {
           const result = await groqCall(m, workerMessages, isCodeMode ? 8000 : 6000);
-          const t = result.choices?.[0]?.message?.content?.trim();
+          const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
           if (t) { text = t; usedModel = 'groq/' + m; usedUsage = result.usage || null; if (!isCodeMode || hasCodeBlock(t)) break; }
         } catch (e) { tbErrors.push(`groq/${m}: ${e?.message || e}`); }
       }
@@ -604,10 +604,16 @@ async function handleTexBrain(req, res) {
     //      needed -- the common case stays fast). Agent gets a shorter
     //      timeout than Supreme so it stays relatively responsive; Supreme
     //      users have already opted into a slower, deeper pass (4x cost).
+    //      max_tokens is 16000, not the usual 8000: R1 is a reasoning model --
+    //      it spends a real chunk of its output budget on internal <think>
+    //      chain-of-thought BEFORE the final answer. Capping it at the same
+    //      8000 ceiling as fast models risked truncating mid-thought, before
+    //      it ever reached the actual code block -- wasting the entire point
+    //      of paying the extra latency for it.
     if (isCodeMode && (!text || !hasCodeBlock(text))) {
       try {
-        const result = await orCall(TB_REASONING, workerMessages, 8000, isSupreme ? 45000 : 35000);
-        const t = result.choices?.[0]?.message?.content?.trim();
+        const result = await orCall(TB_REASONING, workerMessages, 16000, isSupreme ? 45000 : 35000);
+        const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
         if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
       } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
     }
@@ -618,7 +624,7 @@ async function handleTexBrain(req, res) {
       if (!isCodeMode) {
         try {
           const result = await orCall(TB_TALK, workerMessages, 6000);
-          const t = result.choices?.[0]?.message?.content?.trim();
+          const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
           if (t) { text = t; usedModel = TB_TALK; usedUsage = result.usage || null; }
         } catch (e) { tbErrors.push(`or/${TB_TALK}: ${e?.message || e}`); }
       } else {
@@ -626,7 +632,7 @@ async function handleTexBrain(req, res) {
         for (const m of codeCandidates) {
           try {
             const result = await orCall(m, workerMessages);
-            const t = result.choices?.[0]?.message?.content?.trim();
+            const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
             if (t) { text = t; usedModel = m; usedUsage = result.usage || null; if (hasCodeBlock(t)) break; }
           } catch (e) { tbErrors.push(`or/${m}: ${e?.message || e}`); }
         }
@@ -657,7 +663,7 @@ async function handleTexBrain(req, res) {
         const result = GROQ_KEY
           ? await groqCall(GROQ_CODE1, retryPrompt, 8192)
           : await orCall(TB_CODE1, retryPrompt, 8192);
-        const t = result.choices?.[0]?.message?.content?.trim();
+        const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
         if (t && hasCodeBlock(t)) { text = text + '\n\n' + t; usedModel += '+retry'; }
       } catch (e) { /* keep original text */ }
     }
