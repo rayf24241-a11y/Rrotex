@@ -8,6 +8,14 @@ const MODELS = {
     logo: 'T',
     tier: 'free',
     access: 'Free',
+    // Hidden from the app/website (see the model picker in editor.html and
+    // index.html), but the entry is kept here for later. enabled: false is
+    // the actual server-side gate -- it's enforced in resolveModelId() below
+    // AND at the top of handleTexBrain() in api/chat.js (a separate route
+    // that doesn't go through resolveModelId at all), so hiding it from the
+    // UI can't be bypassed by tampered client code, a direct API call, or a
+    // stale localStorage value pointing at it.
+    enabled: false,
     inputTexTokens: 0.8,
     outputTexTokens: 2.4,
     multiplier: 2,
@@ -93,13 +101,20 @@ const MODEL_ALIASES = {
 const DEFAULT_MODEL_ID = 'google-flash';
 
 function resolveModelId(id) {
-  if (MODELS[id]) return id;
-  if (MODEL_ALIASES[id] && MODELS[MODEL_ALIASES[id]]) return MODEL_ALIASES[id];
+  // A disabled model (enabled: false) is treated as not found -- this is the
+  // actual server-side enforcement for hiding a model, not just leaving it
+  // out of the client UI. A tampered client, stale localStorage value, or a
+  // request crafted directly against the API cannot resolve to a disabled
+  // model this way; it silently falls through to DEFAULT_MODEL_ID instead.
+  if (MODELS[id] && MODELS[id].enabled !== false) return id;
+  if (MODEL_ALIASES[id] && MODELS[MODEL_ALIASES[id]] && MODELS[MODEL_ALIASES[id]].enabled !== false) return MODEL_ALIASES[id];
   return DEFAULT_MODEL_ID;
 }
 
 function publicCatalog() {
-  return Object.entries(MODELS).map(([id, m]) => ({
+  return Object.entries(MODELS)
+    .filter(([, m]) => m.enabled !== false)
+    .map(([id, m]) => ({
     id,
     name: m.name,
     providerName: m.providerName || '',

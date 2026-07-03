@@ -509,6 +509,17 @@ async function handleTexBrain(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ error: 'method not allowed' }); return; }
 
+  // This route is dispatched purely by URL path (see the handler at the
+  // bottom of this file), not through resolveModelId(), so hiding TexBrain
+  // from the model catalog alone doesn't stop a direct request here. Same
+  // enabled: false gate as resolveModelId -- this is the actual server-side
+  // enforcement; a tampered client or a raw request against this endpoint
+  // can't bypass it.
+  if (MODELS['texbrain-thinking']?.enabled === false) {
+    res.status(404).json({ error: 'TexBrain is not currently available.' });
+    return;
+  }
+
   const { authToken, messages = [], projectMode = 'Roblox', mode = '', proPass = '' } = req.body || {};
   const tbAuth = tbVerifyToken(authToken);
   if (!tbAuth.ok) { res.status(401).json({ error: 'Please sign in to use TexBrain.' }); return; }
