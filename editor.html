@@ -2053,7 +2053,12 @@
       if (!scripts.length) return out + '\nPROJECT SCRIPTS: none scanned yet (the plugin auto-scans on connect and every 10s).';
       out += '\nPROJECT SCRIPTS (live from Roblox Studio - ' + scripts.length + ' scripts). Search these before saying the project is empty:';
       for (const s of scripts) {
-        const src = String(s.source || '').slice(0, 3000);
+        // 3000 was cutting off most non-trivial scripts (a 150+ line system
+        // is easily past that) before the model ever saw the rest of the
+        // file. The server-side PROJECT CONTEXT budget (api/chat.js
+        // buildEditorSystemPrompt) is now large enough that a higher
+        // per-script cap here won't just get re-truncated immediately after.
+        const src = String(s.source || '').slice(0, 12000);
         const rawPath = String(s.path || s.name || 'Script');
         const displayPath = _normalizeFilePath(rawPath);
         out += '\n\n--- ' + displayPath + ' [' + (s.class || 'Script') + '] ---\n' + src;

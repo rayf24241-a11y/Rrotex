@@ -1652,7 +1652,20 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     );
   }
   if (projectContext) {
-    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, isPro ? 48000 : 16000)}`);
+    // Gemini 2.5 Flash's real context window is >1M tokens (confirmed live
+    // against OpenRouter's model metadata) -- the old 16k/48k character caps
+    // here were chopping most non-trivial projects (each script alone can
+    // already eat 3-8k characters) down to a handful of scripts before the
+    // model ever saw the rest, directly undermining the "MANDATORY PROJECT
+    // SEARCH PASS" instruction above: it can't search context that was
+    // already truncated away. Scaled up for everyone, and further for
+    // Agent/Super Agent specifically, since that's exactly when a full view
+    // of the project matters most (finding the real owner script, existing
+    // patterns to reuse, everything the search-pass rule asks for).
+    const contextCap = superAgent ? (isPro ? 160000 : 60000)
+      : agent ? (isPro ? 110000 : 42000)
+      : (isPro ? 64000 : 24000);
+    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, contextCap)}`);
   }
   return parts.join('\n');
 }
@@ -1800,6 +1813,14 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
       providerModel: selected.orModel,
       apiKey: openRouterKey,
       baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+      // google/gemini-2.5-flash is a real hybrid-reasoning model with a
+      // controllable thinking budget -- confirmed live against OpenRouter's
+      // /models/.../endpoints metadata, which lists "reasoning" in
+      // supported_parameters for every provider endpoint of this model.
+      // Scoped to exactly this attempt (not the qwen3-coder fallback, which
+      // isn't confirmed to support it) so reasoningFor() only ever applies
+      // where it's known to work.
+      reasoningCapable: selected.route === 'openrouter',
     });
   }
 
@@ -1840,7 +1861,7 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
           model: attempt.providerModel,
           messages: cleanMessages,
           attachments: cleanAttachments,
-          temperature: modelTemperature(selected),
+          temperature: codeTemperature(selected, context.agent, context.superAgent),
           maxTokens: effectiveMaxTokens(attempt, maxTokens),
         };
         try {
@@ -1869,8 +1890,9 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         baseUrl: attempt.baseUrl,
         model: attempt.providerModel,
         messages: cleanMessages,
-        temperature: modelTemperature(selected),
+        temperature: codeTemperature(selected, context.agent, context.superAgent),
         maxTokens: effectiveMaxTokens(attempt, maxTokens),
+        reasoning: reasoningFor(attempt, context.agent, context.superAgent),
       });
       if (!acceptable(result)) {
         errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
@@ -1959,6 +1981,37 @@ function effectiveMaxTokens(attempt, maxTokens) {
   return /:free\b/i.test(attempt.providerModel || '') ? Math.min(maxTokens, 8000) : maxTokens;
 }
 
+// Requests real thinking/reasoning tokens from a reasoning-capable attempt
+// (currently just google/gemini-2.5-flash, see resolveProviderCall's
+// reasoningCapable flag) instead of a single fast pass -- confirmed live
+// against OpenRouter's model metadata that "reasoning" is a supported
+// parameter for this model. exclude:true means the thinking tokens are
+// billed and used but never sent back in the response, matching the
+// existing "never output hidden reasoning" rule -- callers here only ever
+// read .content, never .reasoning, so this is belt-and-suspenders.
+// Scoped to Agent/Super Agent: plain chat doesn't need the extra latency
+// or the real per-token reasoning cost (billed by OpenRouter separately
+// from completion tokens) for a quick question.
+function reasoningFor(attempt, agent, superAgent) {
+  if (!attempt.reasoningCapable) return undefined;
+  if (superAgent) return { effort: 'high', exclude: true };
+  if (agent) return { effort: 'medium', exclude: true };
+  return undefined;
+}
+
+// Editing/fixing code benefits from a lower, more deterministic temperature
+// than open-ended chat -- TexBrain's own cascade already settled on 0.2 for
+// its coding calls (see TB_CODE1/TB_REASONING usage above). Google Flash was
+// pinned at a flat 0.35 regardless of mode; lower it further for Agent/Super
+// Agent specifically, where correctness matters more than variety. Plain
+// chat keeps the model's normal temperature unchanged.
+function codeTemperature(selected, agent, superAgent) {
+  const base = modelTemperature(selected);
+  if (superAgent) return Math.min(base, 0.15);
+  if (agent) return Math.min(base, 0.25);
+  return base;
+}
+
 async function streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens, context) {
   response.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -1988,10 +2041,12 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     try {
       let fullText = '';
       const attemptMaxTokens = effectiveMaxTokens(attempt, maxTokens);
+      const reasoning = reasoningFor(attempt, context.agent, context.superAgent);
+      const temperature = codeTemperature(selected, context.agent, context.superAgent);
       if (wantsCode && !isLastAttempt) {
         const probe = attempt.provider === 'anthropic'
-          ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature: modelTemperature(selected), maxTokens: attemptMaxTokens, timeoutMs: 28000 })
-          : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature: modelTemperature(selected), maxTokens: attemptMaxTokens, timeoutMs: 28000 });
+          ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature, maxTokens: attemptMaxTokens, timeoutMs: 28000 })
+          : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature, maxTokens: attemptMaxTokens, timeoutMs: 28000, reasoning });
         if (!hasStudioCodeBlock(probe.text)) {
           errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
           continue;
@@ -1999,9 +2054,9 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         sseWrite(response, { d: probe.text });
         fullText = probe.text;
       } else if (attempt.provider === 'anthropic') {
-        fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, attemptMaxTokens);
+        fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, attemptMaxTokens, temperature);
       } else {
-        fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, attemptMaxTokens);
+        fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, attemptMaxTokens, reasoning, temperature);
       }
       logUsage({
         user_id: context.userId,
@@ -2112,7 +2167,7 @@ function resolveAnthropicModel(selected) {
   return (selected.envModel && process.env[selected.envModel]) || selected.anthropicModel;
 }
 
-async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens) {
+async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens, reasoning, temperature) {
   const providerResponse = await fetch(providerCall.baseUrl, {
     method: 'POST',
     headers: {
@@ -2123,9 +2178,10 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
     body: JSON.stringify({
       model: providerCall.providerModel,
       messages,
-      temperature: modelTemperature(selected),
+      temperature: temperature ?? modelTemperature(selected),
       max_tokens: maxTokens,
       stream: true,
+      ...(reasoning ? { reasoning } : {}),
     }),
   });
   if (!providerResponse.ok) {
@@ -2144,8 +2200,8 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
   return fullText;
 }
 
-async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens) {
-  const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, modelTemperature(selected), maxTokens);
+async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens, temperature) {
+  const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, temperature ?? modelTemperature(selected), maxTokens);
   body.stream = true;
 
   const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -2334,7 +2390,7 @@ async function verifyFirebaseToken(authToken) {
   }
 }
 
-async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperature = 0.7, maxTokens = 900, timeoutMs }) {
+async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperature = 0.7, maxTokens = 900, timeoutMs, reasoning }) {
   if (!apiKey) {
     throw new Error('Missing provider key');
   }
@@ -2351,6 +2407,7 @@ async function callOpenAiCompatible({ apiKey, baseUrl, model, messages, temperat
       messages,
       temperature,
       max_tokens: maxTokens,
+      ...(reasoning ? { reasoning } : {}),
     }),
     ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   });
