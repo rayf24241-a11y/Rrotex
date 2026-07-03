@@ -630,6 +630,22 @@ async function handleTexBrain(req, res) {
       }
     }
 
+    // Regular Agent mode: unlike Supreme, this doesn't get the reasoning pass
+    // up front (agent mode should stay fast for the common case where Groq or
+    // an OpenRouter fast model just works). But if every fast candidate has
+    // already failed to produce a code block, that's exactly the situation
+    // where a genuinely stronger model is worth the extra latency -- the fast
+    // path already failed, so there's nothing left to lose by trying harder
+    // before giving up. Uses the full workerMessages (real context), unlike
+    // the stripped-context retry further down.
+    if (mode === 'agent' && (!text || !hasCodeBlock(text))) {
+      try {
+        const result = await orCall(TB_REASONING, workerMessages, 8000, 40000);
+        const t = result.choices?.[0]?.message?.content?.trim();
+        if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
+      } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
+    }
+
     if (!text && tbErrors.length) console.error('[TexBrain] all candidates failed:', tbErrors.join(' | '));
 
     if (!text) {
