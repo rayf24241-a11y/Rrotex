@@ -599,58 +599,57 @@ async function handleTexBrain(req, res) {
     const groqCall = (model, msgs, maxTok = 8000, timeoutMs = 20000) =>
       tbGroqPost(model, msgs, maxTok, timeoutMs);
 
-    // 1. Groq gpt-oss-120b — a single fast attempt only (not looping into the
-    //    weaker llama-3.3-70b yet). If this alone produces usable code, the
-    //    common case stays fast. If not, step 1.3 tries a genuinely BIGGER
-    //    model before falling back to a smaller/faster one -- raw capability
-    //    beats speed once the fast attempt has already failed once.
+    // 1. Groq — fast, tried first. Agent mode loops through BOTH Groq
+    //    candidates before reaching for anything slower (speed matters most
+    //    for the common case; a real user report confirmed the earlier
+    //    "try the biggest model early" ordering made ordinary requests feel
+    //    ~2x slower for no benefit most of the time). Supreme mode only
+    //    tries the first Groq candidate before moving to bigger/slower
+    //    models, since Supreme users have already opted into depth over
+    //    speed (4x cost).
     if (GROQ_KEY) {
-      try {
-        const result = await groqCall(isCodeMode ? GROQ_CODE1 : GROQ_TALK, workerMessages, isCodeMode ? 8000 : 6000);
-        const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
-        if (t) { text = t; usedModel = 'groq/' + (isCodeMode ? GROQ_CODE1 : GROQ_TALK); usedUsage = result.usage || null; }
-      } catch (e) { tbErrors.push(`groq/${GROQ_CODE1}: ${e?.message || e}`); }
+      const groqCandidates = isCodeMode
+        ? (isSupreme ? [GROQ_CODE1] : [GROQ_CODE1, GROQ_CODE2])
+        : [GROQ_TALK];
+      for (const m of groqCandidates) {
+        try {
+          const result = await groqCall(m, workerMessages, isCodeMode ? 8000 : 6000);
+          const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
+          if (t) { text = t; usedModel = 'groq/' + m; usedUsage = result.usage || null; if (!isCodeMode || hasCodeBlock(t)) break; }
+        } catch (e) { tbErrors.push(`groq/${m}: ${e?.message || e}`); }
+      }
     }
 
-    // 1.3. Code mode only: qwen3-coder:free on OpenRouter is the full 480B
-    //      parameter model (35B active, MoE) -- confirmed via
-    //      openrouter.ai/qwen/qwen3-coder:free -- genuinely the largest free
-    //      coding-specialized model available, ~4x bigger than gpt-oss-120b.
-    //      Tried here, before falling back to the smaller/faster Groq
-    //      llama-3.3-70b, because raw model capability matters more than
-    //      speed once the fast first attempt didn't already succeed.
-    if (isCodeMode && (!text || !hasCodeBlock(text))) {
+    // 1.3/1.5. Supreme mode only: qwen3-coder (the full 480B parameter model,
+    //      confirmed via openrouter.ai/qwen/qwen3-coder:free -- ~4x bigger
+    //      than gpt-oss-120b) then a genuine reasoning pass (deepseek-r1),
+    //      tried early because Supreme users already expect a slower, deeper
+    //      pass. Agent mode does NOT get these early -- they're still
+    //      available as fallbacks in step 2 below, just not jumping ahead of
+    //      the fast path, so ordinary Agent requests stay fast.
+    if (isSupreme && (!text || !hasCodeBlock(text))) {
       try {
         const result = await orCall(TB_CODE1, workerMessages, 8000, 30000);
         const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
         if (t && hasCodeBlock(t)) { text = t; usedModel = TB_CODE1; usedUsage = result.usage || null; }
       } catch (e) { tbErrors.push(`or/${TB_CODE1}: ${e?.message || e}`); }
     }
-
-    // 1.5. Agent and Super Agent: a genuinely stronger reasoning pass, not
-    //      just more prompt text on the same fast model. Skipped if a prior
-    //      attempt already produced a usable code block (saves the latency
-    //      when not needed -- the common case stays fast). Agent gets a
-    //      shorter timeout than Supreme so it stays relatively responsive;
-    //      Supreme users have already opted into a slower, deeper pass (4x
-    //      cost). max_tokens is 16000, not the usual 8000: R1 is a reasoning
-    //      model -- it spends a real chunk of its output budget on internal
-    //      <think> chain-of-thought BEFORE the final answer. Capping it at
-    //      the same 8000 ceiling as fast models risked truncating
-    //      mid-thought, before it ever reached the actual code block --
-    //      wasting the entire point of paying the extra latency for it.
-    if (isCodeMode && (!text || !hasCodeBlock(text))) {
+    // max_tokens is 16000, not the usual 8000: R1 is a reasoning model -- it
+    // spends a real chunk of its output budget on internal <think>
+    // chain-of-thought BEFORE the final answer. Capping it at the same 8000
+    // ceiling as fast models risked truncating mid-thought, before it ever
+    // reached the actual code block.
+    if (isSupreme && (!text || !hasCodeBlock(text))) {
       try {
-        const result = await orCall(TB_REASONING, workerMessages, 16000, isSupreme ? 45000 : 35000);
+        const result = await orCall(TB_REASONING, workerMessages, 16000, 45000);
         const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
         if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
       } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
     }
 
-    // 2. Resilience fallbacks -- TB_CODE1 (qwen3-coder) already tried in step
-    //    1.3, not repeated here. GROQ_CODE2 restores a fast Groq-based option
-    //    for when specifically gpt-oss-120b is unavailable but Groq itself
-    //    is fine, giving provider diversity alongside the OpenRouter options.
+    // 2. Resilience fallbacks. For Agent mode this is where qwen3-coder
+    //    (TB_CODE1) actually lives -- available, just not jumping the fast
+    //    path. For Supreme, TB_CODE1 was already tried above.
     if (!text || (isCodeMode && !hasCodeBlock(text))) {
       if (!isCodeMode) {
         try {
@@ -659,24 +658,27 @@ async function handleTexBrain(req, res) {
           if (t) { text = t; usedModel = TB_TALK; usedUsage = result.usage || null; }
         } catch (e) { tbErrors.push(`or/${TB_TALK}: ${e?.message || e}`); }
       } else {
-        if (GROQ_KEY) {
+        const codeCandidates = isSupreme ? [TB_CODE2, TB_UI] : [TB_CODE1, TB_CODE2, TB_UI];
+        for (const m of codeCandidates) {
           try {
-            const result = await groqCall(GROQ_CODE2, workerMessages, 8000);
+            const result = await orCall(m, workerMessages);
             const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
-            if (t) { text = t; usedModel = 'groq/' + GROQ_CODE2; usedUsage = result.usage || null; }
-          } catch (e) { tbErrors.push(`groq/${GROQ_CODE2}: ${e?.message || e}`); }
-        }
-        if (!hasCodeBlock(text)) {
-          const codeCandidates = [TB_CODE2, TB_UI];
-          for (const m of codeCandidates) {
-            try {
-              const result = await orCall(m, workerMessages);
-              const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
-              if (t) { text = t; usedModel = m; usedUsage = result.usage || null; if (hasCodeBlock(t)) break; }
-            } catch (e) { tbErrors.push(`or/${m}: ${e?.message || e}`); }
-          }
+            if (t) { text = t; usedModel = m; usedUsage = result.usage || null; if (hasCodeBlock(t)) break; }
+          } catch (e) { tbErrors.push(`or/${m}: ${e?.message || e}`); }
         }
       }
+    }
+
+    // 3. Agent mode true last resort: the reasoning pass, only reachable if
+    //    every faster option above already failed. Rare in practice, so it
+    //    never affects normal-case speed -- Supreme already tried this
+    //    earlier and won't repeat it here.
+    if (mode === 'agent' && !isSupreme && (!text || !hasCodeBlock(text))) {
+      try {
+        const result = await orCall(TB_REASONING, workerMessages, 16000, 30000);
+        const t = sanitizeAssistantText(result.choices?.[0]?.message?.content?.trim());
+        if (t && hasCodeBlock(t)) { text = t; usedModel = TB_REASONING; usedUsage = result.usage || null; }
+      } catch (e) { tbErrors.push(`or/${TB_REASONING}: ${e?.message || e}`); }
     }
 
     if (!text && tbErrors.length) console.error('[TexBrain] all candidates failed:', tbErrors.join(' | '));
