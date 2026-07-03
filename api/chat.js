@@ -1841,7 +1841,7 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
           messages: cleanMessages,
           attachments: cleanAttachments,
           temperature: modelTemperature(selected),
-          maxTokens,
+          maxTokens: effectiveMaxTokens(attempt, maxTokens),
         };
         try {
           const result = await callAnthropic(anthropicRequest);
@@ -1870,7 +1870,7 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         model: attempt.providerModel,
         messages: cleanMessages,
         temperature: modelTemperature(selected),
-        maxTokens,
+        maxTokens: effectiveMaxTokens(attempt, maxTokens),
       });
       if (!acceptable(result)) {
         errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
@@ -1948,6 +1948,17 @@ function hasStudioCodeBlock(text) {
   return /```\s*(?:file:|studio-action|roblox-model)/i.test(String(text || ''));
 }
 
+// Agent/Super Agent push maxTokens up to 12000-16000 (see the maxTokens
+// calculation above) for the PAID primary model, which handles it fine. But
+// a resilience/retry fallback attempt can land on a free-tier (":free")
+// OpenRouter model, and those hard-cap completion length and ERROR OUT
+// (not truncate) well below that -- the exact bug already diagnosed and
+// fixed for TexBrain's own cascade (see its 8000-not-12000 comment). Apply
+// the same cap here so a fallback attempt doesn't fail for the same reason.
+function effectiveMaxTokens(attempt, maxTokens) {
+  return /:free\b/i.test(attempt.providerModel || '') ? Math.min(maxTokens, 8000) : maxTokens;
+}
+
 async function streamResponse(response, providerCall, cleanMessages, cleanAttachments, selected, maxTokens, context) {
   response.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -1976,10 +1987,11 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
     try {
       let fullText = '';
+      const attemptMaxTokens = effectiveMaxTokens(attempt, maxTokens);
       if (wantsCode && !isLastAttempt) {
         const probe = attempt.provider === 'anthropic'
-          ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature: modelTemperature(selected), maxTokens, timeoutMs: 28000 })
-          : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature: modelTemperature(selected), maxTokens, timeoutMs: 28000 });
+          ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature: modelTemperature(selected), maxTokens: attemptMaxTokens, timeoutMs: 28000 })
+          : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature: modelTemperature(selected), maxTokens: attemptMaxTokens, timeoutMs: 28000 });
         if (!hasStudioCodeBlock(probe.text)) {
           errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
           continue;
@@ -1987,9 +1999,9 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         sseWrite(response, { d: probe.text });
         fullText = probe.text;
       } else if (attempt.provider === 'anthropic') {
-        fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, maxTokens);
+        fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, attemptMaxTokens);
       } else {
-        fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, maxTokens);
+        fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, attemptMaxTokens);
       }
       logUsage({
         user_id: context.userId,
