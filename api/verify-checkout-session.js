@@ -1,4 +1,5 @@
 const { signProPass } = require('./_lib/propass.js');
+const { sendEmail } = require('./_lib/email.js');
 
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -55,6 +56,19 @@ module.exports = async function handler(request, response) {
       return;
     }
 
+    const buyerEmail = session.metadata?.email || session.customer_details?.email || '';
+    const millions = texTokens / 1_000_000;
+    const tokenLabel = (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M';
+    await sendEmail({
+      to: buyerEmail,
+      subject: 'Your ROTEX TexTokens purchase',
+      html: `<div style="font-family:sans-serif;max-width:400px">
+        <h2 style="color:#4cc9f0">ROTEX</h2>
+        <p>Thanks for your purchase! <strong>$${dollars}</strong> was charged and <strong>${tokenLabel} TexTokens</strong> were added to your account.</p>
+        <p style="color:#888;font-size:13px">Session: ${session.id}</p>
+      </div>`,
+    });
+
     response.status(200).json({
       verified: true,
       dollars,
@@ -85,6 +99,17 @@ module.exports = async function handler(request, response) {
     sub: subscriptionId,
     plan: 'pro',
     exp: Date.now() + 35 * 24 * 60 * 60 * 1000,
+  });
+
+  const buyerEmail = session.metadata?.email || session.customer_details?.email || '';
+  await sendEmail({
+    to: buyerEmail,
+    subject: 'Welcome to ROTEX Pro',
+    html: `<div style="font-family:sans-serif;max-width:400px">
+      <h2 style="color:#4cc9f0">ROTEX</h2>
+      <p>You're now a <strong>ROTEX Pro</strong> subscriber. Your Pro features are active on this account.</p>
+      <p style="color:#888;font-size:13px">Manage or cancel anytime from your account page. Billing renews automatically each month via Stripe.</p>
+    </div>`,
   });
 
   response.status(200).json({

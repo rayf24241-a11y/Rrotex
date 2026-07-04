@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { sendEmail } = require('./_lib/email.js');
 
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -16,59 +17,22 @@ module.exports = async function handler(request, response) {
   const expiresAt = Date.now() + 10 * 60 * 1000;
   const token = signPayload({ email, codeHash: hash(code), expiresAt });
 
-  // ── 1. Gmail SMTP (nodemailer) ─────────────────────────────────────────────
-  const gmailPass = process.env.GMAIL_APP_PASSWORD;
-  const gmailUser = process.env.GMAIL_USER || 'rayf24241@gmail.com';
-  if (gmailPass) {
-    try {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: gmailUser, pass: gmailPass },
-      });
-      await transporter.sendMail({
-        from: `ROTEX <${gmailUser}>`,
-        to: email,
-        subject: 'Your ROTEX login code',
-        html: `<div style="font-family:sans-serif;max-width:400px">
-          <h2 style="color:#4cc9f0">ROTEX</h2>
-          <p>Your login code is:</p>
-          <h1 style="font-size:52px;letter-spacing:10px;margin:8px 0">${code}</h1>
-          <p style="color:#888;font-size:13px">Expires in 10 minutes. If you didn't request this, ignore it.</p>
-        </div>`,
-      });
-      response.status(200).json({ ok: true, token });
-      return;
-    } catch (err) {
-      console.error('Gmail send failed:', err.message);
-    }
+  const sent = await sendEmail({
+    to: email,
+    subject: 'Your ROTEX login code',
+    html: `<div style="font-family:sans-serif;max-width:400px">
+      <h2 style="color:#4cc9f0">ROTEX</h2>
+      <p>Your login code is:</p>
+      <h1 style="font-size:52px;letter-spacing:10px;margin:8px 0">${code}</h1>
+      <p style="color:#888;font-size:13px">Expires in 10 minutes. If you didn't request this, ignore it.</p>
+    </div>`,
+  });
+  if (sent) {
+    response.status(200).json({ ok: true, token });
+    return;
   }
 
-  // ── 2. Resend ──────────────────────────────────────────────────────────────
-  const resendKey = process.env.RESEND_API_KEY;
-  if (resendKey) {
-    try {
-      const emailFrom = process.env.EMAIL_FROM || 'ROTEX <onboarding@resend.dev>';
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: emailFrom,
-          to: email,
-          subject: 'Your ROTEX login code',
-          html: `<p>Your ROTEX login code is:</p><h1>${code}</h1><p>Expires in 10 minutes.</p>`,
-        }),
-      });
-      if (res.ok) {
-        response.status(200).json({ ok: true, token });
-        return;
-      }
-    } catch (err) {
-      console.error('Resend failed:', err.message);
-    }
-  }
-
-  // ── 3. Dev fallback — show code on screen ─────────────────────────────────
+  // ── Dev fallback — show code on screen ────────────────────────────────────
   response.status(200).json({
     ok: true,
     token,
