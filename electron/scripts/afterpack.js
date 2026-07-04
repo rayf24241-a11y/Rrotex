@@ -20,7 +20,15 @@ module.exports = async function afterPack(context) {
   } else if (platformName === 'mac') {
     exePath = path.join(appOutDir, `${productName}.app`, 'Contents', 'MacOS', productName);
   } else {
-    exePath = path.join(appOutDir, productName);
+    // Linux sanitizes productName into a filesystem-safe executable name
+    // (LinuxPackager.executableName, e.g. "rotex-desktop") rather than
+    // using it verbatim -- using productName directly here ("ROTEX
+    // Desktop", with the space) pointed at a file that doesn't exist and
+    // failed every linux build with ENOENT, confirmed via the actual
+    // GitHub Actions run logs. packager.executableName is the real,
+    // build-computed name for whichever platform is actually packaging,
+    // so this works instead of guessing at a specific sanitization rule.
+    exePath = path.join(appOutDir, packager.executableName || productName);
   }
 
   console.log(`[afterPack] Applying security fuses to: ${exePath}`);
