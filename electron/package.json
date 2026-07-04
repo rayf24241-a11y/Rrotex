@@ -1,7 +1,8 @@
 {
   "name": "rotex-editor",
-  "version": "1.17.1",
+  "version": "1.17.2",
   "description": "ROTEX desktop AI agent for Unity, Roblox, Blender, and game dev projects",
+  "homepage": "https://www.rrotex.com",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -13,7 +14,10 @@
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
   },
-  "author": "ROTEX",
+  "author": {
+    "name": "ROTEX",
+    "email": "rayf24241@gmail.com"
+  },
   "license": "MIT",
   "dependencies": {
     "electron-updater": "^6.3.9"
