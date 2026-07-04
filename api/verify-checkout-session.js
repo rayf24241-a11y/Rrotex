@@ -93,12 +93,14 @@ module.exports = async function handler(request, response) {
   }
 
   // Signed pass proves Pro status to /api/chat without a database.
-  // 35 days covers the billing month; the app refreshes it via /api/refresh-pro.
+  // One-time purchase: exactly 30 days, no auto-renewal. subscriptionId will
+  // be empty for these; refresh-pro.js knows to skip the Stripe lookup for
+  // a still-valid no-sub pass instead of treating it as a lapsed subscription.
   const proPass = signProPass({
     uid,
     sub: subscriptionId,
     plan: 'pro',
-    exp: Date.now() + 35 * 24 * 60 * 60 * 1000,
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
   });
 
   const buyerEmail = session.metadata?.email || session.customer_details?.email || '';
@@ -107,8 +109,8 @@ module.exports = async function handler(request, response) {
     subject: 'Welcome to ROTEX Pro',
     html: `<div style="font-family:sans-serif;max-width:400px">
       <h2 style="color:#4cc9f0">ROTEX</h2>
-      <p>You're now a <strong>ROTEX Pro</strong> subscriber. Your Pro features are active on this account.</p>
-      <p style="color:#888;font-size:13px">Manage or cancel anytime from your account page. Billing renews automatically each month via Stripe.</p>
+      <p>You're now a <strong>ROTEX Pro</strong> user. Your Pro features are active on this account for the next <strong>30 days</strong>.</p>
+      <p style="color:#888;font-size:13px">This is a one-time purchase, not a subscription — nothing auto-renews. Come back to your account page after 30 days to get another 30 days of Pro.</p>
     </div>`,
   });
 

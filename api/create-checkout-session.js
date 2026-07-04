@@ -1,6 +1,7 @@
 const { verifyProPass } = require('./_lib/propass.js');
 
 const TOKENS_PER_DOLLAR = 400_000; // $2.50 per 1M tokens
+const PRO_PRICE_CENTS = 2000; // $20 — one-time charge, grants 30 days of Pro
 
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -57,7 +58,17 @@ module.exports = async function handler(request, response) {
 
   if (!isCreditCheckout) {
     const existingPass = verifyProPass(request.body?.proPass || '');
-    if (existingPass?.uid === uid && existingPass.sub) {
+    if (existingPass?.uid === uid) {
+      // One-time Pro pass (no subscription id) — verifyProPass already
+      // rejects expired passes, so a valid one here is still within its 30 days.
+      if (!existingPass.sub) {
+        response.status(200).json({
+          configured: true,
+          alreadyPro: true,
+          message: 'You already have an active Pro pass.',
+        });
+        return;
+      }
       const active = await stripeSubscriptionIsActive(secretKey, existingPass.sub);
       if (active) {
         response.status(200).json({
@@ -112,9 +123,13 @@ module.exports = async function handler(request, response) {
       'metadata[textokens]': String(texTokens),
     });
   } else {
+    // One-time charge, not a recurring subscription: grants exactly 30 days
+    // of Pro (see verify-checkout-session.js), then the user buys again.
     body = new URLSearchParams({
-      mode: 'subscription',
-      'line_items[0][price]': priceId,
+      mode: 'payment',
+      'line_items[0][price_data][currency]': 'usd',
+      'line_items[0][price_data][product_data][name]': 'ROTEX Pro — 30 days',
+      'line_items[0][price_data][unit_amount]': String(PRO_PRICE_CENTS),
       'line_items[0][quantity]': '1',
       success_url: `${origin}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}${desktopCallbackQuery}`,
       cancel_url:  `${origin}/account#pro`,
@@ -122,9 +137,6 @@ module.exports = async function handler(request, response) {
       'metadata[uid]':  uid,
       'metadata[email]': verifiedEmail,
       'metadata[kind]': 'pro',
-      'subscription_data[metadata][uid]': uid,
-      'subscription_data[metadata][email]': verifiedEmail,
-      'subscription_data[metadata][kind]': 'pro',
     });
   }
 
