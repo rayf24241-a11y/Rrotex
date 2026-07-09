@@ -2,8 +2,14 @@
   'use strict';
 
   const redirect = () => {
-    try { document.body.innerHTML = ''; } catch {}
-    window.location.replace('/');
+    // Blank the page hard so nothing sensitive stays inspectable.
+    try { document.documentElement.innerHTML = '<body style="margin:0;background:#05070c"></body>'; } catch {}
+    try { window.stop(); } catch {}
+    // Only navigate away from sub-pages. On the home page ('/') a
+    // location.replace('/') would reload into this same guard and loop
+    // forever while devtools stays open, so there we just leave it blanked.
+    const atRoot = location.pathname === '/' || /\/(index|app)\.html?$/i.test(location.pathname);
+    if (!atRoot) { try { window.location.replace('/'); } catch {} }
   };
 
   // ── Block right-click context menu ──────────────────────────────

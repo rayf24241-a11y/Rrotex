@@ -31,7 +31,7 @@ http.createServer(async (request, response) => {
 
     let pathname = decodeURIComponent(new URL(request.url, `http://localhost:${port}`).pathname);
     if (pathname === '/') pathname = '/index.html';
-    if (pathname === '/app' || pathname === '/chat') pathname = '/index.html';
+    if (pathname === '/app' || pathname === '/chat') pathname = '/app.html';
     if (pathname === '/home' || pathname === '/community' || pathname === '/prompt-guide' || pathname === '/blog' || pathname === '/contact' || pathname === '/contact-us' || pathname === '/pricing') pathname = '/index.html';
     if (pathname === '/account') pathname = '/account.html';
     if (pathname === '/pro') pathname = '/account.html';
@@ -40,7 +40,7 @@ http.createServer(async (request, response) => {
     if (pathname === '/projects' || pathname === '/dashboard' || pathname === '/my-chats') pathname = '/projects.html';
     if (pathname === '/tokens')  pathname = '/tokens.html';
     if (pathname === '/documentation' || pathname === '/docs') pathname = '/docs.html';
-    if (pathname === '/editor') pathname = '/editor.html';
+    if (pathname === '/editor') pathname = '/app.html';
 
     const filePath = path.resolve(root, `.${pathname}`);
     if (!filePath.startsWith(root)) {

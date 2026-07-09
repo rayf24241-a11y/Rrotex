@@ -5,7 +5,7 @@
   "rewrites": [
     { "source": "/api/plugin-bridge", "destination": "/api/chat/plugin-bridge" },
     { "source": "/api/chat/:path*", "destination": "/api/chat" },
-    { "source": "/editor", "destination": "/index.html" },
+    { "source": "/editor", "destination": "/app.html" },
     { "source": "/account", "destination": "/account.html" },
     { "source": "/login",   "destination": "/login.html" },
     { "source": "/signup", "destination": "/login.html" },
@@ -25,8 +25,8 @@
     { "source": "/contact-us", "destination": "/index.html" },
     { "source": "/pricing", "destination": "/index.html" },
     { "source": "/pro", "destination": "/account.html" },
-    { "source": "/app", "destination": "/index.html" },
-    { "source": "/chat", "destination": "/index.html" }
+    { "source": "/app", "destination": "/app.html" },
+    { "source": "/chat", "destination": "/app.html" }
   ],
   "redirects": [
     { "source": "/download", "destination": "/", "permanent": false }
@@ -35,9 +35,16 @@
     {
       "source": "/(.*)",
       "headers": [
+        { "key": "Cache-Control", "value": "no-store, max-age=0" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
+        { "key": "X-DNS-Prefetch-Control", "value": "off" },
         {
-          "key": "Cache-Control",
-          "value": "no-store, max-age=0"
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://apis.google.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.google.com https://www.gstatic.com https://apis.google.com https://cdn.jsdelivr.net https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://*.google.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://checkout.stripe.com"
         }
       ]
     }

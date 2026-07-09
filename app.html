@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ROTEX — Roblox Dev Studio</title>
+    <meta name="description" content="ROTEX web studio: chat, plan, and build Roblox Studio features from the browser." />
+    <meta name="theme-color" content="#05070c" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <script src="./dev-guard.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #05070c;
+        --panel: rgba(13, 18, 28, 0.72);
+        --panel-solid: #0b1019;
+        --panel-2: #111827;
+        --line: rgba(255, 255, 255, 0.10);
+        --line-soft: rgba(255, 255, 255, 0.06);
+        --text: #f5f8ff;
+        --muted: #a0aec6;
+        --quiet: #6b7a94;
+        --yellow: #ffd60a;
+        --green: #2ee87a;
+        --blue: #5ca8ff;
+        --purple: #a985ff;
+        --red: #ff5470;
+        --radius: 16px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 82% -8%, rgba(255, 214, 10, 0.16), transparent 34rem),
+          radial-gradient(circle at 4% 6%, rgba(92, 168, 255, 0.14), transparent 30rem),
+          radial-gradient(circle at 50% 120%, rgba(169, 133, 255, 0.12), transparent 34rem),
+          linear-gradient(180deg, #070a11 0%, #05070c 46%, #080b12 100%);
+        overflow: hidden;
+      }
+      body::before {
+        content: "";
+        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+        background-size: 56px 56px;
+        mask-image: radial-gradient(circle at 50% 30%, rgba(0,0,0,0.7), transparent 80%);
+      }
+      a { color: inherit; text-decoration: none; }
+      button, input, textarea, select { font: inherit; color: inherit; }
+      img { max-width: 100%; display: block; }
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 20px; border: 2px solid transparent; background-clip: padding-box; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); background-clip: padding-box; }
+
+      /* ── Shell ─────────────────────────────────────────────── */
+      .app {
+        position: relative; z-index: 1;
+        height: 100vh;
+        display: grid;
+        grid-template-columns: 264px minmax(0, 1fr) 320px;
+        gap: 14px;
+        padding: 14px;
+      }
+      .col {
+        min-height: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        backdrop-filter: blur(22px);
+        -webkit-backdrop-filter: blur(22px);
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 24px 60px -30px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.04);
+      }
+
+      /* ── Left rail ─────────────────────────────────────────── */
+      .rail { padding: 16px 14px; gap: 14px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; letter-spacing: -0.02em; font-size: 18px; padding: 2px 4px 6px; }
+      .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 22px rgba(255,214,10,0.35); }
+      .brand small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--yellow); }
+      .newchat {
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        width: 100%; padding: 11px; border-radius: 12px; cursor: pointer;
+        font-weight: 800; font-size: 14px;
+        color: #10131a; border: none;
+        background: linear-gradient(180deg, #ffe259, var(--yellow));
+        box-shadow: 0 12px 30px -12px rgba(255,214,10,0.7);
+        transition: transform .12s ease, box-shadow .12s ease;
+      }
+      .newchat:hover { transform: translateY(-1px); box-shadow: 0 16px 36px -12px rgba(255,214,10,0.85); }
+      .rail-label { font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--quiet); padding: 6px 6px 2px; }
+      .tabs { display: flex; flex-direction: column; gap: 6px; }
+      .tab {
+        display: flex; align-items: center; gap: 10px;
+        text-align: left; width: 100%; padding: 10px 12px; cursor: pointer;
+        border-radius: 11px; border: 1px solid transparent; background: transparent;
+        color: var(--muted); font-weight: 700; font-size: 13.5px;
+        transition: background .14s ease, color .14s ease, border-color .14s ease;
+      }
+      .tab .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .7; }
+      .tab:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+      .tab.active { color: var(--text); border-color: var(--line); background: rgba(255,255,255,0.06); }
+      .tab.active .dot { background: var(--yellow); opacity: 1; box-shadow: 0 0 12px var(--yellow); }
+      .tab small { display: block; font-size: 11px; font-weight: 500; color: var(--quiet); }
+
+      .shortcuts { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+      .nav-item {
+        text-align: left; width: 100%; padding: 9px 12px; cursor: pointer;
+        border-radius: 10px; border: 1px solid transparent; background: transparent;
+        color: var(--muted); font-size: 12.5px; font-weight: 600;
+        transition: background .14s ease, color .14s ease;
+      }
+      .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+      .nav-item.active { color: var(--text); background: rgba(92,168,255,0.10); border-color: rgba(92,168,255,0.24); }
+
+      .account { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255,255,255,0.03); }
+      .avatar { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #10131a; background: linear-gradient(135deg, var(--yellow), #ffb020); overflow: hidden; }
+      .avatar img { width: 100%; height: 100%; object-fit: cover; }
+      .account-meta { min-width: 0; flex: 1; }
+      .account-meta b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .account-meta span { display: block; font-size: 11px; color: var(--quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .account-btn { padding: 7px 10px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--text); transition: background .14s ease; }
+      .account-btn:hover { background: rgba(255,255,255,0.1); }
+      .account-btn.primary { border: none; color: #10131a; background: linear-gradient(180deg, #ffe259, var(--yellow)); }
+
+      /* ── Center chat ───────────────────────────────────────── */
+      .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line-soft); }
+      .chat-head .title { font-weight: 800; font-size: 14px; letter-spacing: -0.01em; }
+      .chat-head .title span { color: var(--quiet); font-weight: 600; }
+      .run-pill { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); font-size: 12px; font-weight: 700; }
+      .run-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+      .run-pill small { color: var(--quiet); font-weight: 600; }
+
+      .messages { flex: 1; overflow-y: auto; padding: 22px clamp(16px, 4vw, 44px); display: flex; flex-direction: column; gap: 16px; }
+      .msg { max-width: 760px; padding: 13px 16px; border-radius: 15px; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; animation: rise .3s ease; }
+      @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+      .msg.user { align-self: flex-end; color: #10131a; background: linear-gradient(180deg, #ffe98a, var(--yellow)); border-bottom-right-radius: 5px; font-weight: 600; box-shadow: 0 14px 30px -16px rgba(255,214,10,0.6); }
+      .msg.assistant { align-self: flex-start; background: rgba(255,255,255,0.045); border: 1px solid var(--line-soft); border-bottom-left-radius: 5px; }
+      .msg.status { align-self: flex-start; background: rgba(92,168,255,0.08); border: 1px solid rgba(92,168,255,0.22); color: #cfe1ff; font-size: 13px; }
+      .msg.error { align-self: flex-start; background: rgba(255,84,112,0.10); border: 1px solid rgba(255,84,112,0.3); color: #ffc2cd; }
+      .msg-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+      .forge-empty { margin: auto; text-align: center; max-width: 640px; padding: 20px; animation: rise .4s ease; }
+      .forge-empty h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 900; letter-spacing: -0.03em; margin: 0 0 12px; background: linear-gradient(120deg, #fff, #ffe98a 60%, var(--yellow)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .forge-empty p { color: var(--muted); font-size: 14.5px; line-height: 1.65; margin: 0 auto 22px; max-width: 540px; }
+      .forge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+      .forge-card { text-align: left; padding: 15px; border-radius: 14px; cursor: pointer; border: 1px solid var(--line); background: rgba(255,255,255,0.03); transition: transform .14s ease, border-color .14s ease, background .14s ease; }
+      .forge-card:hover { transform: translateY(-3px); border-color: rgba(255,214,10,0.4); background: rgba(255,214,10,0.05); }
+      .forge-card strong { display: block; font-size: 14px; margin-bottom: 5px; }
+      .forge-card span { font-size: 12px; color: var(--quiet); line-height: 1.5; }
+
+      .composer { padding: 14px clamp(12px, 3vw, 24px) 18px; border-top: 1px solid var(--line-soft); }
+      .composer-box { border: 1px solid var(--line); border-radius: 16px; background: rgba(9,12,19,0.7); padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; transition: border-color .16s ease, box-shadow .16s ease; }
+      .composer-box:focus-within { border-color: rgba(255,214,10,0.45); box-shadow: 0 0 0 3px rgba(255,214,10,0.10); }
+      #chatInput { width: 100%; border: none; background: transparent; resize: none; outline: none; font-size: 14.5px; line-height: 1.5; min-height: 26px; max-height: 150px; }
+      #chatInput::placeholder { color: var(--quiet); }
+      .composer-row { display: flex; align-items: center; gap: 10px; }
+      .model-select { position: relative; }
+      #modelSelect { appearance: none; padding: 7px 30px 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+      .model-select::after { content: "▾"; position: absolute; right: 11px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--quiet); font-size: 11px; }
+      .composer-spacer { flex: 1; }
+      .hint { font-size: 11.5px; color: var(--quiet); }
+      .send { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 11px; border: none; cursor: pointer; font-weight: 800; font-size: 13.5px; color: #10131a; background: linear-gradient(180deg, #ffe259, var(--yellow)); box-shadow: 0 12px 26px -12px rgba(255,214,10,0.7); transition: transform .12s ease, opacity .12s ease; }
+      .send:hover { transform: translateY(-1px); }
+      .send:disabled { opacity: .5; cursor: default; transform: none; }
+
+      /* ── Right panel ───────────────────────────────────────── */
+      .panel { padding: 16px 15px; gap: 14px; overflow-y: auto; }
+      .panel h3 { margin: 0; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--quiet); }
+      .bridge-card { border: 1px solid var(--line); border-radius: 13px; padding: 14px; background: rgba(255,255,255,0.03); }
+      .bridge-code-row { display: flex; align-items: center; gap: 8px; }
+      .bridge-code { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 20px; font-weight: 800; letter-spacing: .12em; color: var(--yellow); }
+      .icon-btn { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); cursor: pointer; font-weight: 800; transition: background .14s ease; }
+      .icon-btn:hover { background: rgba(255,255,255,0.1); }
+      .status-row { display: flex; align-items: center; gap: 9px; margin-top: 12px; font-size: 13px; font-weight: 600; }
+      #pluginDot { width: 10px; height: 10px; border-radius: 50%; background: var(--quiet); flex-shrink: 0; transition: background .2s ease, box-shadow .2s ease; }
+      #pluginDot.ok { background: var(--green); box-shadow: 0 0 12px var(--green); }
+      #pluginDot.wait { background: var(--yellow); box-shadow: 0 0 10px rgba(255,214,10,0.6); animation: blink 1.4s ease-in-out infinite; }
+      @keyframes blink { 50% { opacity: .35; } }
+      .health { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--quiet); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line-soft); }
+      .btn { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; transition: background .14s ease; }
+      .btn:hover { background: rgba(255,255,255,0.1); }
+      .btn.primary { border: none; color: #10131a; background: linear-gradient(180deg, #ffe259, var(--yellow)); }
+      .check-btn { width: 100%; margin-top: 12px; }
+      .ctx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .ctx { border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 11px; background: rgba(255,255,255,0.02); }
+      .ctx span { display: block; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); margin-bottom: 3px; }
+      .ctx b { font-size: 13.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+      .runbox { border: 1px solid var(--line); border-radius: 13px; padding: 13px 14px; background: rgba(255,255,255,0.03); }
+      .runbox .rs { font-size: 14px; font-weight: 800; }
+      .runbox .rd { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+      .runbox .rm { font-size: 11px; color: var(--quiet); margin-top: 6px; }
+      .result-log { display: flex; flex-direction: column; gap: 7px; max-height: 190px; overflow-y: auto; }
+      .result-log .row { font-size: 12px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line-soft); background: rgba(255,255,255,0.02); }
+      .result-log .row.ok { border-color: rgba(46,232,122,0.28); }
+      .result-log .row.fail { border-color: rgba(255,84,112,0.3); }
+      .result-log:empty::after { content: "No Studio results yet."; font-size: 12px; color: var(--quiet); }
+
+      .backlink { font-size: 12px; color: var(--quiet); padding: 2px 4px; }
+      .backlink:hover { color: var(--text); }
+
+      /* ── Responsive ────────────────────────────────────────── */
+      @media (max-width: 1080px) {
+        .app { grid-template-columns: 234px minmax(0, 1fr); }
+        .col.panel { display: none; }
+      }
+      @media (max-width: 760px) {
+        .app { grid-template-columns: minmax(0, 1fr); padding: 8px; }
+        .col.rail { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- ── Left rail ── -->
+      <aside class="col rail">
+        <a class="brand" href="/">
+          <img src="./icon.png" alt="ROTEX" />
+          <span>ROTEX<small>Dev Studio</small></span>
+        </a>
+        <button class="newchat" id="newChatBtn" type="button">＋ New Chat</button>
+
+        <div>
+          <div class="rail-label">Mode</div>
+          <div class="tabs">
+            <button class="tab active" data-mode="ask" type="button"><span class="dot"></span><span>Ask<small>Talk, plan, no edits</small></span></button>
+            <button class="tab" data-mode="agent" type="button"><span class="dot"></span><span>Agent<small>Edit the game via plugin</small></span></button>
+            <button class="tab" data-mode="supreme" type="button"><span class="dot"></span><span>Supreme<small>Deep multi-step build</small></span></button>
+          </div>
+        </div>
+
+        <div style="min-height:0; display:flex; flex-direction:column;">
+          <div class="rail-label">Quick prompts</div>
+          <div class="shortcuts">
+            <button class="nav-item active" data-prompt="" type="button">General</button>
+            <button class="nav-item" data-prompt="Make a polished mobile-safe shop UI that appears in game with one LocalScript owner." type="button">Shop UI</button>
+            <button class="nav-item" data-prompt="Add a leaderstats + coins system with a safe DataStore save/load using pcall and autosave." type="button">Coins + Save</button>
+            <button class="nav-item" data-prompt="Build a round system with a timer, teams, and a winner announcement." type="button">Round System</button>
+            <button class="nav-item" data-prompt="Debug my broken feature. Find the real owner script, fix the root cause, and delete duplicates." type="button">Debug</button>
+            <button class="nav-item" data-prompt="Build a small map area using terrain, lighting, and Toolbox models for static props only." type="button">Map Area</button>
+          </div>
+        </div>
+
+        <div class="account">
+          <div class="avatar" id="profileAvatar">?</div>
+          <div class="account-meta">
+            <b id="accountName">Guest</b>
+            <span id="accountEmail">Sign in for Pro + tokens</span>
+          </div>
+          <button class="account-btn primary" id="signInBtn" type="button">Sign in</button>
+          <button class="account-btn" id="signOutBtn" type="button" hidden>Out</button>
+        </div>
+      </aside>
+
+      <!-- ── Center chat ── -->
+      <main class="col chat">
+        <div class="chat-head">
+          <div class="title">ROTEX Roblox Dev Mode <span>· website studio</span></div>
+          <div class="run-pill"><i></i><span id="runState">Ready</span><small id="runMini">Chat workflow</small></div>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="composer">
+          <form class="composer-box" id="chatForm">
+            <textarea id="chatInput" rows="1" placeholder="Ask ROTEX..."></textarea>
+            <div class="composer-row">
+              <div class="model-select"><select id="modelSelect"><option value="google-flash">Google Flash</option></select></div>
+              <span class="hint">Enter to send · Shift+Enter for newline</span>
+              <div class="composer-spacer"></div>
+              <button class="send" id="sendBtn" type="submit">Send ➤</button>
+            </div>
+          </form>
+        </div>
+      </main>
+
+      <!-- ── Right panel ── -->
+      <aside class="col panel">
+        <h3>Studio Bridge</h3>
+        <div class="bridge-card">
+          <div class="bridge-code-row">
+            <div class="bridge-code" id="bridgeCode">RX----</div>
+            <button class="icon-btn" id="copyCodeBtn" type="button" title="Copy bridge code">#</button>
+          </div>
+          <div class="status-row">
+            <span id="pluginDot" class="wait"></span>
+            <span id="pluginStatus">Waiting for Studio plugin</span>
+            <span class="health" id="bridgeHealth">Waiting</span>
+          </div>
+          <button class="btn check-btn" id="checkPluginBtn" type="button">Check Plugin</button>
+        </div>
+
+        <h3>Live Context</h3>
+        <div class="ctx-grid">
+          <div class="ctx"><span>Plugin</span><b id="ctxPlugin">Disconnected</b></div>
+          <div class="ctx"><span>Game</span><b id="ctxGame">Unknown</b></div>
+          <div class="ctx"><span>Scripts</span><b id="ctxScripts">0</b></div>
+          <div class="ctx"><span>GUI</span><b id="ctxGui">0</b></div>
+          <div class="ctx"><span>Queued</span><b id="ctxActions">0</b></div>
+          <div class="ctx"><span>Bridge</span><b id="ctxBridge">memory</b></div>
+        </div>
+
+        <h3>Run Status</h3>
+        <div class="runbox">
+          <div class="rd" id="runDetail">Ask mode can talk without Studio. Switch to Agent or Supreme for edits.</div>
+        </div>
+
+        <h3>Studio Results</h3>
+        <div class="result-log" id="resultLog"></div>
+
+        <a class="backlink" href="/">← Back to rrotex.com</a>
+      </aside>
+    </div>
+
+    <script src="./rotex-tokens.js"></script>
+    <script src="./web-app.js"></script>
+  </body>
+</html>
