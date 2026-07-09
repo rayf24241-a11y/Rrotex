@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -32,9 +32,9 @@
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════════
+<!-- --------------------------------------------------------------
      HIDDEN STUBS "" kept for editor.js compatibility, not visible
-     ══════════════════════════════════════════════════════════════ -->
+     -------------------------------------------------------------- -->
 <div id="editorApp" style="display:none;position:absolute;pointer-events:none;">
   <aside id="activityBar">
     <div class="ab-top">
@@ -124,9 +124,9 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════
+<!-- --------------------------------------------------------------
      VISIBLE APP
-     ══════════════════════════════════════════════════════════════ -->
+     -------------------------------------------------------------- -->
 <!-- Engine picker modal -->
 <div class="rx-ep-overlay" id="rxEpOverlay">
   <div class="rx-ep-modal">
@@ -433,9 +433,9 @@
   </footer>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════
+<!-- --------------------------------------------------------------
      EDITOR.JS BRIDGE "" maps new element IDs to what editor.js expects
-     ══════════════════════════════════════════════════════════════ -->
+     -------------------------------------------------------------- -->
 
 <!-- editor.js compatibility: it looks for these IDs for the AI chat -->
 <!-- We proxy the real elements so both can work -->
@@ -491,9 +491,9 @@
   </form>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════
+<!-- --------------------------------------------------------------
      FIREBASE + CHAT HISTORY LOGIC
-     ══════════════════════════════════════════════════════════════ -->
+     -------------------------------------------------------------- -->
 <script src="./desktop-auth.js"></script>
 <script src="./rotex-tokens.js"></script>
 <script src="./rotex-chats.js"></script>
@@ -781,6 +781,13 @@
     { id: 'pro-smart',         name: 'Claude Haiku',          role: 'Premium', subtitle: 'best',  svg: CLAUDE_SVG,      pro: false, localOnly: false, vision: true  },
   ];
 
+  const ROTEX_AI_CATEGORIES = {
+    Roblox: ['Roblox Scripter', 'Bug Fixer', 'UI Builder', 'Game Systems', 'DataStore Saver', 'Gamepass Helper', 'Prompt Builder', 'Code Reviewer', 'Studio Setup Helper', 'Model Import Helper'],
+    Unity: ['Unity C# Helper', 'Unity VR Helper', 'Multiplayer Helper', 'Bug Fixer'],
+    General: ['3D Model Helper', 'Game Idea Helper', 'Dev Business Helper', 'Portfolio/Commission Helper'],
+  };
+  window.ROTEX_AI_CATEGORIES = ROTEX_AI_CATEGORIES;
+
   function applyModelVision(modelId) {
     const m = MODELS.find(x => x.id === modelId);
     const ssBtn = document.getElementById('rxScreenshotBtn');
@@ -817,7 +824,7 @@
       if (info?.base) _apiBase = info.base;
       if (info?.isDev) {
         const badge = document.createElement('div');
-        badge.textContent = (info.appName || 'DEV') + (info.base !== 'https://www.rrotex.com' ? ' → ' + info.base : '');
+        badge.textContent = (info.appName || 'DEV') + (info.base !== 'https://www.rrotex.com' ? ' -> ' + info.base : '');
         badge.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font:11px/1.6 Consolas,monospace;text-align:center;padding:1px;pointer-events:none;';
         document.body?.appendChild(badge);
       }
@@ -1249,7 +1256,7 @@
       let _pluginConnected = false;
       let _studioConnected = false;
       let _pluginReady = false;
-      let _ver = '1.17.01';
+      let _ver = '1.17.27';
       function displayVersion(ver) { return ver; }
 
       function setLoadStatus(text) {
@@ -1299,7 +1306,7 @@
         dot.title = connected ? 'Rojo connected' : 'Rojo not connected';
       }
 
-      function markStudioConnected() {
+      function markStudioPluginConnected() {
         const _fresh = !window.__rotexStudioConnected;
         window.__rotexStudioConnected = true;
         _pluginConnected = true;
@@ -1311,23 +1318,35 @@
           if (window.__rotexGameName) window.__rxShowConnectInfo?.();
           else setTimeout(() => window.__rxShowConnectInfo?.(), 1800);
         }
-        lsIcon(2, 'ok'); lsLabel(2, 'Rojo connected!'); lsSub(2, '');
+        lsIcon(2, 'ok'); lsLabel(2, 'Roblox Studio connected!'); lsSub(2, 'ROTEX plugin heartbeat is live.');
         unlockChatComposer();
         checkCanContinue();
       }
 
+      function markRojoAvailable() {
+        setRojoDot(true);
+        if (!window.__rotexStudioConnected) {
+          lsIcon(2, '...');
+          lsLabel(2, 'Rojo ready, waiting for Studio');
+          lsSub(2, 'Open Roblox Studio and connect the ROTEX plugin.');
+        }
+      }
+
       // -- Row 2: Studio ---------------------------------------------
       // Register BEFORE any await so we never miss the event
-      window.rotexDesktop.onPluginConnected(markStudioConnected);
+      window.rotexDesktop.onPluginConnected(markStudioPluginConnected);
       window.rotexDesktop.onPluginStatus?.((status) => {
-        if (status?.connected) markStudioConnected();
+        if (status?.connected) markStudioPluginConnected();
         else {
           window.__rotexStudioConnected = false;
+          _pluginConnected = false;
+          _studioConnected = false;
           setRojoDot(false);
+          lockChatComposer();
           if (!_pluginConnected) {
             lsIcon(2, '...');
-            lsLabel(2, 'Waiting for Rojo');
-            lsSub(2, 'Run rojo serve in your project folder, then open Roblox Studio to connect.');
+            lsLabel(2, 'Waiting for Roblox Studio');
+            lsSub(2, 'Open Studio, then connect the ROTEX plugin.');
           }
         }
       });
@@ -1362,34 +1381,48 @@
       }
 
       const _initRojo = await checkRojoRunning();
-      if (_initRojo) markStudioConnected();
+      if (_initRojo) markRojoAvailable();
+      const _initStatus = await window.rotexDesktop.getPluginStatus().catch(() => null);
+      if (_initStatus?.connected) markStudioPluginConnected();
       else {
-        const _initStatus = await window.rotexDesktop.getPluginStatus().catch(() => null);
-        if (_initStatus?.connected) markStudioConnected();
-        else window.__rotexStudioConnected = false;
+        window.__rotexStudioConnected = false;
+        lockChatComposer();
       }
 
       setInterval(async () => {
         const rojoOk = await checkRojoRunning();
-        if (rojoOk) { markStudioConnected(); return; }
+        if (rojoOk) markRojoAvailable();
         const status = await window.rotexDesktop.getPluginStatus?.().catch(() => null);
-        if (status?.connected) markStudioConnected();
+        if (status?.connected) markStudioPluginConnected();
         else {
-          setRojoDot(false);
+          if (!rojoOk) setRojoDot(false);
+          window.__rotexStudioConnected = false;
+          _pluginConnected = false;
+          _studioConnected = false;
           lockChatComposer();
           if (!_pluginConnected) {
             lsIcon(2, '...');
-            lsLabel(2, 'Waiting for Rojo');
-            lsSub(2, 'Run rojo serve in your project folder, then open Roblox Studio to connect.');
+            lsLabel(2, rojoOk ? 'Rojo ready, waiting for Studio' : 'Waiting for Roblox Studio');
+            lsSub(2, rojoOk ? 'Connect the ROTEX plugin in Studio.' : 'Open Studio, then connect the ROTEX plugin.');
           }
         }
       }, 700);
 
       // Background: install plugin silently. On the very first install, prompt
-      // the user to reopen Roblox Studio so it loads the plugin.
+      // the user to reopen Roblox Studio so it loads the plugin. Also prompt
+      // after plugin updates because Studio keeps the already-loaded Lua file.
       ensureStudioPluginInstalled().then((res) => {
-        if (res?.ok && localStorage.getItem('rotex_plugin_installed_once') !== '1') {
+        const installedVersion = String(res?.version || '');
+        const seenVersion = localStorage.getItem('rotex_plugin_installed_version') || '';
+        const shouldShowNotice =
+          res?.ok && (
+            localStorage.getItem('rotex_plugin_installed_once') !== '1' ||
+            (installedVersion && installedVersion !== seenVersion) ||
+            res.changed === true
+          );
+        if (shouldShowNotice) {
           localStorage.setItem('rotex_plugin_installed_once', '1');
+          if (installedVersion) localStorage.setItem('rotex_plugin_installed_version', installedVersion);
           showFirstRunPluginNotice();
         }
       }).catch(() => {});
@@ -1403,7 +1436,7 @@
           overlay.id = 'rxUpdateOverlay';
           overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(10,10,15,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;';
           overlay.innerHTML = `
-            <div style="font-size:32px;">??</div>
+            <div style="font-size:32px;">?</div>
             <div style="font-size:20px;font-weight:700;">Update downloaded!</div>
             <div id="rxUpdateOverlaySub" style="font-size:14px;color:rgba(255,255,255,0.6);">Restarting to apply v${version} in 5 seconds...</div>
             <div style="width:240px;height:4px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">
@@ -1556,6 +1589,7 @@
   {
     let _chatBusy = false;
     let _chatAbort = null;
+    let _chatStartedAt = 0;
     const _chatHistory = [];
     let _rojoWarnShown = false;
     let _activeChatId = localStorage.getItem('rotex_active_chat') || null;
@@ -1578,14 +1612,20 @@
     }
 
     function _normalizeFilePath(raw) {
-      // Strip leading "game." or "game/" prefix, then convert dots to slashes,
-      // then collapse duplicate slashes.
-      let p = String(raw || '').trim();
-      p = p.replace(/^game[./]/i, '');
-      // If path uses dots as separators (e.g. ServerScriptService.Folder.Script)
-      // and has no slashes, convert dots to slashes.
-      if (!p.includes('/') && !p.includes('\\')) p = p.replace(/\./g, '/');
+      let p = String(raw || '').trim().replace(/^['"`]+|['"`]+$/g, '');
+      p = p.replace(/^file:\s*/i, '');
+      p = p.replace(/^game:GetService\(["']([^"']+)["']\)[./\\]?/i, '$1/');
+      p = p.replace(/^game[./\\]/i, '');
+      p = p.replace(/^workspace[./\\]/i, 'Workspace/');
       p = p.replace(/\\/g, '/').replace(/\/+/g, '/');
+      const extMatch = p.match(/(\.(?:client|server|module)?\.?lua)$/i);
+      const ext = extMatch ? extMatch[1] : '';
+      let base = ext ? p.slice(0, -ext.length) : p;
+      if (!base.includes('/')) base = base.replace(/\./g, '/');
+      p = (base + ext).replace(/\/+/g, '/');
+      if (/^(StarterPlayerScripts|StarterCharacterScripts)\//i.test(p)) {
+        p = 'StarterPlayer/' + p;
+      }
       return p;
     }
 
@@ -1686,7 +1726,7 @@
         const list = Array.isArray(parsed) ? parsed : [parsed];
         for (const action of list) {
           if (!action || typeof action !== 'object') continue;
-          if (['delete_instance', 'set_property', 'select_instances', 'create_model', 'insert_toolbox_model', 'terrain_edit', 'lighting_set', 'create_ui_image'].includes(action.type)) {
+          if (['delete_instance', 'set_property', 'select_instances', 'create_model', 'insert_toolbox_model', 'terrain_edit', 'lighting_set', 'create_ui_image', 'create_ui'].includes(action.type)) {
             actions.push(action);
           }
         }
@@ -1714,7 +1754,7 @@
       return actions;
     }
 
-    // ── Project memory: durable facts the AI has learned about THIS project/
+    // -- Project memory: durable facts the AI has learned about THIS project/
     // user, persisted across sessions (not just within one chat). Populated
     // from hidden ```project-memory blocks the model appends when it learns
     // something worth remembering (see the PROJECT MEMORY UPDATES prompt
@@ -1743,6 +1783,35 @@
 
     function _clearProjectMemory() {
       try { localStorage.removeItem(_projectMemoryKey()); } catch {}
+    }
+
+    // -- Living Project Spec: an auto-generated design brief (# TITLE +
+    // * bullets) the server's free-model pre-pass creates from rough asks
+    // ("I want a fighting game!") and updates as scope grows. Keyed by the
+    // active CHAT's id -- NOT window.__rotexGameName, which is Roblox-plugin
+    // specific, arrives asynchronously only after Studio connects, and is
+    // undefined for Unity/Web projects and on a brand-new project's very
+    // first message (exactly when the spec is first born). The chat id is
+    // available synchronously for every project mode from message one.
+    const PROJECT_SPEC_MAX_LEN = 4000; // matches api/chat.js PROJECT_SPEC_CAP
+
+    function _projectSpecKey() {
+      const id = String(localStorage.getItem('rotex_active_chat') || '').trim();
+      return 'rotex_project_spec:' + (id || 'default');
+    }
+
+    function _loadProjectSpec() {
+      try {
+        const raw = localStorage.getItem(_projectSpecKey());
+        return typeof raw === 'string' ? raw : '';
+      } catch { return ''; }
+    }
+
+    function _saveProjectSpec(specText) {
+      try {
+        const text = String(specText || '').trim().slice(0, PROJECT_SPEC_MAX_LEN);
+        if (text) localStorage.setItem(_projectSpecKey(), text);
+      } catch {}
     }
 
     function _extractProjectMemory(content) {
@@ -1778,8 +1847,7 @@
     }
 
     function _pluginPath(path) {
-      let value = String(path || '').replace(/\\/g, '/').replace(/^\s+|\s+$/g, '');
-      value = value.replace(/^game[./]/i, '');
+      let value = _normalizeFilePath(path);
       value = value.replace(/\.(client|server|module)?\.?lua$/i, '');
       if (/^(StarterPlayerScripts|StarterCharacterScripts)\//i.test(value)) {
         value = 'StarterPlayer/' + value;
@@ -1811,9 +1879,9 @@
         return 'ROTEX UI MODE: PLAN. Plan mode teams with Agent by preparing the approach only. Do not output code blocks, file blocks, commands, or Studio actions. Return a concise numbered plan and say Agent/Super Agent can execute it.';
       }
       if (currentMode === 'agent') {
-        return 'ROTEX UI MODE: AGENT. You may edit the Roblox game. Be smart and direct: use project context, choose the likely correct path, then output complete Studio file/studio-action blocks for the smallest complete fix. If the bug is duplicate UI/scripts, keep one owner and delete/disable the duplicates. ROTEX will hide those blocks and apply them through the connected Studio plugin. The connected plugin can edit scripts, create model geometry, edit parts/terrain, set Lighting properties, select/delete instances, and set instance properties.';
+        return 'ROTEX UI MODE: AGENT. You may edit the Roblox game. Be smart and direct: use project context, choose the likely correct path, then output complete Studio file/studio-action blocks for the smallest complete fix. For UI, prefer create_ui studio-actions to create visible StarterGui objects, plus one LocalScript owner ending in .client.lua for behavior; set Enabled=true/ResetOnSpawn=false/visible sizes/ZIndex, and delete duplicates. If the bug is duplicate UI/scripts or UI not showing, fix the existing owner instead of creating another copy. ROTEX will hide executable blocks and apply them through the connected Studio plugin. The connected plugin can edit scripts, create visible UI trees, create model geometry, insert real Toolbox models for map/world-building only, edit parts/terrain, set Lighting properties, select/delete instances, and set instance properties.';
       }
-      return 'ROTEX UI MODE: SUPER AGENT. You may perform deeper multi-step edits. Be smarter than Agent: inspect likely conflicts, update owning scripts, remove stale scripts, add missing server/client pieces, include cleanup, then output complete Studio file/studio-action blocks. For duplicate UI/scripts, identify every duplicate owner and delete/disable all but one. ROTEX will hide those blocks and apply them through the connected Studio plugin. The connected plugin can edit scripts, create model geometry, edit parts/terrain, set Lighting properties, select/delete instances, and set instance properties.';
+      return 'ROTEX UI MODE: SUPER AGENT. You may perform deeper multi-step edits. Be smarter than Agent: inspect likely conflicts, update owning scripts, remove stale scripts, add missing server/client pieces, include cleanup, then output complete Studio file/studio-action blocks. For UI, use create_ui for visible StarterGui objects when creating/rebuilding visual UI, then add LocalScript behavior as needed. Do a visibility audit: correct LocalScript class/path, PlayerGui parent, Enabled/Visible, ResetOnSpawn, DisplayOrder/ZIndex, non-zero Size, on-screen Position, connected opener controls, mobile scaling, and duplicate ScreenGui/script cleanup. For duplicate UI/scripts, identify every duplicate owner and delete/disable all but one. ROTEX will hide executable blocks and apply them through the connected Studio plugin. The connected plugin can edit scripts, create visible UI trees, create model geometry, insert real Toolbox models for map/world-building only, edit parts/terrain, set Lighting properties, select/delete instances, and set instance properties.';
     }
 
     function _waitForStudioResults(actionId, expectedCount = 1, timeoutMs = 18000) {
@@ -2108,6 +2176,7 @@
       if (ctx?.pluginVersion) window.__rotexPluginVersion = ctx.pluginVersion;
       if (Array.isArray(ctx?.capabilities)) window.__rotexPluginCapabilities = ctx.capabilities;
       if (Array.isArray(ctx?.scripts)) window.__rotexScripts = ctx.scripts;
+      if (Array.isArray(ctx?.gui)) window.__rotexGui = ctx.gui;
       if (Array.isArray(ctx?.selected)) window.__rotexSelected = ctx.selected;
       if (ctx?.studioError) {
         const msg = String(ctx.studioError.message || ctx.studioError || '').trim();
@@ -2129,23 +2198,46 @@
     // Build the project-source context the AI reads to find/search existing scripts.
     function _buildScriptsContext() {
       const scripts = Array.isArray(window.__rotexScripts) ? window.__rotexScripts : [];
+      const gui = Array.isArray(window.__rotexGui) ? window.__rotexGui : [];
       const selected = Array.isArray(window.__rotexSelected) ? window.__rotexSelected : [];
       const capabilities = Array.isArray(window.__rotexPluginCapabilities) ? window.__rotexPluginCapabilities : [];
       let out = capabilities.length
         ? 'PLUGIN CAPABILITIES: ' + capabilities.join(', ') + '.'
-        : 'PLUGIN CAPABILITIES: apply_files, create_model geometry, terrain_edit, lighting_set, create_ui_image, set_property, delete_instance, select_instances.';
-      if (!scripts.length) return out + '\nPROJECT SCRIPTS: none scanned yet (the plugin auto-scans on connect and every 10s).';
-      out += '\nPROJECT SCRIPTS (live from Roblox Studio - ' + scripts.length + ' scripts). Search these before saying the project is empty:';
-      for (const s of scripts) {
-        // 3000 was cutting off most non-trivial scripts (a 150+ line system
-        // is easily past that) before the model ever saw the rest of the
-        // file. The server-side PROJECT CONTEXT budget (api/chat.js
-        // buildEditorSystemPrompt) is now large enough that a higher
-        // per-script cap here won't just get re-truncated immediately after.
-        const src = String(s.source || '').slice(0, 12000);
-        const rawPath = String(s.path || s.name || 'Script');
-        const displayPath = _normalizeFilePath(rawPath);
-        out += '\n\n--- ' + displayPath + ' [' + (s.class || 'Script') + '] ---\n' + src;
+        : 'PLUGIN CAPABILITIES: apply_files, create_model geometry, terrain_edit, lighting_set, create_ui, create_ui_image, set_property, delete_instance, select_instances.';
+      if (!scripts.length && !gui.length) return out + '\nPROJECT SCRIPTS: none scanned yet (the plugin auto-scans on connect and every 10s).';
+      if (scripts.length) {
+        out += '\nPROJECT SCRIPTS (live from Roblox Studio - ' + scripts.length + ' scripts). Search these before saying the project is empty:';
+        for (const s of scripts) {
+          // 3000 was cutting off most non-trivial scripts (a 150+ line system
+          // is easily past that) before the model ever saw the rest of the
+          // file. The server-side PROJECT CONTEXT budget (api/chat.js
+          // buildEditorSystemPrompt) is now large enough that a higher
+          // per-script cap here won't just get re-truncated immediately after.
+          const src = String(s.source || '').slice(0, 12000);
+          const rawPath = String(s.path || s.name || 'Script');
+          const displayPath = _normalizeFilePath(rawPath);
+          out += '\n\n--- ' + displayPath + ' [' + (s.class || 'Script') + '] ---\n' + src;
+        }
+      } else {
+        out += '\nPROJECT SCRIPTS: none scanned yet (the plugin auto-scans on connect and every 10s).';
+      }
+      if (gui.length) {
+        out += '\n\nPROJECT GUI INVENTORY (live from StarterGui - use this to fix invisible/duplicate UI):';
+        for (const g of gui.slice(0, 80)) {
+          const bits = [
+            g.class || 'GuiObject',
+            g.path || g.name || 'Unknown',
+            g.enabled !== undefined ? 'Enabled=' + g.enabled : '',
+            g.visible !== undefined ? 'Visible=' + g.visible : '',
+            g.resetOnSpawn !== undefined ? 'ResetOnSpawn=' + g.resetOnSpawn : '',
+            g.displayOrder !== undefined ? 'DisplayOrder=' + g.displayOrder : '',
+            g.zIndex !== undefined ? 'ZIndex=' + g.zIndex : '',
+            g.size ? 'Size=' + g.size : '',
+            g.position ? 'Position=' + g.position : '',
+            g.text ? 'Text="' + String(g.text).replace(/\s+/g, ' ').slice(0, 80) + '"' : '',
+          ].filter(Boolean);
+          out += '\n- ' + bits.join(' | ');
+        }
       }
       if (selected.length) {
         out += '\n\nCURRENTLY SELECTED IN STUDIO: ' + selected.map((x) => x.path || x.name).join(', ');
@@ -2172,10 +2264,24 @@
       const inp = document.getElementById('rxAiInput');
       const rawText = String(inp?.value || '').replace(/\r\n/g, '\n');
       const text = rawText.replace(/^\n+|\n+$/g, '');
-      if (!text.trim() || _chatBusy) return;
+      if (!text.trim()) return;
+      if (_chatBusy) {
+        const staleMs = Date.now() - (_chatStartedAt || 0);
+        if (staleMs > 15000) {
+          try { _chatAbort?.abort(); } catch {}
+          _chatBusy = false;
+          _chatAbort = null;
+        } else {
+          return;
+        }
+      }
 
-      // Hard gate: cannot talk to the AI until the plugin is connected.
-      if (!window.__rotexStudioConnected) {
+      // Hard gate: cannot talk to the AI until the real Studio plugin heartbeat is connected.
+      const livePluginStatus = await window.rotexDesktop?.getPluginStatus?.().catch(() => null);
+      const liveStudioConnected = Boolean(livePluginStatus?.connected);
+      window.__rotexStudioConnected = liveStudioConnected;
+      if (!liveStudioConnected) {
+        lockChatComposer();
         const notice = document.getElementById('rxNotConnectedNotice');
         if (notice) notice.style.display = 'flex';
         return;
@@ -2189,10 +2295,15 @@
       _rxAddMsg('user', text);
       _chatHistory.push({ role: 'user', content: text });
 
-      const studioOk = Boolean(window.__rotexStudioConnected);
+      const studioOk = liveStudioConnected;
 
       const isTaskStatus = canEditGame && isTaskRequest;
-      const statusBubble = _rxAddMsg('assistant', isTaskStatus ? 'Working on task..' : 'thinking..');
+      // Optimistic "generating context" label while the server's free-model
+      // spec pre-pass may be running (builder-category requests on the
+      // default model). Harmless if the category turns out non-builder --
+      // the first streamed chunk replaces it exactly like 'thinking..'.
+      const mayGenerateSpec = (selectedModel || 'google-flash') === 'google-flash';
+      const statusBubble = _rxAddMsg('assistant', isTaskStatus ? 'Working on task..' : (mayGenerateSpec ? 'Generating game plan..' : 'thinking..'));
       if (statusBubble && !isTaskStatus) statusBubble.style.opacity = '0.5';
       let bubble = isTaskStatus ? null : statusBubble;
       let statusTimer = _startTaskStatus(statusBubble, isTaskStatus);
@@ -2221,7 +2332,9 @@
       }
 
       _chatBusy = true;
+      _chatStartedAt = Date.now();
       _chatAbort = new AbortController();
+      let chatTimeout = null;
       try {
         const projectContextText = [
           _modeInstruction(studioOk),
@@ -2239,10 +2352,20 @@
           // TexBrain is always a code assistant — use agent/code mode when studio
           // is connected, so the server builds the code-writing prompt and applies files.
           const localMode = currentMode === 'supreme' ? 'supreme' : (studioOk || currentMode === 'agent') ? 'agent' : '';
-          const result = await window.rotexDesktop.callTexBrain(localMessages, projMode, localMode, authToken, proPass);
+          const texBrainTimeoutMs = isTaskStatus ? 45000 : 25000;
+          const result = await Promise.race([
+            window.rotexDesktop.callTexBrain(localMessages, projMode, localMode, authToken, proPass),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('TexBrain timed out. Try again in a moment or switch to Google Flash.')), texBrainTimeoutMs)),
+            new Promise((_, reject) => {
+              const signal = _chatAbort?.signal;
+              if (!signal) return;
+              if (signal.aborted) reject(new DOMException('Stopped.', 'AbortError'));
+              signal.addEventListener('abort', () => reject(new DOMException('Stopped.', 'AbortError')), { once: true });
+            }),
+          ]);
           if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
           if (result?.error) {
-            if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'On hold');
+            if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'Try again');
             if (!bubble) bubble = _rxAddMsg('assistant', '');
             if (bubble) { _renderChatMessage(bubble, 'assistant', result.error); bubble.style.opacity = ''; }
             _chatHistory.push({ role: 'assistant', content: result.error });
@@ -2252,7 +2375,7 @@
 
           const full = String(result?.text || '').trim();
           if (!full) {
-            if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'On hold');
+            if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'Try again');
             if (!bubble) bubble = _rxAddMsg('assistant', '');
             const emptyMsg = 'TexBrain did not return a response. Try again in a moment or switch to Claude Haiku.';
             if (bubble) { _renderChatMessage(bubble, 'assistant', emptyMsg); bubble.style.opacity = ''; }
@@ -2285,7 +2408,7 @@
           if (!appliedToStudio && hasActions && bubble && canEditGame && studioOk) {
             _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. The file paths may not match a known Roblox service root (e.g. ServerScriptService/Script.lua).');
           } else if (!appliedToStudio && isTaskStatus && bubble && canEditGame && studioOk) {
-            _renderChatMessage(bubble, 'assistant', 'I did not receive an executable Studio change from the model, so nothing was edited. Try Agent or Super Agent again.');
+            _renderChatMessage(bubble, 'assistant', 'Nothing was edited in Roblox Studio because the model did not send a valid ROTEX file or Studio action block. Try again in Super Agent.');
           }
           if (full) {
             const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
@@ -2302,6 +2425,11 @@
           return;
         }
 
+        const requestTimeoutMs = isTaskStatus ? 115000 : 60000;
+        chatTimeout = setTimeout(() => {
+          try { _chatAbort?.abort(); } catch {}
+        }, requestTimeoutMs);
+
         const resp = await fetch(_apiBase + '/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2314,6 +2442,7 @@
             projectMode: projMode,
             projectContext: projectContextText,
             projectMemory: _loadProjectMemory().join('\n'),
+            projectSpec: _loadProjectSpec(),
             proPass,
             texTokensLeft: texTok,
             agent: currentMode === 'agent' || currentMode === 'supreme',
@@ -2325,7 +2454,7 @@
         if (!resp.ok || !resp.headers.get('content-type')?.includes('text/event-stream')) {
           const err = await resp.json().catch(() => ({}));
           if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
-          if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'On hold');
+          if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'Try again');
           if (!bubble) bubble = _rxAddMsg('assistant', '');
           if (bubble) { _renderChatMessage(bubble, 'assistant', err.text || 'Could not reach ROTEX servers.'); bubble.style.opacity = ''; }
           _chatHistory.push({ role: 'assistant', content: err.text || 'Error' });
@@ -2337,8 +2466,24 @@
         const dec = new TextDecoder();
         let buf = '', full = '';
         let chargedTexTokens = 0;
+        let serverErrorText = '';
         outer: while (true) {
-          const { done, value } = await reader.read();
+          let chunk;
+          try {
+            chunk = await Promise.race([
+              reader.read(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('stream_idle_timeout')), full ? 60000 : 75000)),
+            ]);
+          } catch (idleErr) {
+            serverErrorText = full
+              ? ''
+              : 'The AI route took too long to start. Try again, or switch models for this message.';
+            try { _chatAbort?.abort(); } catch {}
+            try { await reader.cancel(); } catch {}
+            if (serverErrorText) full = serverErrorText;
+            break outer;
+          }
+          const { done, value } = chunk;
           if (done) break;
           buf += dec.decode(value, { stream: true });
           const evts = buf.split('\n\n');
@@ -2350,6 +2495,9 @@
             // Dev account: persist the server-issued long-lived Pro pass so it
             // stays free even after the Firebase token expires.
             if (p.devPass) { try { localStorage.setItem('rotex_pro_pass', p.devPass); window.updateSidebarPlan?.(); } catch {} }
+            // Living Project Spec: persist the server-updated design brief
+            // for this chat so the next request sends it back for updating.
+            if (typeof p.spec === 'string' && p.spec.trim()) _saveProjectSpec(p.spec);
             if (p.d) {
               full += p.d;
               if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
@@ -2366,7 +2514,11 @@
                 document.getElementById('rxAiMessages').scrollTop = 999999;
               }
             }
-            if (p.error) { if (!full) full = p.text || 'Error from server.'; break outer; }
+            if (p.error) {
+              serverErrorText = p.text || 'The selected AI provider failed this request.';
+              if (!full) full = serverErrorText;
+              break outer;
+            }
             if (p.usage?.textokens_charged) {
               chargedTexTokens = Math.max(chargedTexTokens, Number(p.usage.textokens_charged) || 0);
             }
@@ -2387,7 +2539,7 @@
           bubble.style.opacity = '';
           const visible = _safeEditModeText(full, '');
           const safeFull = full || 'The model returned an empty response. Try again in a moment.';
-          _renderChatMessage(bubble, 'assistant', (hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : safeFull);
+          _renderChatMessage(bubble, 'assistant', serverErrorText || ((hasActions || codeLike || isTaskStatus) ? (visible || 'Working in Roblox Studio...') : safeFull));
         }
         const appliedToStudio = full ? await _applyStudioFilesFromResponse(full, bubble, text) : false;
         // Tie the status directly to whether a failure message is about to be
@@ -2396,14 +2548,16 @@
         // at the same time as "nothing was edited" whenever hasActions was
         // false but an edit was clearly still expected, e.g. studio connected
         // + agent mode + the model just produced no code).
-        const streamFailedToApply = !appliedToStudio && canEditGame && studioOk && (hasActions || isTaskStatus);
+        const streamFailedToApply = !serverErrorText && !appliedToStudio && canEditGame && studioOk && (hasActions || isTaskStatus);
         if (isTaskStatus && statusBubble) {
           _renderTaskStatus(statusBubble, streamFailedToApply ? 'On hold' : 'Task done');
         }
-        if (!appliedToStudio && hasActions && bubble && canEditGame && studioOk) {
+        if (serverErrorText) {
+          if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'Try again');
+        } else if (!appliedToStudio && hasActions && bubble && canEditGame && studioOk) {
           _renderChatMessage(bubble, 'assistant', 'I generated the changes but could not apply them to Roblox Studio. The file paths may not match a known Roblox service root (e.g. ServerScriptService/Script.lua).');
         } else if (!appliedToStudio && isTaskStatus && bubble && canEditGame && studioOk) {
-          _renderChatMessage(bubble, 'assistant', 'I did not receive an executable Studio change from the model, so nothing was edited. Try Agent or Super Agent again.');
+          _renderChatMessage(bubble, 'assistant', 'Nothing was edited in Roblox Studio because the model did not send a valid ROTEX file or Studio action block. Try again in Super Agent.');
         }
         if (full) {
           const storedContent = appliedToStudio ? (bubble?.textContent || _stripFileBlocks(full) || 'Done.') : full;
@@ -2418,18 +2572,21 @@
         }
       } catch (err) {
         if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
-        if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'On hold');
+        if (isTaskStatus && statusBubble) _renderTaskStatus(statusBubble, 'Try again');
         // Only show an error if we haven't already rendered a response.
         // A network hiccup on the final chunk shouldn't wipe out a completed reply.
         const alreadyHasContent = bubble && (bubble.textContent || '').trim().length > 0;
         if (!alreadyHasContent) {
           if (!bubble) bubble = _rxAddMsg('assistant', '');
-          if (bubble) _renderChatMessage(bubble, 'assistant', err?.name === 'AbortError' ? 'Stopped.' : 'Could not reach ROTEX servers.');
+          const timedOut = err?.name === 'AbortError';
+          if (bubble) _renderChatMessage(bubble, 'assistant', timedOut ? 'The AI took too long and I stopped waiting. Try again, or switch models for this message.' : (err?.message || 'Could not reach ROTEX servers.'));
         }
         if (bubble) bubble.style.opacity = '';
       } finally {
+        if (chatTimeout) { clearTimeout(chatTimeout); chatTimeout = null; }
         _chatBusy = false;
         _chatAbort = null;
+        _chatStartedAt = 0;
         const input = document.getElementById('rxAiInput');
         if (input && !input.disabled) input.focus();
         // Refresh the server-side usage display after the message is counted.
@@ -2493,3 +2650,4 @@ setupChatListEvents();
 <script src="./editor.js"></script>
 </body>
 </html>
+

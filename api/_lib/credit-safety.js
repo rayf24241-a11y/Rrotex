@@ -40,7 +40,7 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
 
 async function checkCreditSafety({ selected, provider, model, userId, estimate, texTokensLeft, isPro = false }) {
   const balance = providerBalanceUsd();
-  const providerBusyText = 'AI is busy right now. Please retry in a few seconds.';
+  const providerBusyText = 'The selected AI route is temporarily unavailable. Try again now, or switch models for this message.';
   const outText = isPro
     ? "You've used your 1M TexTokens daily limit. Come back tomorrow, or buy more at rrotex.com/tokens."
     : 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.';

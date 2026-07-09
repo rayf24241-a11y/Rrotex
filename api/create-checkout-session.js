@@ -1,7 +1,7 @@
 const { verifyProPass } = require('./_lib/propass.js');
 
 const TOKENS_PER_DOLLAR = 400_000; // $2.50 per 1M tokens
-const PRO_PRICE_CENTS = 2000; // $20 — one-time charge, grants 30 days of Pro
+const PRO_PRICE_CENTS = 2000; // $20 - one-time charge, grants 30 days of Pro
 
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -9,34 +9,24 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
-  const livePriceId   = cleanEnv(process.env.STRIPE_PRICE_ID);
-  const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
-  const testPriceId   = cleanEnv(process.env.STRIPE_TEST_PRICE_ID);
-  const hasTestKeys   = Boolean(testSecretKey && testPriceId);
-  const hasLiveKeys   = Boolean(liveSecretKey && livePriceId);
-  const testMode      = process.env.STRIPE_MODE === 'test' || (!hasLiveKeys && hasTestKeys);
-  const secretKey     = testMode ? testSecretKey : liveSecretKey;
-  const priceId       = testMode ? testPriceId   : livePriceId;
+  const secretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
+  const priceId   = cleanEnv(process.env.STRIPE_PRICE_ID);
 
   const { uid = '', email = '', kind = 'pro', dollars = 0, authToken = '' } = request.body || {};
   const isCreditCheckout = kind === 'credits';
   const desktopCallback = normalizeDesktopCallback(request.body?.desktopCallback);
   const desktopCallbackQuery = desktopCallback ? `&desktop_callback=${encodeURIComponent(desktopCallback)}` : '';
 
-  if (!secretKey || (!isCreditCheckout && !priceId)) {
-    const missingNames = testMode
-      ? 'STRIPE_TEST_SECRET_KEY and STRIPE_TEST_PRICE_ID'
-      : 'STRIPE_SECRET_KEY and STRIPE_PRICE_ID';
+  if (!secretKey) {
     response.status(200).json({
       configured: false,
-      message: `Stripe is not configured. Add ${missingNames} in Vercel.`,
+      message: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Vercel.',
     });
     return;
   }
 
-  // Reject test keys when live mode is expected — prevents accidental test payments
-  if (!testMode && secretKey.startsWith('sk_test_')) {
+  // Live checkout only. Reject test keys so real pricing never silently uses test mode.
+  if (secretKey.startsWith('sk_test_')) {
     response.status(500).json({
       configured: false,
       message: 'STRIPE_SECRET_KEY is a test key. Set a live Stripe key (sk_live_...) in Vercel to charge real payments.',
@@ -59,7 +49,7 @@ module.exports = async function handler(request, response) {
   if (!isCreditCheckout) {
     const existingPass = verifyProPass(request.body?.proPass || '');
     if (existingPass?.uid === uid) {
-      // One-time Pro pass (no subscription id) — verifyProPass already
+      // One-time Pro pass (no subscription id) - verifyProPass already
       // rejects expired passes, so a valid one here is still within its 30 days.
       if (!existingPass.sub) {
         response.status(200).json({
@@ -128,7 +118,7 @@ module.exports = async function handler(request, response) {
     body = new URLSearchParams({
       mode: 'payment',
       'line_items[0][price_data][currency]': 'usd',
-      'line_items[0][price_data][product_data][name]': 'ROTEX Pro — 30 days',
+      'line_items[0][price_data][product_data][name]': 'ROTEX Pro - 30 days',
       'line_items[0][price_data][unit_amount]': String(PRO_PRICE_CENTS),
       'line_items[0][quantity]': '1',
       success_url: `${origin}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}${desktopCallbackQuery}`,
@@ -157,7 +147,7 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  response.status(200).json({ configured: true, mode: testMode ? 'test' : 'live', url: data.url });
+  response.status(200).json({ configured: true, mode: 'live', url: data.url });
 };
 
 function cleanEnv(value) {

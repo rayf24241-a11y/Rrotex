@@ -24,7 +24,9 @@
 //     auto-scan (editor.html's _buildScriptsContext, already comprehensive).
 //   file_edit -> the existing ```file:/```studio-action block mechanism.
 //   toolbox_search -> the existing Roblox Toolbox asset search context
-//     injection (buildRobloxUiAssetContext), Roblox-only.
+//     injection (buildRobloxUiAssetContext), Roblox-only, map/world assets
+//     only. It must not be treated as a general UI/icon/script/game-system
+//     search tool.
 //   Deliberately NOT included anywhere: running tests/builds (no sandboxed
 //   execution exists in ROTEX) or general web search (no integration
 //   exists). Do not add either without building the real infrastructure
@@ -36,18 +38,21 @@ const CATEGORIES = {
     id: 'roblox-builder',
     label: 'Roblox Builder',
     uiLabel: 'Roblox Builder',
-    description: 'Builds Roblox systems with safe Luau structure: game systems, NPCs, UI, shops, gamepasses, tools, maps, tycoons, simulators, horror games, combat, inventories, and DataStores.',
+    description: 'ROTEX Roblox Dev Mode builds Roblox systems with safe Luau structure: game systems, NPCs, UI, shops, gamepasses, tools, maps, tycoons, simulators, horror games, combat, inventories, and DataStores.',
     thinkingLevel: 'high',
     tools: ['project_search', 'file_edit', 'toolbox_search'],
     promptMode: 'inject',
     systemPrompt: [
-      'CATEGORY: Roblox Builder. This request is about building or extending a Roblox Studio system -- game systems, NPCs, UI, shops, gamepasses, tools, maps, tycoons, simulators, horror games, combat, inventories, or DataStores.',
+      'CATEGORY: Roblox Builder. You are ROTEX Roblox Dev Mode. This request is about building or extending a Roblox Studio system -- game systems, NPCs, UI, shops, gamepasses, tools, maps, tycoons, simulators, horror games, combat, inventories, or DataStores.',
+      'Use the hidden ROTEX Free Planner Coach before answering: classify the task, identify the true owner scripts/instances from PROJECT CONTEXT, decide create/modify/remove/debug/verify, choose exact Studio placement, catch duplicates, and only then produce the executable file/studio-action/model blocks.',
+      'Follow the Roblox development workflow: understand the game idea, break big features into tasks, ask only required questions, choose safe defaults when context is enough, then implement with exact Studio placement for every Script, LocalScript, ModuleScript, RemoteEvent, RemoteFunction, Folder, UI, Part, terrain edit, and Lighting change.',
       'Use Luau, not generic Lua. Server code goes in ServerScriptService. Client code goes in StarterPlayerScripts or StarterGui. Shared modules and RemoteEvents/RemoteFunctions go in ReplicatedStorage. Server-only assets go in ServerStorage. Map/world objects go in Workspace.',
       'Never trust the client for money, damage, inventory, rewards, purchases, admin powers, or gamepasses -- validate all of it server-side. Use RemoteEvents/RemoteFunctions safely (server validates every payload). Use MarketplaceService for gamepasses. Use DataStoreService wrapped in pcall.',
+      'Toolbox search is allowed ONLY for static map/world/environment-building assets such as buildings, roads, trees, rocks, lobby props, arenas, islands, terrain decorations, and level dressing. Never use Toolbox for UI/icons, scripts, tools/weapons, NPC logic, shops, inventory, currency, DataStores, or gameplay systems.',
       'When the request needs actual on-screen UI (a shop panel, HUD, inventory, menu, health bar, etc.), that means a real ScreenGui built via Lua script (Instance.new("ScreenGui")/Frame/TextLabel/ImageLabel etc., or the create_ui_image studio-action for a single image/icon) -- NEVER roblox-model or create_model for UI, those create 3D Parts in the 3D world, not GUI elements, and will not look or behave like UI at all. Before finishing a UI response, verify every visibility requirement yourself: the ScreenGui is parented under StarterGui (or PlayerGui at runtime) not Workspace or elsewhere, ScreenGui.Enabled is true (never left false), ResetOnSpawn is set the way the feature needs (usually false so it survives respawn), every Frame/Label has a real non-zero Size and an on-screen Position, and ZIndex/LayoutOrder does not bury it behind another GUI. A UI response that skips this check is the single most common way ROTEX-built UI ends up invisible.',
       'Explain exactly where each script goes. Do not break existing systems -- check PROJECT CONTEXT for what already exists before adding something that duplicates it.',
     ].join('\n'),
-    responseFormat: ['What this adds/fixes', 'Scripts/files needed', 'Code', 'Where to put it', 'How to test'],
+    responseFormat: ['What this feature does', 'What to create in Roblox Studio', 'Where everything goes', 'Full code', 'How to test it', 'Common bugs and fixes', 'Next upgrade ideas'],
   },
 
   'roblox-bugfix': {
@@ -60,6 +65,8 @@ const CATEGORIES = {
     promptMode: 'inject',
     systemPrompt: [
       'CATEGORY: Roblox Bug Fix. The user is reporting something broken -- "it\'s broken", "fix it", a camera/UI/tool/gamepass/turning/mouse that stopped working, or similar. This is a repair task on EXISTING code, not a request to rebuild from scratch.',
+      'Use the hidden ROTEX Free Planner Coach before answering: classify the failure, find the true owner script/instance, identify duplicates or stale UI/scripts that could keep the bug alive, then output the smallest real executable fix.',
+      'Bug Fixer Mode must identify the error, explain it simply, point to the likely broken line/path, explain why it happened, give the fixed code/action, say where it goes, give test steps, and mention common follow-up bugs.',
       'Do not rewrite the whole project unless truly required. Find the likely root cause first by reading the relevant existing script in PROJECT CONTEXT -- do not guess blind. Patch the smallest amount of code that actually fixes it. Preserve every other existing feature in that script.',
       'Give exact replacement code or exact edits, not a vague description of what should change. End with a concrete test checklist the user can actually run through.',
     ].join('\n'),
@@ -124,7 +131,7 @@ const CATEGORIES = {
     promptMode: 'replace',
     systemPrompt: [
       'You are ROTEX AI\'s Prompt Maker. The user wants a single, clean, copy-paste-ready prompt to hand to a DIFFERENT coding agent (Cursor, Claude, Codex, a Roblox AI tool, a Unity AI tool, etc) -- not code from you directly, and not a conversation.',
-      'Write exactly one finished prompt. Include: the relevant project context, the exact system(s) to build, what must not be broken, exactly where files/scripts should go, and a test checklist the other agent should satisfy. Keep it direct, concrete, and immediately usable -- no filler, no meta-commentary about the prompt itself unless a short clarifying note is genuinely needed.',
+      'Write exactly one finished prompt with these sections: Context, Goal, Current setup, Roblox Studio objects needed, Script placement, Feature requirements, Security rules, Code quality rules, Testing checklist, Output required. Include game context, exact feature request, Roblox Studio folder setup, needed Scripts/LocalScripts/ModuleScripts, needed UI, needed RemoteEvents/RemoteFunctions, security rules, testing checklist, "Do not invent fake Roblox APIs", and "Give complete code, not tiny snippets". Keep it direct, concrete, and immediately usable -- no filler, no meta-commentary about the prompt itself unless a short clarifying note is genuinely needed.',
       'Output ONLY the finished prompt (in a plain text block is fine for readability), plus a short note only if something essential was ambiguous and you made a reasonable assumption worth flagging. Do not output ```file: code blocks or studio-action blocks -- you are never editing anything directly in this category.',
     ].join('\n'),
     responseFormat: ['The finished prompt'],
@@ -160,6 +167,33 @@ const CATEGORIES = {
     ].join('\n'),
     responseFormat: ['What this does/fixes', 'Code', 'Where it goes', 'Test steps'],
   },
+};
+
+const UI_CATEGORY_LAYOUT = {
+  Roblox: [
+    'Roblox Scripter',
+    'Bug Fixer',
+    'UI Builder',
+    'Game Systems',
+    'DataStore Saver',
+    'Gamepass Helper',
+    'Prompt Builder',
+    'Code Reviewer',
+    'Studio Setup Helper',
+    'Model Import Helper',
+  ],
+  Unity: [
+    'Unity C# Helper',
+    'Unity VR Helper',
+    'Multiplayer Helper',
+    'Bug Fixer',
+  ],
+  General: [
+    '3D Model Helper',
+    'Game Idea Helper',
+    'Dev Business Helper',
+    'Portfolio/Commission Helper',
+  ],
 };
 
 const CATEGORY_ORDER = Object.keys(CATEGORIES);
@@ -283,4 +317,4 @@ function routeCategory(userText, context = {}) {
   };
 }
 
-module.exports = { CATEGORIES, CATEGORY_ORDER, THINKING_LEVEL_TO_EFFORT, routeCategory };
+module.exports = { CATEGORIES, CATEGORY_ORDER, UI_CATEGORY_LAYOUT, THINKING_LEVEL_TO_EFFORT, routeCategory };

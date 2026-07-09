@@ -7,19 +7,14 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
-  const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
-  const hasTestKey = Boolean(testSecretKey);
-  const hasLiveKey = Boolean(liveSecretKey);
-  const testMode  = process.env.STRIPE_MODE === 'test' || (!hasLiveKey && hasTestKey);
-  const secretKey = testMode ? testSecretKey : liveSecretKey;
+  const secretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
 
   if (!secretKey) {
     response.status(200).json({ verified: false, message: 'Stripe is not configured.' });
     return;
   }
 
-  if (!testMode && secretKey.startsWith('sk_test_')) {
+  if (secretKey.startsWith('sk_test_')) {
     response.status(500).json({ verified: false, message: 'Stripe is using a test key — cannot verify real payments. Set STRIPE_SECRET_KEY to a live key (sk_live_...).' });
     return;
   }

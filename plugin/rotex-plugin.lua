@@ -1,8 +1,10 @@
--- ROTEX Studio Plugin v3.0
+-- ROTEX Studio Plugin v3.5
 -- Connects Roblox Studio to the ROTEX AI desktop app.
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
 local HTTP_PORT = PORTS[1]
+local PLUGIN_VERSION = "3.5"
+local WEB_BRIDGE_URL = "https://www.rrotex.com/api/plugin-bridge"
 
 local HttpService          = game:GetService("HttpService")
 local Selection            = game:GetService("Selection")
@@ -20,7 +22,7 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 	Enum.InitialDockState.Right, false, false, 300, 580, 240, 380
 )
 local widget = plugin:CreateDockWidgetPluginGui("ROTEX_Panel", widgetInfo)
-widget.Title = "ROTEX AI v2"
+widget.Title = "ROTEX AI v" .. PLUGIN_VERSION
 widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- ── Colors ────────────────────────────────────────────────────────────────────
@@ -70,18 +72,35 @@ local function Button(parent, text, size, pos, bg, textColor, fs)
 	return b
 end
 
+local function TextInput(parent, text, size, pos)
+	local b = Instance.new("TextBox")
+	b.Size, b.Position = size, pos
+	b.BackgroundColor3 = C.panel
+	b.TextColor3, b.PlaceholderColor3 = C.text, C.quiet
+	b.Text, b.PlaceholderText = text or "", "Web code from rrotex.com"
+	b.TextSize, b.Font = 11, Enum.Font.Gotham
+	b.ClearTextOnFocus = false
+	b.BorderSizePixel = 0
+	b.Parent = parent
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+	return b
+end
+
 -- ── Build UI ──────────────────────────────────────────────────────────────────
 local root = Frame(widget, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), C.bg)
 
 local hdr = Frame(root, UDim2.new(1,0,0,48), UDim2.new(0,0,0,0), C.surface)
 Label(hdr, "ROTEX AI", UDim2.new(1,-14,0,20), UDim2.new(0,12,0,8), C.text, 14, true)
-Label(hdr, "Studio Bridge v3.0", UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
+Label(hdr, "Studio Bridge v" .. PLUGIN_VERSION, UDim2.new(1,-14,0,14), UDim2.new(0,12,0,28), C.muted, 9, false)
 Frame(root, UDim2.new(1,0,0,1), UDim2.new(0,0,0,48), C.border)
 
 local Y = 58
 
 local connectBtn    = Button(root, "Connect to ROTEX", UDim2.new(1,-20,0,36), UDim2.new(0,10,0,Y), C.blue, Color3.new(1,1,1), 13)
 Y = Y + 46
+
+local webCodeInput = TextInput(root, plugin:GetSetting("rotex_web_code") or "", UDim2.new(1,-20,0,30), UDim2.new(0,10,0,Y))
+Y = Y + 36
 
 local statusLbl     = Label(root, "● Not connected", UDim2.new(1,-20,0,16), UDim2.new(0,12,0,Y), C.quiet, 11)
 Y = Y + 20
@@ -133,6 +152,8 @@ outputText.Parent = outputScroll
 local connected    = false
 local currentToken = plugin:GetSetting("rotex_token") or ""
 local projectName  = ""
+local bridgeMode   = "local"
+local webCode      = plugin:GetSetting("rotex_web_code") or ""
 
 local function setStatus(text, color)
 	statusLbl.Text, statusLbl.TextColor3 = text, color or C.quiet
@@ -223,6 +244,101 @@ local function postJSON(port, path, body, timeoutSecs)
 	return ref.data
 end
 
+local function normalizeWebCode(value)
+	return (tostring(value or ""):upper():gsub("[^A-Z0-9]", "")):sub(1, 18)
+end
+
+local function webRequest(op, payload, timeoutSecs)
+	webCode = normalizeWebCode(webCodeInput.Text)
+	if #webCode < 4 then return nil, "missing web code" end
+	plugin:SetSetting("rotex_web_code", webCode)
+	local ref = { done = false, data = nil, err = nil }
+	task.spawn(function()
+		local body = payload or {}
+		body.op = op
+		body.code = webCode
+		body.pluginVersion = PLUGIN_VERSION
+		local ok, encoded = pcall(function() return HttpService:JSONEncode(body) end)
+		if not ok then ref.err = "bad payload"; ref.done = true; return end
+		local reqOk, res = pcall(function()
+			return HttpService:RequestAsync({
+				Url = WEB_BRIDGE_URL,
+				Method = "POST",
+				Headers = { ["Content-Type"] = "application/json" },
+				Body = encoded,
+			})
+		end)
+		if reqOk and res and res.Success then
+			local ok2, decoded = pcall(function() return HttpService:JSONDecode(res.Body or "{}") end)
+			ref.data = ok2 and decoded or { ok = true }
+		elseif reqOk and res then
+			ref.err = "HTTP " .. tostring(res.StatusCode) .. " " .. tostring(res.StatusMessage)
+		else
+			ref.err = tostring(res)
+		end
+		ref.done = true
+	end)
+	local t0 = tick()
+	while not ref.done and (tick() - t0) < (timeoutSecs or 5) do task.wait(0.1) end
+	return ref.data, ref.err
+end
+
+local function bridgeGetActions()
+	if bridgeMode == "web" then
+		return webRequest("actions", {}, 4)
+	end
+	return getJSON(HTTP_PORT, "/studio/actions", 4)
+end
+
+local function bridgePostResult(payload)
+	if bridgeMode == "web" then
+		return webRequest("result", { result = payload }, 4)
+	end
+	return postJSON(HTTP_PORT, "/studio/result", HttpService:JSONEncode(payload), 4)
+end
+
+local function bridgePostContext(ctx, timeoutSecs)
+	if bridgeMode == "web" then
+		return webRequest("context", { context = ctx }, timeoutSecs or 8)
+	end
+	return postJSON(HTTP_PORT, "/ai/start", HttpService:JSONEncode(ctx), timeoutSecs or 8)
+end
+
+local function bridgeDisconnect()
+	if bridgeMode == "web" then
+		return webRequest("disconnect", {}, 2)
+	end
+	return postJSON(HTTP_PORT, "/disconnect", "{}", 2)
+end
+
+local function bridgeHeartbeat()
+	if bridgeMode == "web" then
+		return webRequest("heartbeat", {
+			gameName = projectName,
+		}, 4)
+	end
+	return postJSON(HTTP_PORT, "/heartbeat", "{}", 4)
+end
+
+local function bridgePostStudioError(message, messageType)
+	if bridgeMode == "web" then
+		return bridgePostResult({
+			ok = false,
+			type = "studio_error",
+			messages = {
+				"Studio " .. tostring(messageType or "error") .. ": " .. tostring(message or ""),
+			},
+			actionId = "studio-error-" .. tostring(os.time()),
+		})
+	end
+	local payload = HttpService:JSONEncode({
+		message = tostring(message),
+		type = tostring(messageType),
+		time = os.time(),
+	})
+	return postJSON(HTTP_PORT, "/studio/error", payload, 4)
+end
+
 -- ── Game scanner ──────────────────────────────────────────────────────────────
 local SCAN_SERVICES = {
 	"ServerScriptService", "ReplicatedStorage", "StarterPlayer",
@@ -256,8 +372,50 @@ local function scanAllScripts(maxScripts)
 	return scripts
 end
 
+local function scanAllGui(maxItems)
+	maxItems = maxItems or 80
+	local gui = {}
+	local function addGui(inst, depth)
+		if depth > 6 or #gui >= maxItems then return end
+		if inst:IsA("ScreenGui") or inst:IsA("GuiObject") then
+			local item = {
+				path = inst:GetFullName(),
+				name = inst.Name,
+				class = inst.ClassName,
+			}
+			if inst:IsA("ScreenGui") then
+				item.enabled = inst.Enabled
+				item.resetOnSpawn = inst.ResetOnSpawn
+				item.displayOrder = inst.DisplayOrder
+				item.ignoreGuiInset = inst.IgnoreGuiInset
+			end
+			if inst:IsA("GuiObject") then
+				item.visible = inst.Visible
+				item.size = tostring(inst.Size)
+				item.position = tostring(inst.Position)
+				item.anchorPoint = tostring(inst.AnchorPoint)
+				item.zIndex = inst.ZIndex
+				if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+					item.text = string.sub(inst.Text or "", 1, 80)
+				end
+			end
+			table.insert(gui, item)
+		end
+		local ok, children = pcall(function() return inst:GetChildren() end)
+		if not ok then return end
+		for _, child in ipairs(children) do
+			if #gui >= maxItems then return end
+			addGui(child, depth + 1)
+		end
+	end
+	local ok, starterGui = pcall(function() return game:GetService("StarterGui") end)
+	if ok and starterGui then addGui(starterGui, 0) end
+	return gui
+end
+
 local function buildGameContext(includeSelected)
 	local scripts = scanAllScripts(100)
+	local gui = scanAllGui(80)
 	local selected = {}
 	if includeSelected then
 		for _, obj in ipairs(Selection:Get()) do
@@ -280,19 +438,21 @@ local function buildGameContext(includeSelected)
 	return {
 		project = projectName,
 		gameName = gameName,
-		pluginVersion = "3.0",
+		pluginVersion = PLUGIN_VERSION,
 		capabilities = {
 			"apply_files",
 			"create_model geometry",
 			"insert_toolbox_model (real Toolbox assets via InsertService)",
 			"terrain_edit fill_block/fill_ball/clear",
 			"lighting_set properties",
+			"create_ui full StarterGui ScreenGui trees",
 			"create_ui_image ImageLabel/ImageButton",
 			"set_property parts/instances",
 			"delete_instance",
 			"select_instances",
 		},
 		scripts = scripts,
+		gui = gui,
 		selected = selected,
 	}
 end
@@ -329,11 +489,22 @@ end
 -- ── Script apply ──────────────────────────────────────────────────────────────
 local function splitPath(p) local t={} for s in string.gmatch(p or "","[^/\\]+") do table.insert(t,s) end return t end
 local function studioRoot(n) local ok,s=pcall(function() return game:GetService(n) end) return (ok and s) or workspace end
-local function scriptClassFor(name, source)
+local function scriptClassFor(name, source, parts)
 	local lower = string.lower(name or "")
+	local root = parts and parts[1] or ""
+	local folder = parts and parts[2] or ""
+	local rootLower = string.lower(root or "")
+	local folderLower = string.lower(folder or "")
 	if string.find(lower, "localscript") or string.find(lower, "%.client%.lua$") then return "LocalScript" end
+	if string.find(lower, "%.server%.lua$") then return "Script" end
 	if string.find(lower, "modulescript") or string.find(lower, "%.module%.lua$")
 		or string.find(source or "", "[\r\n]%s*return%s+[%w_%.]+%s*$") then return "ModuleScript" end
+	if rootLower == "startergui"
+		or (rootLower == "starterplayer" and (folderLower == "starterplayerscripts" or folderLower == "startercharacterscripts"))
+		or rootLower == "starterplayerscripts"
+		or rootLower == "startercharacterscripts" then
+		return "LocalScript"
+	end
 	return "Script"
 end
 local function cleanName(n)
@@ -344,6 +515,12 @@ end
 local function applyStudioFile(file)
 	local parts = splitPath(file.path)
 	if #parts < 2 then return false, "Bad path: " .. tostring(file.path) end
+	if parts[1] == "game" or parts[1] == "Game" then
+		table.remove(parts, 1)
+	end
+	if parts[1] == "StarterPlayerScripts" or parts[1] == "StarterCharacterScripts" then
+		table.insert(parts, 1, "StarterPlayer")
+	end
 	local parent = studioRoot(parts[1])
 	for i = 2, #parts - 1 do
 		local folder = parent:FindFirstChild(parts[i])
@@ -352,17 +529,16 @@ local function applyStudioFile(file)
 	end
 	local scriptName = cleanName(parts[#parts])
 	local source = file.content or ""
+	local desiredClass = scriptClassFor(parts[#parts], source, parts)
 	local action = "Created"
 	local existing = parent:FindFirstChild(scriptName)
-	local existingClass = nil
 	if existing and existing:IsA("LuaSourceContainer") then
-		existingClass = existing.ClassName
 		existing:Destroy()
 		action = "Updated"
 	end
-	local obj = Instance.new(existingClass or scriptClassFor(parts[#parts], source))
+	local obj = Instance.new(desiredClass)
 	obj.Name, obj.Source, obj.Parent = scriptName, source, parent
-	return true, action .. " " .. file.path
+	return true, action .. " " .. desiredClass .. " " .. file.path
 end
 
 local function handleCreateModel(action)
@@ -501,6 +677,126 @@ local function colorFromValue(value)
 	return nil
 end
 
+local GUI_CLASSES = {
+	Frame = true,
+	TextLabel = true,
+	TextButton = true,
+	TextBox = true,
+	ImageLabel = true,
+	ImageButton = true,
+	ScrollingFrame = true,
+	UICorner = true,
+	UIStroke = true,
+	UIGradient = true,
+	UIPadding = true,
+	UIListLayout = true,
+	UIGridLayout = true,
+	UIScale = true,
+}
+
+local function applyGuiProps(inst, spec)
+	if inst:IsA("GuiObject") then
+		inst.Size = udim2FromTable(spec.size, inst.Size)
+		inst.Position = udim2FromTable(spec.position, inst.Position)
+		inst.AnchorPoint = vector2FromTable(spec.anchorPoint, inst.AnchorPoint)
+		if spec.backgroundColor then inst.BackgroundColor3 = colorFromValue(spec.backgroundColor) or inst.BackgroundColor3 end
+		if spec.backgroundTransparency ~= nil then inst.BackgroundTransparency = tonumber(spec.backgroundTransparency) or inst.BackgroundTransparency end
+		if spec.visible ~= nil then inst.Visible = spec.visible == true end
+		if spec.zIndex ~= nil then inst.ZIndex = tonumber(spec.zIndex) or inst.ZIndex end
+		if spec.layoutOrder ~= nil then inst.LayoutOrder = tonumber(spec.layoutOrder) or inst.LayoutOrder end
+	end
+	if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+		inst.Text = tostring(spec.text or inst.Text or "")
+		inst.TextScaled = spec.textScaled ~= false
+		inst.TextWrapped = spec.textWrapped ~= false
+		if spec.textColor then inst.TextColor3 = colorFromValue(spec.textColor) or inst.TextColor3 end
+		if spec.textSize ~= nil then inst.TextSize = tonumber(spec.textSize) or inst.TextSize end
+		local fontName = tostring(spec.font or "")
+		if fontName ~= "" then local ok, font = pcall(function() return Enum.Font[fontName] end) if ok then inst.Font = font end end
+	end
+	if inst:IsA("ImageLabel") or inst:IsA("ImageButton") then
+		local imageValue = tostring(spec.image or spec.assetId or "")
+		if imageValue ~= "" and not imageValue:match("^rbxassetid://") and imageValue:match("^%d+$") then
+			imageValue = "rbxassetid://" .. imageValue
+		end
+		inst.Image = imageValue
+		if spec.imageTransparency ~= nil then inst.ImageTransparency = tonumber(spec.imageTransparency) or inst.ImageTransparency end
+	end
+	if inst:IsA("UICorner") then
+		inst.CornerRadius = UDim.new(0, tonumber(spec.radius) or tonumber(spec.cornerRadius) or 8)
+	end
+	if inst:IsA("UIStroke") then
+		if spec.color then inst.Color = colorFromValue(spec.color) or inst.Color end
+		if spec.thickness ~= nil then inst.Thickness = tonumber(spec.thickness) or inst.Thickness end
+		if spec.transparency ~= nil then inst.Transparency = tonumber(spec.transparency) or inst.Transparency end
+	end
+	if inst:IsA("UIGradient") then
+		if type(spec.colors) == "table" and #spec.colors >= 2 then
+			local c1 = colorFromValue(spec.colors[1]) or Color3.new(1, 1, 1)
+			local c2 = colorFromValue(spec.colors[2]) or Color3.new(0, 0, 0)
+			inst.Color = ColorSequence.new(c1, c2)
+		end
+		if spec.rotation ~= nil then inst.Rotation = tonumber(spec.rotation) or inst.Rotation end
+	end
+	if inst:IsA("UIPadding") then
+		local p = spec.padding
+		if type(p) == "table" then
+			inst.PaddingTop = UDim.new(0, p.top or p[1] or 0)
+			inst.PaddingRight = UDim.new(0, p.right or p[2] or 0)
+			inst.PaddingBottom = UDim.new(0, p.bottom or p[3] or 0)
+			inst.PaddingLeft = UDim.new(0, p.left or p[4] or 0)
+		end
+	end
+	if inst:IsA("UIListLayout") then
+		if spec.padding ~= nil then inst.Padding = UDim.new(0, tonumber(spec.padding) or 0) end
+		local fill = tostring(spec.fillDirection or "")
+		if fill ~= "" then local ok, v = pcall(function() return Enum.FillDirection[fill] end) if ok then inst.FillDirection = v end end
+		local sort = tostring(spec.sortOrder or "")
+		if sort ~= "" then local ok, v = pcall(function() return Enum.SortOrder[sort] end) if ok then inst.SortOrder = v end end
+	end
+	if inst:IsA("UIScale") then
+		if spec.scale ~= nil then inst.Scale = tonumber(spec.scale) or inst.Scale end
+	end
+end
+
+local function createGuiElement(parent, spec)
+	if type(spec) ~= "table" then return nil end
+	local className = tostring(spec.class or "Frame")
+	if not GUI_CLASSES[className] then className = "Frame" end
+	local inst = Instance.new(className)
+	inst.Name = tostring(spec.name or className)
+	applyGuiProps(inst, spec)
+	inst.Parent = parent
+	for _, child in ipairs(spec.children or {}) do
+		createGuiElement(inst, child)
+	end
+	return inst
+end
+
+local function handleCreateUi(action)
+	local starterGui = game:GetService("StarterGui")
+	local guiName = tostring(action.screenGui or action.name or "ROTEXGui")
+	if action.replace ~= false then
+		local old = starterGui:FindFirstChild(guiName)
+		if old then old:Destroy() end
+	end
+	local screenGui = starterGui:FindFirstChild(guiName)
+	if not screenGui or not screenGui:IsA("ScreenGui") then
+		screenGui = Instance.new("ScreenGui")
+		screenGui.Name = guiName
+		screenGui.Parent = starterGui
+	end
+	screenGui.Enabled = action.enabled ~= false
+	screenGui.ResetOnSpawn = action.resetOnSpawn == true
+	screenGui.IgnoreGuiInset = action.ignoreGuiInset == true
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.DisplayOrder = tonumber(action.displayOrder) or 50
+	for _, spec in ipairs(action.elements or action.children or {}) do
+		createGuiElement(screenGui, spec)
+	end
+	return true, "Created UI: StarterGui." .. guiName
+end
+
 local function materialFromValue(value, fallback)
 	if not value then return fallback end
 	local ok, material = pcall(function() return Enum.Material[tostring(value)] end)
@@ -536,6 +832,7 @@ local function handleLightingSet(action)
 		if action.property then props[action.property] = action.value end
 	end
 	local changed = {}
+	local failed = 0
 	for prop, value in pairs(props) do
 		local finalValue = value
 		local lower = string.lower(tostring(prop))
@@ -546,11 +843,12 @@ local function handleLightingSet(action)
 		if ok then
 			table.insert(changed, tostring(prop))
 		else
+			failed = failed + 1
 			table.insert(changed, tostring(prop) .. " failed: " .. tostring(err))
 		end
 	end
 	ChangeHistoryService:SetWaypoint("ROTEX LightingSet Done")
-	return true, "Updated lighting: " .. table.concat(changed, ", ")
+	return failed == 0, "Updated lighting: " .. table.concat(changed, ", ")
 end
 
 local function handleCreateUiImage(action)
@@ -620,6 +918,16 @@ end
 -- ── Connection helpers ────────────────────────────────────────────────────────
 -- Detects the "Http requests are not enabled" Studio error so we can tell the
 -- user exactly how to fix it instead of silently showing "not found".
+local function unpackActionResult(callOk, okValue, msgValue, fallback)
+	if not callOk then
+		return false, tostring(okValue or "Studio action crashed")
+	end
+	if type(okValue) == "boolean" then
+		return okValue, tostring(msgValue or (okValue and fallback or "Studio action failed"))
+	end
+	return true, tostring(okValue or fallback)
+end
+
 local function isHttpDisabled(err)
 	if not err then return false end
 	local e = string.lower(tostring(err))
@@ -632,14 +940,25 @@ local function tryConnect()
 	local lastErr = nil
 	for _, port in ipairs(PORTS) do
 		local data, err = getJSON(port, "/ping", 2)
-		if data and data.ok then return port, data end
+		if data and data.ok then return "local", port, data end
 		if err then lastErr = err end
 	end
-	return nil, nil, lastErr
+	webCode = normalizeWebCode(webCodeInput.Text)
+	if #webCode >= 4 then
+		local okName, name = pcall(function() return game.Name end)
+		local data, err = webRequest("plugin_hello", {
+			gameName = (okName and name and name ~= "" and name) or "Untitled Experience",
+		}, 4)
+		if data and data.ok then return "web", 0, data end
+		if err then lastErr = err end
+	end
+	return nil, nil, nil, lastErr
 end
 
-local function onConnected(connPort, connData)
-	HTTP_PORT   = connPort
+local function onConnected(mode, connPort, connData)
+	bridgeMode = mode or "local"
+	if bridgeMode == "local" then HTTP_PORT = connPort end
+	connData = connData or {}
 	local token = (connData.token or ""):match("^%s*(.-)%s*$")
 	if #token >= 4 then
 		currentToken = token
@@ -649,15 +968,20 @@ local function onConnected(connPort, connData)
 	projectName = connData.project or ""
 	setActionButtons(true)
 	connectBtn.Text = "Reconnect"
-	setStatus("✓ Connected · port " .. connPort, C.green)
-	appendLog("[ROTEX] Connected on port " .. connPort)
+	if bridgeMode == "web" then
+		setStatus("Connected to rrotex.com web", C.green)
+		appendLog("[ROTEX] Connected to rrotex.com web bridge")
+	else
+		setStatus("Connected on port " .. tostring(connPort), C.green)
+		appendLog("[ROTEX] Connected on port " .. tostring(connPort))
+	end
 	task.spawn(function()
-		appendLog("[Scan] Reading game scripts…")
+		appendLog("[Scan] Reading game scripts...")
 		local ctx = buildGameContext(false)
 		local n   = #(ctx.scripts or {})
 		scriptCountLbl.Text = n .. " scripts found"
-		postJSON(HTTP_PORT, "/ai/start", HttpService:JSONEncode(ctx), 8)
-		appendLog("[Scan] Sent " .. n .. " scripts — ready to chat!")
+		bridgePostContext(ctx, 8)
+		appendLog("[Scan] Sent " .. n .. " scripts - ready to chat!")
 	end)
 end
 
@@ -669,20 +993,21 @@ local function onDisconnected(reason)
 	scriptCountLbl.Text = ""
 end
 
--- ── Auto-connect loop (runs forever, retries every 5 s when not connected) ───
+-- Auto-connect loop (runs forever, retries every 5s when not connected)
 task.spawn(function()
 	while true do
 		if not connected then
-			setStatus("● Searching for ROTEX Desktop…", C.yellow)
-			local connPort, connData, connErr = tryConnect()
-			if connPort then
-				onConnected(connPort, connData)
+			local hasWebCode = #normalizeWebCode(webCodeInput.Text) >= 4
+			setStatus(hasWebCode and "Searching web bridge..." or "Searching for ROTEX Desktop...", C.yellow)
+			local mode, connPort, connData, connErr = tryConnect()
+			if mode then
+				onConnected(mode, connPort, connData)
 			elseif isHttpDisabled(connErr) then
-				setStatus("⚠ Enable HTTP Requests (see log)", C.red)
+				setStatus("Enable HTTP Requests (see log)", C.red)
 				connectBtn.Text = "Connect to ROTEX"
-				appendLog("[ROTEX] HTTP requests are OFF. Fix: Home → Game Settings → Security → turn ON 'Allow HTTP Requests' (or run  game:GetService('HttpService').HttpEnabled = true  in the command bar), then click Connect.")
+				appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
 			else
-				setStatus("● ROTEX Desktop not found — is the app open?", C.quiet)
+				setStatus(hasWebCode and "ROTEX Web not connected" or "ROTEX Desktop not found", C.quiet)
 				connectBtn.Text = "Connect to ROTEX"
 			end
 		end
@@ -690,17 +1015,15 @@ task.spawn(function()
 	end
 end)
 
--- ── Disconnect button (manual stop) ──────────────────────────────────────────
+-- Disconnect button (manual stop)
 disconnectBtn.MouseButton1Click:Connect(function()
 	if not connected then return end
-	postJSON(HTTP_PORT, "/disconnect", "{}", 2)
+	bridgeDisconnect()
 	onDisconnected("Manually disconnected")
 	appendLog("[ROTEX] Manually disconnected")
 end)
 
--- ── Auto-send game context every 10s while connected ──────────────────────────
--- Replaces the old manual "Send Context" button. Keeps ROTEX's view of the
--- place's scripts fresh automatically.
+-- Auto-send game context every 10s while connected
 task.spawn(function()
 	while true do
 		task.wait(10)
@@ -709,29 +1032,30 @@ task.spawn(function()
 		if ok and ctx then
 			local n = #(ctx.scripts or {})
 			scriptCountLbl.Text = n .. " scripts found"
-			postJSON(HTTP_PORT, "/ai/start", HttpService:JSONEncode(ctx), 8)
+			bridgePostContext(ctx, 8)
 		end
 	end
 end)
 
--- ── Connect button (force immediate retry) ────────────────────────────────────
+-- Connect button (force immediate retry)
 connectBtn.MouseButton1Click:Connect(function()
 	if connected then return end
-	setStatus("● Connecting…", C.yellow)
-	connectBtn.Text = "Connecting…"
-	appendLog("[ROTEX] Connecting…")
+	setStatus("Connecting...", C.yellow)
+	connectBtn.Text = "Connecting..."
+	appendLog("[ROTEX] Connecting...")
 	task.spawn(function()
-		local connPort, connData, connErr = tryConnect()
-		if connPort then
-			onConnected(connPort, connData)
+		local mode, connPort, connData, connErr = tryConnect()
+		if mode then
+			onConnected(mode, connPort, connData)
 		elseif isHttpDisabled(connErr) then
 			connectBtn.Text = "Connect to ROTEX"
-			setStatus("⚠ Enable HTTP Requests (see log)", C.red)
-			appendLog("[ROTEX] HTTP requests are OFF. Fix: Home → Game Settings → Security → turn ON 'Allow HTTP Requests' (or run  game:GetService('HttpService').HttpEnabled = true  in the command bar), then click Connect.")
+			setStatus("Enable HTTP Requests (see log)", C.red)
+			appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
 		else
 			connectBtn.Text = "Connect to ROTEX"
-			setStatus("● ROTEX Desktop not found", C.quiet)
-			appendLog("[ROTEX] Could not reach ROTEX — is the desktop app open?")
+			local hasWebCode = #normalizeWebCode(webCodeInput.Text) >= 4
+			setStatus(hasWebCode and "ROTEX Web not connected" or "ROTEX Desktop not found", C.quiet)
+			appendLog(hasWebCode and "[ROTEX] Could not reach the rrotex.com bridge. Check the web code." or "[ROTEX] Could not reach ROTEX Desktop.")
 		end
 	end)
 end)
@@ -747,7 +1071,7 @@ task.spawn(function()
 	while true do
 		task.wait(1)
 		if not connected then failCount = 0; continue end
-		local data = getJSON(HTTP_PORT, "/studio/actions", 4)
+		local data = bridgeGetActions()
 		if not data then
 			failCount = failCount + 1
 			if failCount >= 5 then
@@ -776,8 +1100,9 @@ task.spawn(function()
 			ChangeHistoryService:SetWaypoint("ROTEX ApplyFiles Done")
 
 		elseif action.type == "create_model" then
-			local ok2, msg = pcall(handleCreateModel, action)
-			success = ok2; addMsg(msg or ok2)
+			local callOk, actionOk, msg = pcall(handleCreateModel, action)
+			success, msg = unpackActionResult(callOk, actionOk, msg, "Created model")
+			addMsg(msg)
 
 		elseif action.type == "insert_toolbox_model" then
 			local callOk, modelOk, msg = pcall(handleInsertToolboxModel, action)
@@ -785,16 +1110,24 @@ task.spawn(function()
 			addMsg(callOk and (msg or (modelOk and "ok" or "Failed to insert Toolbox asset")) or tostring(modelOk))
 
 		elseif action.type == "terrain_edit" then
-			local ok2, msg = pcall(handleTerrainEdit, action)
-			success = ok2; addMsg(msg or ok2)
+			local callOk, actionOk, msg = pcall(handleTerrainEdit, action)
+			success, msg = unpackActionResult(callOk, actionOk, msg, "Edited terrain")
+			addMsg(msg)
 
 		elseif action.type == "lighting_set" then
-			local ok2, msg = pcall(handleLightingSet, action)
-			success = ok2; addMsg(msg or ok2)
+			local callOk, actionOk, msg = pcall(handleLightingSet, action)
+			success, msg = unpackActionResult(callOk, actionOk, msg, "Updated lighting")
+			addMsg(msg)
+
+		elseif action.type == "create_ui" then
+			local callOk, actionOk, msg = pcall(handleCreateUi, action)
+			success, msg = unpackActionResult(callOk, actionOk, msg, "Created UI")
+			addMsg(msg)
 
 		elseif action.type == "create_ui_image" then
-			local ok2, msg = pcall(handleCreateUiImage, action)
-			success = ok2; addMsg(msg or ok2)
+			local callOk, actionOk, msg = pcall(handleCreateUiImage, action)
+			success, msg = unpackActionResult(callOk, actionOk, msg, "Created UI image")
+			addMsg(msg)
 
 		elseif action.type == "set_property" then
 			local ok2, msg = handleSetProperty(action)
@@ -811,7 +1144,7 @@ task.spawn(function()
 		elseif action.type == "send_context" then
 			task.spawn(function()
 				local ctx = buildGameContext(true)
-				postJSON(HTTP_PORT, "/ai/start", HttpService:JSONEncode(ctx), 8)
+				bridgePostContext(ctx, 8)
 				appendLog("[Context] Sent " .. #(ctx.scripts or {}) .. " scripts")
 			end)
 			continue
@@ -820,7 +1153,7 @@ task.spawn(function()
 		end
 
 		appendLog("[Studio] " .. table.concat(msgs, "\n[Studio] "))
-		postJSON(HTTP_PORT, "/studio/result", HttpService:JSONEncode({ ok = success, messages = msgs, actionId = action.id }), 4)
+		bridgePostResult({ ok = success, messages = msgs, actionId = action.id })
 	end
 end)
 
@@ -835,12 +1168,7 @@ local errorConnection = LogService.MessageOut:Connect(function(message, messageT
 	local now = tick()
 	if now - lastErrorAt < ERROR_THROTTLE_SEC then return end
 	lastErrorAt = now
-	local payload = HttpService:JSONEncode({
-		message = tostring(message),
-		type = tostring(messageType),
-		time = os.time(),
-	})
-	postJSON(HTTP_PORT, "/studio/error", payload, 4)
+	bridgePostStudioError(message, messageType)
 end)
 
 -- ── Heartbeat (every 0.7s) ────────────────────────────────────────────────────
@@ -848,7 +1176,7 @@ task.spawn(function()
 	while true do
 		task.wait(0.7)
 		if not connected then continue end
-		local r = postJSON(HTTP_PORT, "/heartbeat", "{}", 4)
+		local r = bridgeHeartbeat()
 		if not r then
 			-- heartbeat failed — don't disconnect immediately, server will timeout us
 		end
@@ -857,3 +1185,4 @@ end)
 
 -- ── Startup ───────────────────────────────────────────────────────────────────
 setActionButtons(false)
+

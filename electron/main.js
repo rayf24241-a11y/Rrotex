@@ -580,9 +580,9 @@ ipcMain.handle('capture-screen', async () => {
   } catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('queue-studio-actions', async (event, actions) => {
-  const safeActions = Array.isArray(actions) ? actions.slice(0, 10) : [];
+  const safeActions = Array.isArray(actions) ? actions.slice(0, 75) : [];
   studioActionQueue.push(...safeActions);
-  studioActionQueue = studioActionQueue.slice(-25);
+  studioActionQueue = studioActionQueue.slice(-150);
   return { ok: true, queued: studioActionQueue.length };
 });
 
@@ -657,14 +657,14 @@ async function startPluginServerInternal(token, projectName, proPass, projectMod
     const reqToken = url.searchParams.get('token') || '';
 
     if (url.pathname === '/ping' && req.method === 'GET') {
-      sendJSON(res, { ok: true, project: currentProjectName, token: pluginToken });
+      sendJSON(res, { ok: true, project: currentProjectName, token: pluginToken, requiredPluginVersion: '3.5' });
       markStudioConnected(url.searchParams.get('source') || 'studio');
       return;
     }
 
     if (url.pathname === '/heartbeat' && req.method === 'POST') {
       markStudioConnected('studio');
-      sendJSON(res, { ok: true, token: pluginToken });
+      sendJSON(res, { ok: true, token: pluginToken, requiredPluginVersion: '3.5' });
       return;
     }
 
@@ -811,6 +811,7 @@ async function startPluginServerInternal(token, projectName, proPass, projectMod
 }
 
 ipcMain.handle('start-plugin-server', async (event, token, projectName, proPass, projectMode) => {
+  await installStudioPluginFile().catch(() => null);
   return startPluginServerInternal(token, projectName, proPass, projectMode);
 });
 
@@ -856,12 +857,21 @@ function texbrainApiRequest(body) {
       let d = '';
       res.on('data', c => { d += c; });
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(d) }); }
-        catch { reject(new Error(`parse — HTTP ${res.statusCode} — raw: ${d.slice(0, 400)}`)); }
+        try { finish(resolve, { status: res.statusCode, body: JSON.parse(d) }); }
+        catch { finish(reject, new Error(`parse error - HTTP ${res.statusCode} - raw: ${d.slice(0, 400)}`)); }
       });
     });
-    req.on('error', reject);
-    req.setTimeout(120000, () => { req.destroy(); reject(new Error('timeout')); });
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      fn(value);
+    };
+    req.on('error', (err) => finish(reject, err));
+    req.setTimeout(60000, () => {
+      req.destroy(new Error('TexBrain request timed out'));
+      finish(reject, new Error('TexBrain request timed out'));
+    });
     req.write(postData);
     req.end();
   });
@@ -901,16 +911,34 @@ async function findStudioPluginSource() {
   return null;
 }
 
+function readStudioPluginVersion(sourceText) {
+  const text = String(sourceText || '');
+  const explicit = text.match(/PLUGIN_VERSION\s*=\s*["']([^"']+)["']/);
+  if (explicit) return explicit[1];
+  const comment = text.match(/ROTEX Studio Plugin v([0-9.]+)/i);
+  return comment ? comment[1] : '';
+}
+
 async function installStudioPluginFile() {
   const dest = studioPluginPath();
   try {
     const src = await findStudioPluginSource();
     if (!src) throw new Error('ROTEX Roblox plugin source was not found in this app build.');
+    const srcText = await fs.promises.readFile(src, 'utf8');
+    let previousText = '';
+    try { previousText = await fs.promises.readFile(dest, 'utf8'); } catch {}
     await fs.promises.mkdir(path.dirname(dest), { recursive: true });
     await fs.promises.copyFile(src, dest);
     const stat = await fs.promises.stat(dest);
     if (!stat.isFile()) throw new Error('Plugin copy finished, but the installed file was not found.');
-    return { ok: true, installed: true, path: dest };
+    return {
+      ok: true,
+      installed: true,
+      changed: previousText !== srcText,
+      version: readStudioPluginVersion(srcText),
+      previousVersion: readStudioPluginVersion(previousText),
+      path: dest,
+    };
   } catch (err) {
     return { ok: false, installed: false, error: err.message, path: dest };
   }
@@ -924,7 +952,9 @@ ipcMain.handle('check-studio-plugin', async () => {
   const dest = studioPluginPath();
   try {
     const stat = await fs.promises.stat(dest);
-    return { ok: true, installed: stat.isFile(), path: dest };
+    let version = '';
+    try { version = readStudioPluginVersion(await fs.promises.readFile(dest, 'utf8')); } catch {}
+    return { ok: true, installed: stat.isFile(), version, path: dest };
   } catch {
     return { ok: true, installed: false, path: dest };
   }

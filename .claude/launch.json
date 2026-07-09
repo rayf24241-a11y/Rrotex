@@ -7,6 +7,18 @@
       "runtimeArgs": ["dev-server.cjs"],
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "jr-ray-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "C:\\Users\\rayf2\\jr-ray\\renderer", "-p", "8123", "-c-1"],
+      "port": 8123
+    },
+    {
+      "name": "meshy-studio",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\rayf2\\meshy-studio\\server\\index.js"],
+      "port": 4173
     }
   ]
 }

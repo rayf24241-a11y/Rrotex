@@ -3,17 +3,33 @@
     "api/chat.js": { "maxDuration": 90 }
   },
   "rewrites": [
+    { "source": "/api/plugin-bridge", "destination": "/api/chat/plugin-bridge" },
     { "source": "/api/chat/:path*", "destination": "/api/chat" },
     { "source": "/editor", "destination": "/index.html" },
     { "source": "/account", "destination": "/account.html" },
     { "source": "/login",   "destination": "/login.html" },
+    { "source": "/signup", "destination": "/login.html" },
+    { "source": "/sign-up", "destination": "/login.html" },
+    { "source": "/register", "destination": "/login.html" },
+    { "source": "/projects", "destination": "/projects.html" },
+    { "source": "/dashboard", "destination": "/projects.html" },
+    { "source": "/my-chats", "destination": "/projects.html" },
     { "source": "/tokens",  "destination": "/tokens.html" },
     { "source": "/docs",    "destination": "/docs.html" },
+    { "source": "/documentation", "destination": "/docs.html" },
+    { "source": "/home", "destination": "/index.html" },
+    { "source": "/community", "destination": "/index.html" },
+    { "source": "/prompt-guide", "destination": "/index.html" },
+    { "source": "/blog", "destination": "/index.html" },
+    { "source": "/contact", "destination": "/index.html" },
+    { "source": "/contact-us", "destination": "/index.html" },
+    { "source": "/pricing", "destination": "/index.html" },
+    { "source": "/pro", "destination": "/account.html" },
     { "source": "/app", "destination": "/index.html" },
     { "source": "/chat", "destination": "/index.html" }
   ],
   "redirects": [
-    { "source": "/download", "destination": "/#download", "permanent": false }
+    { "source": "/download", "destination": "/", "permanent": false }
   ],
   "headers": [
     {

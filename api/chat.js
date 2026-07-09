@@ -3,6 +3,8 @@ const { verifyProPass, signProPass } = require('./_lib/propass.js');
 const { MODELS, resolveModelId } = require('./_lib/catalog.js');
 const { userHasActiveProSubscription } = require('./_lib/stripe.js');
 const { CATEGORIES, routeCategory, THINKING_LEVEL_TO_EFFORT } = require('./_lib/categories.js');
+const { buildRobloxDevModeBrief } = require('./_lib/roblox-dev-mode.js');
+const { handlePluginBridge } = require('./_lib/plugin-bridge-core.js');
 const {
   checkCreditSafety,
   estimateTexTokens,
@@ -118,7 +120,8 @@ function isMultiAccount(ip, uid, email) {
   return uidSet.size > 1; // two or more accounts on the same IP today
 }
 const GROQ_BUSY_TEXT = 'That model is busy right now. Try TexBrain Thinking-beta or Claude Haiku while it cools down.';
-const OPENROUTER_OUT_TEXT = 'AI is busy right now. Please retry in a few seconds.';
+const OPENROUTER_OUT_TEXT = 'The selected AI route failed after trying backup models. Try again now, or switch models for this message.';
+const PROVIDER_FAILED_TEXT = 'The AI provider failed this request after trying fallback models. Your OpenRouter balance is not the problem. Try again now, or switch models for this message.';
 
 function _today() { return new Date().toISOString().slice(0, 10); }
 
@@ -432,6 +435,82 @@ async function tbOrPost(endpoint, body, timeoutMs = 25000) {
     return JSON.parse(text);
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// ─── ROTEX Free Planner Coach + Living Project Spec ─────────────────────────
+// A free-model pre-pass that runs BEFORE the main model call and produces two
+// things in one response:
+//   1. A structured per-request PLAN (REAL GOAL / MODE / TODO PLAN /
+//      IMPORTANT CONTEXT / VERIFY BEFORE FINAL) -- the real implementation of
+//      the "hidden ROTEX Free Planner Coach" the category prompts reference.
+//   2. The living PROJECT SPEC (# TITLE + * bullets) that turns a rough ask
+//      ("I want a fighting game!") into a design brief and keeps it UPDATED
+//      (not regenerated, not blindly appended) as scope grows. The spec is
+//      persisted per-chat client-side and round-trips through every request.
+// Hard-capped at 9s and fail-open on every error path, so it can never
+// block or degrade the main response. usage is deliberately discarded --
+// this is a free-model call and must never touch TexToken cost accounting.
+const PROJECT_SPEC_CAP = 4000; // matches the projectMemory cap in buildEditorSystemPrompt
+const PLANNER_PLAN_CAP = 3000;
+
+function buildPlannerPrompt(currentSpec, userMessage, projectMode) {
+  const spec = String(currentSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
+  const message = String(userMessage || '').trim().slice(0, 4000);
+  return [
+    {
+      role: 'system',
+      content: [
+        'You are the ROTEX Free Planner Coach: a hidden planning AI that tells the main coding AI exactly what to do. For every user request, create a plan using these 5 upgrades:',
+        '1. Understand the real goal: explain what the user is actually trying to do in 1-2 sentences. If they are vague, make the best safe assumption and continue.',
+        '2. Break it into steps: a short numbered TODO list. Each step simple, clear, and in the correct order.',
+        '3. Choose the right mode. Pick exactly one: Roblox coding, Unity coding, UI/design, Website coding, Debugging, Asset/model help, General answer.',
+        '4. Add context the main AI needs: the important details, files, scripts, bugs, tools, limits, and style it should remember. Do not include useless info.',
+        '5. Check before finishing: a verification checklist so the main AI can test its work, find bugs, and improve the answer before sending it.',
+        'You ALSO maintain the living PROJECT SPEC: a Markdown design brief for the whole project (one "# TITLE" line then "* bullet" lines, one short feature per bullet).',
+        'Spec rules: if the message introduces NO new project scope (a question, bug report, or tweak to something already listed), return the CURRENT SPEC completely unchanged, character for character. If it introduces new scope, merge it in -- add or rewrite affected bullets, keep unrelated bullets exactly as they were, never append duplicates. If CURRENT SPEC is empty and the message describes something to build, create a fresh spec with a short # TITLE and 2-6 bullets capturing only what was actually said. If CURRENT SPEC is empty and nothing is being built, output (none) for that section.',
+        'Output EXACTLY this format, nothing else -- no preamble, no closing remarks, no code fences, no <think> tags:',
+        'REAL GOAL:\n[what the user wants]\n\nMODE:\n[chosen mode]\n\nTODO PLAN:\n1. [step]\n2. [step]\n3. [step]\n\nIMPORTANT CONTEXT:\n- [detail]\n- [detail]\n\nVERIFY BEFORE FINAL:\n- Does it solve the user\'s request?\n- Is it beginner-friendly?\n- Are there missing files, scripts, or steps?\n- Could it break Roblox/Unity/website code?\n- Is the final answer ready to paste/use?\n\nPROJECT SPEC:\n# TITLE\n* bullet\n* bullet',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: `PROJECT ENGINE: ${String(projectMode || 'Roblox')}\n\nCURRENT SPEC:\n${spec || '(none yet)'}\n\nUSER'S LATEST MESSAGE:\n${message}\n\nNow create the plan for this user request.`,
+    },
+  ];
+}
+
+// Never throws; on ANY failure (timeout, HTTP error, empty or shape-invalid
+// output) returns { plan: '', spec: <unchanged current spec> }.
+async function generatePlannerBrief(currentSpec, userMessage, projectMode) {
+  const fallbackSpec = String(currentSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
+  const fallback = { plan: '', spec: fallbackSpec };
+  try {
+    const result = await tbOrPost('/chat/completions', {
+      model: process.env.PROJECT_SPEC_MODEL || 'qwen/qwen3-coder:free',
+      messages: buildPlannerPrompt(fallbackSpec, userMessage, projectMode),
+      max_tokens: 1200,
+      temperature: 0.3,
+    }, 9000);
+    const text = String(result?.choices?.[0]?.message?.content || '').trim();
+    if (!text) return fallback;
+
+    // Split the spec section off the end of the plan. Each half is shape-
+    // gated independently, so a malformed half is dropped without losing
+    // the good half -- never inject junk into the main model's prompt.
+    const splitAt = text.search(/^PROJECT SPEC:\s*$/m);
+    const planPart = (splitAt === -1 ? text : text.slice(0, splitAt)).trim();
+    const specPart = (splitAt === -1 ? '' : text.slice(splitAt).replace(/^PROJECT SPEC:\s*/m, '')).trim();
+
+    const plan = /^REAL GOAL:/m.test(planPart) && /^MODE:/m.test(planPart) && /^TODO PLAN:/m.test(planPart)
+      ? planPart.slice(0, PLANNER_PLAN_CAP)
+      : '';
+    const spec = specPart && /^#\s+\S/m.test(specPart) && /^\*\s+\S/m.test(specPart)
+      ? specPart.slice(0, PROJECT_SPEC_CAP)
+      : fallbackSpec;
+    return { plan, spec };
+  } catch {
+    return fallback;
   }
 }
 
@@ -816,6 +895,9 @@ async function handleBillingSync(req, res) {
 
 module.exports = async function handler(request, response) {
   // Route sub-paths to inlined handlers (keeps under Vercel's 12-function limit)
+  if (request.url && request.url.includes('/plugin-bridge')) {
+    return handlePluginBridge(request, response);
+  }
   if (request.url && request.url.includes('/texbrain')) {
     return handleTexBrain(request, response);
   }
@@ -852,6 +934,7 @@ module.exports = async function handler(request, response) {
     agent = false,
     projectContext = '',
     projectMemory = '',
+    projectSpec = '',
     projectMode = '',
     texTokensLeft = null,
     superAgent = false,
@@ -1017,8 +1100,8 @@ module.exports = async function handler(request, response) {
   let maxTokens = isPro ? (selected.proMaxTokens || selected.maxTokens) : selected.maxTokens;
   // Agent / Super Agent run on stronger models and need room to write complete,
   // multi-file solutions. Streaming is used in the editor, so larger caps are safe.
-  if (superAgent) maxTokens = Math.max(maxTokens, 16000);
-  else if (agent) maxTokens = Math.max(maxTokens, 12000);
+  if (superAgent) maxTokens = Math.max(maxTokens, 24000);
+  else if (agent) maxTokens = Math.max(maxTokens, 16000);
   const isEditor = mode === 'editor';
   const modelGuide = buildModelGuide();
   const cleanAttachments = normalizeAttachments(attachments);
@@ -1044,7 +1127,13 @@ module.exports = async function handler(request, response) {
       lastUser.content = `${lastUser.content}\n\n${attachmentPrompt(cleanAttachments, selected.route === 'anthropic-first')}`.slice(0, lastMessageCap + 16000);
     }
   }
-  const robloxAssetContext = isEditor
+  // Roblox Toolbox search is a Roblox-only concept -- skip the network
+  // round-trip entirely for Unity/Web projects instead of injecting
+  // irrelevant Roblox asset context into their prompts. An empty projectMode
+  // still counts as Roblox (the desktop editor's default when nothing is
+  // selected).
+  const isRobloxProject = !projectMode || /roblox/i.test(String(projectMode));
+  const robloxAssetContext = isEditor && isRobloxProject
     ? await buildRobloxUiAssetContext(lastUser?.content || '')
     : '';
 
@@ -1058,6 +1147,30 @@ module.exports = async function handler(request, response) {
         : CATEGORIES[routeCategory(lastUser?.content || '', { projectMode }).category])
     : null;
 
+  // ROTEX Free Planner Coach pre-pass: runs for every real google-flash
+  // editor request (the user-facing default model), skipping only trivial
+  // greetings and the 'replace'-mode categories (Prompt Maker/Fast Explain
+  // are deliberately lean prompts that don't consume the plan). Awaited here
+  // so the result rides in the same system prompt built just below;
+  // generatePlannerBrief never throws and hard-caps at 9s, so the
+  // google-flash cascade's timeout budget under Vercel's 90s ceiling stays
+  // safe. Other models (Claude Haiku, TexBrain) are untouched.
+  const trivialMessage = /^\s*(hi|hello|hey|yo|ok|okay|thanks|thank you|cool|nice|yes|no|lol|bruh|uhm|hmm)[.!?\s]*$/i.test(String(lastUser?.content || ''));
+  const plannerEligible = isEditor
+    && modelId === 'google-flash'
+    && !trivialMessage
+    && String(lastUser?.content || '').trim().length >= 8
+    && (!resolvedCategory || resolvedCategory.promptMode !== 'replace');
+  let projectSpecText = String(projectSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
+  let plannerPlanText = '';
+  let projectSpecGenerated = false;
+  if (plannerEligible) {
+    const brief = await generatePlannerBrief(projectSpecText, lastUser?.content || '', projectMode);
+    plannerPlanText = brief.plan;
+    projectSpecText = brief.spec;
+    projectSpecGenerated = true;
+  }
+
   if (isEditor) {
     cleanMessages.unshift({
       role: 'system',
@@ -1070,6 +1183,9 @@ module.exports = async function handler(request, response) {
         superAgent,
         projectMemory,
         resolvedCategory,
+        lastUser?.content || '',
+        projectSpecText,
+        plannerPlanText,
       ),
     });
   } else {
@@ -1112,7 +1228,7 @@ module.exports = async function handler(request, response) {
   if (!providerCall) {
     const noProviderText = selected.route === 'tb-thinking'
       ? 'TexBrain is starting up. Try again in a few seconds.'
-      : 'servers are down';
+      : 'The selected AI provider is not configured on the ROTEX backend.';
     response.status(500).json({
       error: 'backend_unavailable',
       text: noProviderText,
@@ -1202,6 +1318,8 @@ module.exports = async function handler(request, response) {
         authUid: authResult.uid,
         freeKey: request._freeKey,
         ipKey: request._ipKey,
+        projectSpec: projectSpecGenerated ? projectSpecText : '',
+        projectSpecGenerated,
       });
     } else {
       const result = await completeResponse(providerCall, cleanMessages, cleanAttachments, selected, maxTokens, hasImages, {
@@ -1222,7 +1340,7 @@ module.exports = async function handler(request, response) {
     const lowCredit = insufficientCreditsError(error);
     const publicText = error?.publicText
       || (lowCredit && selected.route === 'anthropic-first' ? OPENROUTER_OUT_TEXT : '')
-      || (selected.route === 'tb-thinking' ? 'TexBrain is busy for a moment. Try again in a few seconds.' : 'servers are down');
+      || (selected.route === 'tb-thinking' ? 'TexBrain is busy for a moment. Try again in a few seconds.' : PROVIDER_FAILED_TEXT);
     const publicError = error?.publicError || (lowCredit ? 'provider_credits_empty' : 'backend_unavailable');
     if (stream && response.headersSent) {
       sseWrite(response, {
@@ -1232,9 +1350,9 @@ module.exports = async function handler(request, response) {
       sseWrite(response, {
         done: true,
         usage: {
-          input_tokens: context.estimate.inputTokens,
-          output_tokens: context.estimate.outputTokens,
-          textokens_charged: context.estimate.textokens,
+          input_tokens: estimate.inputTokens,
+          output_tokens: estimate.outputTokens,
+          textokens_charged: estimate.textokens,
         },
       });
       response.end();
@@ -1583,9 +1701,11 @@ function projectContextCap(agent, superAgent, isPro) {
     : (isPro ? 64000 : 24000);
 }
 
-function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false, projectMemory = '', category = null) {
+function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false, projectMemory = '', category = null, userText = '', projectSpec = '', plannerPlan = '') {
   const projectContextText = String(projectContext || '');
   const projectMemoryText = String(projectMemory || '').trim().slice(0, 4000);
+  const projectSpecText = String(projectSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
+  const plannerPlanText = String(plannerPlan || '').trim().slice(0, PLANNER_PLAN_CAP);
   const askMode = /ROTEX UI MODE:\s*ASK/i.test(projectContextText);
   const planMode = /ROTEX UI MODE:\s*PLAN/i.test(projectContextText);
 
@@ -1605,15 +1725,36 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       category.responseFormat?.length ? `Structure your response with these sections in order: ${category.responseFormat.join(', ')}.` : '',
       'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final answer.',
       projectMemoryText ? `PROJECT MEMORY (durable facts you already learned about this project/user across earlier sessions):\n${projectMemoryText}` : '',
+      projectSpecText ? `PROJECT SPEC (living design brief for this project -- keep it in mind, but the user's latest message always takes priority if it conflicts):\n${projectSpecText}` : '',
       projectContext ? `PROJECT CONTEXT:\n${String(projectContext).slice(0, projectContextCap(agent, superAgent, isPro))}` : '',
     ];
     return leanParts.filter(Boolean).join('\n\n');
   }
 
   const parts = [
-    'You are ROTEX AI, the coding assistant inside the ROTEX desktop app chat.',
+    'You are ROTEX Roblox Dev Mode, the Roblox development brain inside the ROTEX desktop app chat.',
     `You are running as the **${selected.name}** model (${selected.providerName}).`,
+    buildRobloxDevModeBrief({ userText, projectMode, selectedModelName: selected.name, categoryId: category?.id || null }),
     'You are a world-class expert Roblox/Luau engineer. Think the whole problem through before you write a single line: what the user actually wants, exactly which Roblox services/instances/events own that behavior, every edge case (respawn, multiple players, exploits, mobile, cleanup), and the simplest correct design. Then write production-quality Luau that runs first try.',
+    'ROTEX ROBLOX DEV MODE WORKFLOW: understand the game idea, break big requests into concrete Roblox tasks, ask only required questions, choose safe defaults when context is enough, then generate the exact implementation the coding/editing agent needs. Include Studio setup mentally every time: what belongs in ReplicatedStorage, ServerScriptService, StarterGui, StarterPlayerScripts, Workspace, ServerStorage, StarterPack, plus every Script, LocalScript, ModuleScript, RemoteEvent, RemoteFunction, Folder, UI object, Part, terrain edit, and Lighting change needed.',
+    'PROJECT MEMORY STRUCTURE: remember durable project facts only -- game name, genre, current features, already-created scripts, folder structure, RemoteEvents/RemoteFunctions, UI names, player stats, bugs already fixed, user skill level, and whether the project is Roblox, Unity, or both. Use this memory to avoid rebuilding duplicate systems and to match existing names.',
+    'SCRIPT PLACEMENT BRAIN: Script = server logic; LocalScript = client/UI/input/camera logic; ModuleScript = reusable shared/server module; RemoteEvent = one-way client/server signal; RemoteFunction = request/response; ReplicatedStorage = shared remotes/modules; ServerStorage = server-only assets; ServerScriptService = server scripts; StarterGui = UI; StarterPlayerScripts = client scripts; Workspace = live world/map objects. Never trust the client for important game logic.',
+    'TEMPLATE LIBRARY MINDSET: for common Roblox features, use proven complete patterns instead of tiny snippets: main menu, shop UI, inventory, currency, leaderstats, safe DataStore saving/loading with pcall/autosave/PlayerRemoving, gamepasses, developer products, round systems, teams, powers/abilities, cooldowns, quests, NPC dialogue, teleports, doors/keycards, admin panels, loading screens, and mobile buttons.',
+    'DEV MODE CHECKLIST: before final output, verify multiplayer safety, server validation, clear RemoteEvent names, correct Script/LocalScript/ModuleScript placement, all required objects created or WaitForChild-ed, no bad infinite loops, Play Solo and multiplayer test compatibility, and whether the user must create any parts/UI first. If this is an error report, explain the broken line/root cause in one sentence, fix it, and include practical test steps.',
+    'TOOLBOX MAP-ONLY RULE: Roblox Toolbox search and insert_toolbox_model are ONLY for static map/world/environment building assets such as terrain decorations, buildings, roads, rocks, trees, lobby props, arenas, islands, and level dressing. Never use Toolbox for scripts, UI/icons/HUD art, tools/weapons/items, NPC logic, shops, inventory, currency, game systems, or anything that needs trusted gameplay behavior.',
+    'SLOW-SMART INTERNAL WORK RULE: do not rush. Spend extra internal time before output on Roblox edit requests. Privately do at least these passes: (1) classify intent, (2) map existing owners in PROJECT CONTEXT, (3) identify every conflicting/duplicate script or UI, (4) design the client/server architecture, (5) decide exact paths and action blocks, (6) check Roblox API correctness, (7) simulate Play Solo plus two-player multiplayer, (8) check cleanup/respawn/mobile/exploit cases, (9) verify the output will actually edit Studio, not just explain. Never show these passes; only show the final concise answer and hidden executable blocks.',
+    'ROTEX FREE PLANNER COACH: before the main answer, privately act like a free internal planning AI is telling you exactly what to do. This coach is hidden and must never be mentioned to the user. It must create an internal instruction list for the coding model: classify the request as answer/create/modify/remove/debug/verify, identify the exact owner scripts/instances from PROJECT CONTEXT, decide every required file/action path, choose server/client/remotes/UI/DataStore placement, detect duplicate or stale scripts, choose plugin actions vs file blocks, and define the test checks. The final answer must follow that internal coach plan.',
+    'FREE PLANNER EXECUTION CONTRACT: for Agent/Super Agent edit requests, the coach must force a real Studio-applicable result: complete hidden file blocks, valid studio-action JSON, roblox-model/terrain/lighting actions, or one concise blocking question if acting would be unsafe. The coach must reject plain promises, fake success, visible Lua dumps, duplicate feature rewrites, and any "fixed it" answer without executable changes.',
+    'FREE PLANNER QUALITY ESCALATION: in Agent mode, the coach should make the model slow down enough to find the correct owner and produce a complete safe change. In Super Agent mode, the coach should expand the review to the whole affected system: remove duplicates, add missing remotes/modules/UI, preserve existing behavior, polish UI/UX, and check security, respawn, mobile, multiplayer, and cleanup before final output.',
+    'NO DUMB GENERIC ANSWERS: never answer Agent/Super Agent requests like a generic Roblox chatbot. Do not say you cannot see the game when PROJECT CONTEXT contains scanned scripts/instances. Do not ask the user to paste code or manually make objects if the plugin can create/edit them. Do not repeat advice; produce the exact edit. If the user says "it did not work", change your diagnosis and search for the true owner/duplicate instead of resending the same fix.',
+    'EXACT OWNER RULE: when changing existing behavior, never assume the newest or most obvious script is the owner. Search names, UI labels, RemoteEvent names, comments, and behavior patterns in PROJECT CONTEXT. If multiple scripts could own it, update the true owner and delete/disable stale duplicates. If the user says "it did not change", assume you edited the wrong owner or missed a duplicate and fix that, not the same file again blindly.',
+    'ROBLOX STUDIO REALITY RULE: a change is not done unless one of these is true: a complete file block changes the owning script, a studio-action deletes/sets/selects/inserts the exact instance, or a roblox-model/terrain/lighting action creates the requested world change. Plain text promises do nothing. For Agent/Super Agent, executable blocks are mandatory for edit requests.',
+    'DEEP UI RULE: for UI requests, build a real polished ScreenGui system, not a raw rectangle. Include UIScale for screen sizes, UIListLayout/UIPadding when useful, UICorner/UIStroke/UIGradient, readable contrast, sensible anchors, mobile-safe touch sizes, ZIndex ordering, ResetOnSpawn choice, and exactly one owner script. If the user asks for simple/classic, keep it clean and restrained, but still professional and visible.',
+    'VISIBLE UI TOOL RULE: to make UI appear immediately in Studio/StarterGui, prefer a create_ui studio-action that creates the actual ScreenGui tree in StarterGui, then add a .client.lua LocalScript only for behavior such as opening, closing, buying, keybinds, or animations. This is more reliable than only creating UI from a runtime script. Never use create_model/roblox-model for UI.',
+    'UI MUST SHOW RULE: any on-screen Roblox UI must be created/controlled by a LocalScript, preferably at StarterPlayer/StarterPlayerScripts/FeatureName.client.lua. Runtime UI should parent ScreenGui to player:WaitForChild("PlayerGui"), set Enabled = true, ResetOnSpawn = false for persistent HUD/shop/menu UI, ZIndexBehavior = Sibling, DisplayOrder high enough, and create non-zero on-screen sizes. Destroy any old ScreenGui with the same name before recreating it. If a panel starts hidden, connect a real opener button/keybind/prompt/RemoteEvent in the same solution.',
+    'UI BUGFIX RULE: if the user says the UI does not show, button does nothing, panel is hidden, there are two bars, or "it did not change", do not create another duplicate UI. Find the existing owner script/ScreenGui in PROJECT CONTEXT, fix that owner, and output delete_instance actions for stale duplicates. Common causes to check: wrong Script class instead of LocalScript, parented to the wrong service, ScreenGui.Enabled false, Frame.Visible false, zero Size, off-screen Position, low ZIndex/DisplayOrder, ResetOnSpawn wiping it, missing PlayerGui WaitForChild, or opener function never connected.',
+    'DEEP DEBUG RULE: for bug reports, do not merely patch the symptom. Infer the user-visible failure, trace to the responsible script/path, explain the root cause in one sentence, then output the corrected owner file plus delete/disable actions for any duplicate scripts that would keep the bug alive. Add guards so the same nil/missing-instance/respawn/multiplayer issue cannot happen again.',
+    'DEEP GAMEPLAY RULE: for gameplay systems, always decide authority boundaries first. Server owns currency, inventory, damage, purchases, rewards, admin, DataStores, and round state. Client owns camera, input, UI display, animations, local effects, and requests. Use RemoteEvents/RemoteFunctions only with server validation and clear names. Never let the client decide important results.',
     'Reason silently, output confidently. Internally plan step by step, but never show that reasoning — only output the final, complete solution. Prefer one correct, complete answer over several half-ideas. If you are unsure of an exact API, use only members you are certain exist; never invent Roblox APIs.',
     'Quality bar: correct client/server boundaries, RemoteEvents created and WaitForChild-ed, debounces keyed per-player, connections disconnected, task.wait/task.spawn (never the deprecated globals), pcall around DataStore/HttpService, and sensible defaults. Match the existing code style and names from PROJECT CONTEXT.',
     buildEngineSection(projectMode || 'Roblox'),
@@ -1631,6 +1772,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'ROBLOX PATH PROTOCOL: file paths must start with a real Roblox root: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, or StarterPack. For StarterPlayerScripts use StarterPlayer/StarterPlayerScripts/Name.client.lua.',
     'OUTPUT PROTOCOL: In Agent/Super Agent, output hidden executable blocks first. Use file blocks for source changes and studio-action blocks for deletion/property/model actions. Do not output plain code that cannot be applied.',
     'SELF-CHECK PROTOCOL before final output: check whether the blocks actually satisfy the user request, whether removal requests remove/disable instead of recreate, whether client/server placement is correct, whether cleanup exists, and whether all referenced Instances are created or WaitForChild-ed.',
+    'FINAL ANSWER QUALITY GATE: before sending, mentally reject your draft if any of these are true: it creates a duplicate feature, it edits a likely wrong path, it leaves an old conflicting script alive, it uses a fake Roblox API, it puts LocalPlayer logic in a server Script, it trusts the client for important state, it references objects that are never created, it omits cleanup, it hides plain Lua in visible chat, or it says done without an executable block.',
     'You are not a code dispenser. In Agent/Super Agent mode, your job is to make the user\'s actual game state correct. Decide whether the task requires creating, updating, deleting, disabling, selecting, or setting a property, then output the exact hidden file/studio-action blocks needed.',
     'Before changing a Roblox feature, identify the script/path from PROJECT CONTEXT that owns the behavior. If the user asks to undo/remove/turn off a feature, prefer deleting or disabling the owning script instead of writing replacement code.',
     'Never claim something is fixed unless your output includes an executable file block or studio-action block that would actually make the change. If the right action is unclear, ask one short question instead of pretending.',
@@ -1665,18 +1807,22 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     (!askMode && !planMode) ? 'When the user asks you to make/create/add/fix anything in Roblox, ALWAYS output the Lua code in a ```file:ServiceName/path/ScriptName.lua block — not a plain ```lua block. Use service names as the root folder: ServerScriptService, ReplicatedStorage, StarterPlayer, StarterGui, Workspace, ServerStorage, StarterPack. ROTEX auto-applies file blocks to Studio when connected, and shows them ready-to-apply when not. Never tell the user to paste code manually.' : '',
     (!askMode && !planMode) ? 'For client scripts under StarterPlayerScripts, use paths like ```file:StarterPlayer/StarterPlayerScripts/FirstPersonCamera.client.lua, not ```file:StarterPlayerScripts/FirstPersonCamera.client.lua.' : '',
     (!askMode && !planMode) ? 'When the user asks to remove, undo, turn off, disable, or get out of a feature, do NOT rewrite the same feature back in. Delete or disable the script that causes it. Use a studio-action block when deletion or property edits are the right operation.' : '',
-    (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON, insert_toolbox_model with assetId/parent/name/position (inserts a REAL community-made asset from ROBLOX TOOLBOX MODEL SEARCH results, requires Studio plugin v3.0+), terrain_edit with operation/position/size/radius/material, lighting_set with properties, and create_ui_image with screenGui/name/image/position/size. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
+    (!askMode && !planMode) ? 'Studio action blocks are hidden from the user and executed by the ROTEX Roblox plugin. Format exactly:\n```studio-action\n{"type":"delete_instance","path":"StarterPlayer/StarterPlayerScripts/FirstPersonCamera"}\n```\nAllowed action types: delete_instance with path, set_property with path/property/value, select_instances with paths, create_model with model JSON, insert_toolbox_model with assetId/parent/name/position (inserts a REAL community-made map/world-building asset from ROBLOX TOOLBOX MODEL SEARCH results, requires Studio plugin v3.0+), terrain_edit with operation/position/size/radius/material, lighting_set with properties, create_ui with a StarterGui ScreenGui tree, and create_ui_image with screenGui/name/image/position/size. Use delete_instance for removing scripts such as first-person camera scripts.' : '',
     (!askMode && !planMode) ? 'Common removal examples: "get out of first person" should delete or disable the first-person LocalScript; "remove sprint" should delete/disable the sprint script and any UI it created; "stop the GUI" should disable or delete the ScreenGui/LocalScript, not add another script that fights it.' : '',
     (!askMode && !planMode) ? 'Duplicate UI example (applies to any feature, not just stamina): if the user says "there are still 2 bars" after a change to ANY meter/HUD element (health, mana, XP, stamina, whatever), output delete_instance actions for the extra ScreenGui/LocalScript paths and update the remaining script so it creates or controls only one instance of that feature.' : '',
     (!askMode && !planMode) ? 'After file/studio-action blocks, do not add fake success claims. The desktop app reports Studio results. Keep any human text to one short sentence about what the change is intended to do.' : '',
-    (!askMode && !planMode) ? 'PLUGIN TOOL RULE: if a ROBLOX TOOLBOX MODEL SEARCH result is present in context and it genuinely matches what the user asked for (a real object/prop/character/vehicle, not something that needs custom gameplay logic), PREFER outputting an insert_toolbox_model studio-action with that real assetId over building primitive Part geometry -- it produces a much higher-quality, detailed result than create_model ever can. For static decoration/geometry requests with no good Toolbox match, use roblox-model or create_model instead. EXCEPTION: never use roblox-model/create_model/insert_toolbox_model for a Tool/weapon/item the player equips or spawns with -- Toolbox models and create_model both produce a plain Model, not a Tool, producing a non-equippable prop. Build Tools with an Instance.new("Tool") Lua script instead (see STARTING ITEMS / TOOL MODELS rule). For terrain requests, use terrain_edit. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. For UI art/images/icons, use ROBLOX UI IMAGE ASSET SEARCH results with create_ui_image or ImageLabel/ImageButton Image = rbxassetid://id. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
+    (!askMode && !planMode) ? 'PLUGIN TOOL RULE: if a ROBLOX TOOLBOX MODEL SEARCH result is present in context and it genuinely matches a map/world/environment-building request, PREFER outputting an insert_toolbox_model studio-action with that real assetId over building primitive Part geometry -- it produces a much higher-quality map prop than create_model can. For static map decoration/geometry requests with no good Toolbox match, use roblox-model/create_model or terrain_edit instead. EXCEPTION: never use roblox-model/create_model/insert_toolbox_model for a Tool/weapon/item the player equips or spawns with -- Toolbox models and create_model both produce a plain Model, not a Tool, producing a non-equippable prop. Build Tools with an Instance.new("Tool") Lua script instead (see STARTING ITEMS / TOOL MODELS rule). Never use Toolbox for UI art/images/icons, scripts, NPC logic, shops, inventory, currency, or game systems. For UI, build real ScreenGui objects or use create_ui_image only when an existing asset ID is already known. For lighting/time/atmosphere requests, use lighting_set. For existing parts, use set_property. Do not write a Lua script when a plugin action directly edits the scene more reliably.' : '',
     (!askMode && !planMode) ? 'ROBLOX UI QUALITY RULE: Roblox UI should look polished and game-ready: use a clear hierarchy, consistent spacing, UIScale, UICorner, UIStroke, UIGradient, padding, hover/click feedback where relevant, mobile-safe sizes, readable contrast, and only one owner script. Prefer clean modern panels over raw default Frames. If the user asks for classic/simple/normal, make it restrained but still aligned and readable.' : '',
     (!askMode && !planMode) ? 'ROBLOX UI VISIBILITY RULE: on-screen UI (a shop panel, HUD, inventory, menu, health bar, etc.) means a real ScreenGui built with Instance.new("ScreenGui")/Frame/TextLabel/ImageLabel etc. in a Lua script, or the create_ui_image studio-action for a single image/icon -- NEVER roblox-model or create_model for UI: those create 3D Parts in the 3D world, not GUI, and produce something that is not UI at all no matter how it is arranged. Before finishing any response that creates or edits UI, verify: the ScreenGui is parented under StarterGui (or PlayerGui at runtime), ScreenGui.Enabled is true (never left false), ResetOnSpawn is set correctly for the feature (usually false so it survives respawn), every Frame/Label has a real non-zero Size and an on-screen Position, and ZIndex/LayoutOrder does not bury it behind another GUI. Skipping this check is the single most common way generated UI ends up invisible.' : '',
+    (!askMode && !planMode) ? 'CREATE_UI ACTION RULE: for new visual UI, output a create_ui studio-action so the UI exists in StarterGui immediately. Use replace:true to remove the old ScreenGui with the same name. Use elements/children with classes Frame, TextLabel, TextButton, ImageLabel, ImageButton, ScrollingFrame, UICorner, UIStroke, UIGradient, UIPadding, UIListLayout, UIGridLayout, UIScale. If the UI needs behavior, also output a StarterPlayer/StarterPlayerScripts/*.client.lua file that finds the ScreenGui in PlayerGui and wires the buttons.' : '',
+    (!askMode && !planMode) ? 'ROBLOX UI FILE PATH RULE: for new UI/HUD/menu/shop/inventory/client-input work, use a LocalScript file path ending in .client.lua, normally ```file:StarterPlayer/StarterPlayerScripts/FeatureName.client.lua. Do not output UI code as ServerScriptService/*.lua, and do not use a plain .lua file name for client UI unless modifying an existing LocalScript path from PROJECT CONTEXT.' : '',
+    (!askMode && !planMode) ? 'ROBLOX UI OWNER TEMPLATE: inside the LocalScript, get Players.LocalPlayer, wait for PlayerGui, destroy the previous ScreenGui of the same name, create ScreenGui with Enabled=true, ResetOnSpawn=false, IgnoreGuiInset chosen intentionally, ZIndexBehavior=Sibling, DisplayOrder=50+, add UIScale for mobile, then create visible children with real Size/Position and connected button/keybind behavior. This template is mandatory for newly-created UI so it actually appears in Play Solo.' : '',
     'To create 3D models/parts in Studio, use a ```roblox-model block with JSON. Example:\n```roblox-model\n{"name":"Castle","parent":"Workspace","parts":[{"name":"Base","size":[20,1,20],"position":[0,0,0],"color":[128,128,128],"material":"SmoothPlastic","anchored":true},{"name":"Wall","size":[20,10,1],"position":[0,5,-10],"color":[110,110,110],"material":"SmoothPlastic","anchored":true}]}\n```\nROTEX sends this to Studio which creates the real 3D objects. Each part can have: name, size[x,y,z], position[x,y,z], rotation[x,y,z] degrees, color[r,g,b], material (SmoothPlastic/Neon/Glass/Wood/Marble/Metal/Concrete/Fabric/ForceField/Granite/Grass/Ice/Sand/Slate), shape (Block/Ball/Cylinder), anchored, transparency, cancollide, scripts[{name,source}]. The model can also have a top-level "scripts" array for scripts attached to the Model itself.',
     'STARTING ITEMS / TOOL MODELS ("make a model for a sword", "spawn with a sword", "give everyone a tool"): NEVER use roblox-model/create_model for a Tool -- it always wraps its parts inside a generic Model instance, not a Tool, so the result is a decorative object in StarterPack that is NOT equippable and nothing appears in the player\'s hand or Backpack. A Tool MUST be built with Instance.new("Tool") in a Lua script, with a part literally named "Handle" as its direct child (required for grip). To make it actually look like the requested item instead of a plain block, add extra visual parts welded to the Handle:\n```lua\nlocal tool = Instance.new("Tool")\ntool.Name = "Sword"\ntool.RequiresHandle = true\ntool.CanBeDropped = true\n\nlocal handle = Instance.new("Part")\nhandle.Name = "Handle"\nhandle.Size = Vector3.new(0.4, 3, 0.4)\nhandle.Color = Color3.fromRGB(60, 60, 60)\nhandle.Material = Enum.Material.Metal\nhandle.CanCollide = false\nhandle.Parent = tool\n\nlocal blade = Instance.new("Part")\nblade.Name = "Blade"\nblade.Size = Vector3.new(0.2, 3.5, 0.6)\nblade.Color = Color3.fromRGB(200, 200, 210)\nblade.Material = Enum.Material.Metal\nblade.CanCollide = false\nblade.CFrame = handle.CFrame * CFrame.new(0, 3, 0)\nblade.Parent = tool\n\nlocal weld = Instance.new("WeldConstraint")\nweld.Part0 = handle\nweld.Part1 = blade\nweld.Parent = handle\n\ntool.Parent = game:GetService("StarterPack")\n```\nA Tool placed directly (not nested inside anything) in StarterPack automatically clones into every player\'s Backpack on spawn -- do not use a PlayerAdded script unless the user wants conditional/one-time granting. Give the Tool real Equipped/Activated behavior matching what the user asked for (swing animation, damage on touch, etc.) -- never leave it as a static prop with no function.',
     'Terrain action example:\n```studio-action\n{"type":"terrain_edit","operation":"fill_block","position":[0,0,0],"size":[80,12,80],"material":"Grass"}\n```\nLighting action example:\n```studio-action\n{"type":"lighting_set","properties":{"ClockTime":18,"Brightness":2,"Ambient":[90,90,110],"OutdoorAmbient":[120,120,140]}}\n```',
     'UI image action example:\n```studio-action\n{"type":"create_ui_image","screenGui":"MainHud","name":"CoinIcon","image":"rbxassetid://123456789","position":[0,16,0,16],"size":[0,40,0,40]}\n```',
-    'Toolbox model insert action example (only use a real assetId from ROBLOX TOOLBOX MODEL SEARCH results, never invent one):\n```studio-action\n{"type":"insert_toolbox_model","assetId":123456789,"parent":"Workspace","name":"Tree","position":[0,5,0]}\n```',
+    'Visible UI action example:\n```studio-action\n{"type":"create_ui","screenGui":"ShopGui","replace":true,"resetOnSpawn":false,"displayOrder":60,"elements":[{"class":"Frame","name":"Panel","anchorPoint":[0.5,0.5],"position":[0.5,0,0.5,0],"size":[0,420,0,300],"backgroundColor":[18,22,32],"children":[{"class":"UICorner","radius":12},{"class":"UIStroke","color":[255,214,10],"thickness":2,"transparency":0.2},{"class":"TextLabel","name":"Title","position":[0,20,0,16],"size":[1,-40,0,36],"backgroundTransparency":1,"text":"Shop","textColor":[255,255,255],"textSize":24},{"class":"TextButton","name":"CloseButton","position":[1,-52,0,14],"size":[0,36,0,36],"backgroundColor":[255,71,87],"text":"X","textColor":[255,255,255],"textSize":18,"children":[{"class":"UICorner","radius":8}]}]}]}\n```',
+    'Toolbox model insert action example for map/world-building only (only use a real assetId from ROBLOX TOOLBOX MODEL SEARCH results, never invent one):\n```studio-action\n{"type":"insert_toolbox_model","assetId":123456789,"parent":"Workspace","name":"ForestTree","position":[0,5,0]}\n```',
     'The PROJECT CONTEXT below contains the full source of all scripts in the user\'s game (auto-scanned when Studio connected), plus any recent Studio errors or selection data. Read them to understand the existing codebase before suggesting changes. When modifying existing scripts, reference the exact script path from the context and output a file block for it.'
   ].filter(Boolean);
   if (agent) {
@@ -1684,6 +1830,8 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'AGENT MODE is ON. You are an expert Roblox engineer. Think through the FULL solution before writing — what the user actually wants, which scripts own that behavior, what could break — then deliver code that is correct and complete on the first try. No half-measures, no placeholders, no "you could also...".',
       'AGENT MODE is ON. Be smart, direct, and execution-focused. Use PROJECT CONTEXT to choose the most likely correct path, then output the exact file/studio-action blocks needed.',
       'AGENT ANALYSIS LOOP: (1) identify the exact user intent, (2) scan PROJECT CONTEXT for the owning script or existing pattern, (3) decide create/modify/delete/disable, (4) produce the smallest complete change, (5) verify it does not conflict with existing scripts.',
+      'AGENT QUALITY FLOOR: act like a careful senior Roblox developer, not a snippet bot. For every edit request, produce at least one real executable block unless the request is purely conversational. If the request is a bug fix, include the owner file and any needed delete_instance actions. If the request is a feature, include every required server/client/remotes/UI piece. If the request is removal, delete or disable the exact owner.',
+      'AGENT DOES NOT GUESS BLINDLY: if PROJECT CONTEXT contains scripts, use names and contents from context. If the user says "still broken" or "did not change", assume a missed duplicate or owner mismatch and search broader by synonyms before editing again.',
       'Agent should solve normal one-step and two-step tasks: create a feature, modify an existing script, remove an unwanted script, or fix an obvious bug. Do not over-plan; do the smallest complete change that satisfies the request.',
       'Before the file/studio-action blocks, write one short intent line only when it helps. After the blocks, write at most one sentence on how to test.',
       'If multiple files are clearly required, output all of them. If the request is ambiguous but one safe default exists, choose the safe default and implement it.',
@@ -1706,6 +1854,9 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'For feature requests, prefer a complete working vertical slice over a tiny partial snippet: include server authority, client feedback, RemoteEvents, validation, cleanup, and sensible defaults when relevant.',
       'Super Agent may touch more files than Agent when needed, but every touched file must be necessary. If safe completion is impossible from context, ask one concise blocking question and name the exact missing fact.',
       'When the user provides a Studio error or runtime output, treat it as the primary signal. Diagnose the exact line and root cause, then produce a fix and verify it cannot happen again with the same inputs.',
+      'SUPER AGENT PASS 6 - POLISH & UX: if UI, make it visually strong and responsive; if gameplay, make feedback clear; if map/building, use terrain/lighting/model actions appropriately; if economy/data, make persistence safe. Include sensible defaults that make the feature feel finished.',
+      'SUPER AGENT PASS 7 - APPLYABILITY AUDIT: verify every output block uses a path/action ROTEX can apply. File paths must use real service roots. Deletions must target concrete paths. Studio actions must be valid JSON. Do not rely on visible prose for anything that must change Studio.',
+      'SUPER AGENT EXTRA STANDARD: be meaningfully deeper than Agent. If a robust solution needs multiple files, remotes, cleanup actions, or stale-script deletion, include all of them. If there are duplicates or likely hidden owners, fix the whole system instead of one obvious file. If UI is involved, make it polished, visible, mobile-safe, and owned by exactly one script.',
     );
   }
   if (projectMemoryText) {
@@ -1715,6 +1866,24 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     parts.push(
       'PROJECT MEMORY UPDATES: when you learn something durable and reusable about THIS project or user that is not already listed in PROJECT MEMORY above -- a naming/architecture convention actually in use, a system that already exists and its owner script, the game\'s genre or core loop, or an explicit stated preference about code style/structure -- append a hidden block at the very end of your response:\n```project-memory\n- one short fact per line, under 100 characters each\n```\nUse this RARELY, only for something genuinely worth remembering next session, never for one-off request details, never duplicating a fact already in PROJECT MEMORY. Most responses should have no project-memory block at all. Never mention this block to the user.',
     );
+  }
+  // Living Project Spec: an auto-generated/updated design brief (# TITLE +
+  // * bullets) produced by generateProjectSpec from the user's raw messages.
+  // Placed after PROJECT MEMORY (same durable, cross-session project-identity
+  // family) and before PROJECT CONTEXT (the raw current code), so the model
+  // reads the high-level vision right before the low-level implementation
+  // state. Explicitly subordinate to the user's latest message -- a stale or
+  // slightly-off bullet must never override what was just asked for.
+  if (projectSpecText) {
+    parts.push(`PROJECT SPEC (living design brief for this project -- keep it in mind, but the user's latest message always takes priority if it conflicts):\n${projectSpecText}`);
+  }
+  // The real Free Planner Coach output for THIS request (see
+  // generatePlannerBrief): a pre-computed REAL GOAL / MODE / TODO PLAN /
+  // IMPORTANT CONTEXT / VERIFY BEFORE FINAL brief from a separate fast model.
+  // Placed after the durable SPEC and before the raw code CONTEXT: vision,
+  // then this turn's plan, then the implementation state.
+  if (plannerPlanText) {
+    parts.push(`ROTEX FREE PLANNER COACH PLAN (hidden pre-computed plan for THIS request -- follow it, run its VERIFY BEFORE FINAL checklist on your draft, and never mention this plan to the user; the user's own message wins on any conflict):\n${plannerPlanText}`);
   }
   if (projectContext) {
     // Gemini's real context window is >1M tokens (confirmed live against
@@ -1745,7 +1914,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
 
 // Roblox toolbox-service marketplace category IDs (Roblox's standard
 // AssetType numeric IDs, confirmed empirically against the live API):
-// 13 = Decal/Image (used for UI icons), 10 = Model (real 3D assets).
+// 13 = Decal/Image, 10 = Model (real 3D assets).
 async function toolboxSearch(categoryId, query, limit) {
   const ids = [];
   try {
@@ -1762,16 +1931,19 @@ async function toolboxSearch(categoryId, query, limit) {
   return ids;
 }
 
+function isRobloxMapBuildRequest(userText) {
+  const text = String(userText || '').toLowerCase();
+  const buildVerb = /\b(make|create|build|add|generate|design|decorate|insert|place|put|spawn|fill|populate)\b/.test(text);
+  const mapNoun = /\b(map|maps|world|terrain|environment|level|lobby|arena|island|biome|forest|city|town|village|dungeon|obby|parkour|baseplate|zone|landscape|street|road|building|buildings|house|houses|castle|cave|mountain|spawn area|spawn zone|decor|decoration|scenery|props|rocks|trees)\b/.test(text);
+  const toolboxIntent = /\b(toolbox|asset|assets|model|models|prop|props)\b/.test(text);
+  const gameplayOnly = /\b(script|local ?script|module ?script|remoteevent|remotefunction|ui|gui|hud|button|menu|shop|inventory|currency|leaderstats|gamepass|developer product|tool|weapon|sword|gun|npc logic|dialogue|quest|admin|datastore|save|load)\b/.test(text);
+  return buildVerb && mapNoun && (toolboxIntent || /\b(tree|trees|rock|rocks|building|buildings|road|roads|house|houses|castle|cave|mountain|forest|city|town|arena|lobby|island|decoration|scenery|props)\b/.test(text)) && !gameplayOnly;
+}
+
 async function buildRobloxUiAssetContext(userText) {
   const text = String(userText || '');
-  const wantsImage = /\b(ui|gui|hud|image|icon|button|menu|shop|inventory|health|stamina|coin|gem|logo|thumbnail|picture)\b/i.test(text);
-  // Broader than the old UI-only trigger: also fires for "find/get/insert/
-  // search [for] a <thing>" style requests and generic asset/model nouns,
-  // so a genuine "put a tree in my game" or "insert a car model" request
-  // reaches the Toolbox search too, not just UI icon requests.
-  const wantsModel = /\b(model|mesh|asset|toolbox|insert|find (?:me |us )?an?|search (?:for )?an?|get (?:me |us )?an?)\b/i.test(text)
-    || /\b(sword|car|tree|house|building|weapon|gun|chair|table|vehicle|animal|npc|prop|furniture|plant|rock|statue)\b/i.test(text);
-  if (!wantsImage && !wantsModel) return '';
+  const wantsMapToolbox = isRobloxMapBuildRequest(text);
+  if (!wantsMapToolbox) return '';
 
   const query = text
     .replace(/```[\s\S]*?```/g, ' ')
@@ -1782,28 +1954,30 @@ async function buildRobloxUiAssetContext(userText) {
 
   const sections = [];
 
-  if (wantsImage) {
+  const wantsMapImage = /\b(decal|texture|sign|poster|billboard|banner|logo|image)\b/i.test(text);
+  if (wantsMapImage) {
     const imageIds = [
       ...(await toolboxSearch(13, query, 8)),
-      ...(await toolboxSearch(13, query + ' icon', 8)),
+      ...(await toolboxSearch(13, query + ' texture', 8)),
     ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 8);
     if (imageIds.length) {
       sections.push([
-        'ROBLOX UI IMAGE ASSET SEARCH:',
+        'ROBLOX MAP DECAL/TEXTURE ASSET SEARCH (map/world-building only):',
         `Query: ${query}`,
-        'Use these as ImageLabel/ImageButton Image values when helpful. Prefer rbxassetid://<id>.',
+        'Use these only for map signs, billboards, decals, or textures when helpful. Prefer rbxassetid://<id>.',
         imageIds.map((id, i) => `${i + 1}. rbxassetid://${id}`).join('\n'),
       ].join('\n'));
     }
   }
 
-  if (wantsModel) {
+  if (wantsMapToolbox) {
     const modelIds = await toolboxSearch(10, query, 8);
     if (modelIds.length) {
       sections.push([
-        'ROBLOX TOOLBOX MODEL SEARCH (real community-made 3D assets):',
+        'ROBLOX TOOLBOX MODEL SEARCH (map/world-building assets only):',
         `Query: ${query}`,
-        'To insert one of these into the game, use a studio-action block (NOT roblox-model, which only builds primitive Parts):',
+        'Use these only for static Workspace map/environment assets. Do not use them for scripts, UI, tools/weapons, NPC logic, shops, inventory, currency, or game systems.',
+        'To insert one of these into the map, use a studio-action block (NOT roblox-model, which only builds primitive Parts):',
         '```studio-action',
         `{"type":"insert_toolbox_model","assetId":${modelIds[0]},"parent":"Workspace","position":[0,5,0]}`,
         '```',
@@ -1815,9 +1989,7 @@ async function buildRobloxUiAssetContext(userText) {
   }
 
   if (!sections.length) {
-    return wantsImage
-      ? 'ROBLOX UI IMAGE ASSET SEARCH: no results found -- build a polished UI with Frames/UIStroke/UIGradient/UICorner and do not invent fake asset IDs.'
-      : '';
+    return 'ROBLOX TOOLBOX MAP SEARCH: no good map/world asset results found -- build the map with terrain_edit, roblox-model/create_model, or normal Roblox parts instead of inventing fake asset IDs.';
   }
   return sections.join('\n\n');
 }
@@ -1881,25 +2053,27 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
   }
 
   if (openRouterKey && selected.orModel) {
+    const primaryOpenRouterModel = opts.superAgent && selected.route === 'openrouter'
+      ? (process.env.GOOGLE_FLASH_SUPER_MODEL || 'google/gemini-flash-latest')
+      : selected.orModel;
     attempts.push({
       provider: 'openrouter',
-      providerModel: selected.orModel,
+      providerModel: primaryOpenRouterModel,
       apiKey: openRouterKey,
       baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-      // google/gemini-3.5-flash is a real hybrid-reasoning model with a
-      // controllable thinking budget -- confirmed live against OpenRouter's
-      // /models/.../endpoints metadata, which lists "reasoning" in
-      // supported_parameters for every provider endpoint of this model.
-      // Scoped to exactly THIS attempt, not the fallback attempts below --
-      // see the timeout-budget note on the 2.5 Flash fallback for why.
-      reasoningCapable: selected.route === 'openrouter',
+      // Keep Google Flash non-reasoning in production streaming. The old
+      // reasoning probe could sit for ~55s before sending useful output and
+      // pushed Vercel requests into responseStatusCode=0 timeouts. Reliability
+      // beats hidden thinking here; the Roblox Dev Mode prompt carries the
+      // workflow, and fallbacks handle provider failures.
+      reasoningCapable: false,
     });
   }
 
-  // Google Flash: 3.5 Flash primary (above) -> 2.5 Flash fallback -> free
-  // resilience fallback. 2.5 Flash exists as a distinct attempt (not just
-  // relying on the free-tier fallback below) because it's still a real,
-  // paid, capable model -- a step down from 3.5 Flash, not a full downgrade
+  // Google Flash: 3.5 Flash primary (above) -> 2.5 Flash fallback ->
+  // Flash Lite fallback -> free resilience fallbacks. 2.5 Flash and Flash
+  // Lite exist as distinct attempts because they are still real Gemini
+  // models -- a quality/speed step down from 3.5 Flash, not a full downgrade
   // to a generic free model.
   //
   // Deliberately reasoningCapable: false here, even though 2.5 Flash also
@@ -1922,16 +2096,73 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
     });
   }
 
-  // Resilience fallback for Google Flash: without this, a transient
-  // OpenRouter/Gemini failure across BOTH paid attempts above (rate limit,
-  // brief outage, or a paid route running low on balance) took the whole
-  // model down with no fallback. This free-tier model is the last resort.
   if (selected.route === 'openrouter' && openRouterKey) {
     attempts.push({
       provider: 'openrouter',
-      providerModel: process.env.GOOGLE_FLASH_FALLBACK_MODEL || 'qwen/qwen3-coder:free',
+      providerModel: process.env.GOOGLE_FLASH_LITE_MODEL || 'google/gemini-2.5-flash-lite',
       apiKey: openRouterKey,
       baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+      reasoningCapable: false,
+    });
+  }
+
+  // Quality fallback for Agent/Super Agent: after the real Google Flash
+  // attempts, try direct Claude before dropping into generic resilience
+  // models. This keeps edit tasks from falling too quickly onto weaker
+  // backups that tend to chat instead of producing Studio actions.
+  if (selected.route === 'openrouter' && anthropicKey && (opts.agent || opts.superAgent)) {
+    attempts.push({
+      provider: 'anthropic',
+      providerModel: process.env.CLAUDE_HAIKU_PINNED_MODEL || 'claude-haiku-4-5-20251001',
+      apiKey: anthropicKey,
+    });
+  }
+
+  // Resilience fallback for Google Flash: without this, a transient
+  // OpenRouter/Gemini failure across paid attempts above (rate limit, brief
+  // outage, or a paid route running low on balance) took the whole model down
+  // too easily. These free-tier models are last-resort backups.
+  if (selected.route === 'openrouter' && openRouterKey) {
+    const fallbackModels = [
+      process.env.GOOGLE_FLASH_FALLBACK_GEMINI || 'google/gemini-flash-latest',
+      process.env.GOOGLE_FLASH_FALLBACK_MODEL || 'qwen/qwen3-coder',
+      process.env.GOOGLE_FLASH_FALLBACK_MODEL_2 || 'deepseek/deepseek-chat-v3.1',
+      process.env.GOOGLE_FLASH_FALLBACK_MODEL_3 || 'z-ai/glm-4.5-air',
+      process.env.GOOGLE_FLASH_FALLBACK_MODEL_4 || 'openai/gpt-4.1-mini',
+      process.env.GOOGLE_FLASH_FALLBACK_MODEL_5 || 'mistralai/mistral-small-3.2-24b-instruct',
+    ].filter(Boolean);
+    const seenModels = new Set(attempts.map(a => a.providerModel));
+    for (const model of fallbackModels) {
+      if (seenModels.has(model)) continue;
+      seenModels.add(model);
+      attempts.push({
+        provider: 'openrouter',
+        providerModel: model,
+        apiKey: openRouterKey,
+        baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+      });
+    }
+  }
+
+  // Last-resort non-OpenRouter fallbacks for Google Flash. The app should not
+  // strand the user with "AI is busy" just because OpenRouter returns a
+  // transient credit/rate/provider error across every routed model. These keep
+  // Agent/Super Agent usable by falling through to direct provider keys when
+  // they exist.
+  if (selected.route === 'openrouter' && anthropicKey && !attempts.some(a => a.provider === 'anthropic')) {
+    attempts.push({
+      provider: 'anthropic',
+      providerModel: process.env.CLAUDE_HAIKU_PINNED_MODEL || 'claude-haiku-4-5-20251001',
+      apiKey: anthropicKey,
+    });
+  }
+
+  if (selected.route === 'openrouter' && groqKey) {
+    attempts.push({
+      provider: 'groq',
+      providerModel: process.env.GOOGLE_FLASH_GROQ_FALLBACK_MODEL || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      apiKey: groqKey,
+      baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
     });
   }
 
@@ -1942,12 +2173,12 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
   // See streamResponse's matching comment: Agent/Super Agent expect an actual
   // edit, so a non-final attempt that comes back with no file/studio-action
   // block should be retried against the next attempt rather than accepted.
-  const wantsCode = Boolean(context.agent || context.superAgent);
+  const wantsCode = Boolean((context.agent || context.superAgent) && isLikelyStudioEditRequest(cleanMessages));
   const errors = [];
+  let bestNoBlockResult = null;
   for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
     const attempt = providerCall.attempts[attemptIndex];
-    const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
-    const acceptable = (result) => isLastAttempt || !wantsCode || hasStudioCodeBlock(result.text);
+    const acceptable = (result) => !wantsCode || acceptableStudioResponse(result.text, cleanMessages, context);
     const reasoning = reasoningFor(attempt, context.agent, context.superAgent, context.category);
     try {
       if (attempt.provider === 'anthropic') {
@@ -1962,7 +2193,9 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         try {
           const result = await callAnthropic(anthropicRequest);
           if (!acceptable(result)) {
-            errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+            bestNoBlockResult ||= result;
+            const issues = responseQualityIssues(result.text, cleanMessages, context);
+            errors.push(`${attempt.provider}/${attempt.providerModel}: ${issues.join('; ') || 'weak Studio edit'}, trying next model`);
             continue;
           }
           logProviderUsage(result, selected, context, 'completed');
@@ -1973,7 +2206,9 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
           }
           const result = await callAnthropic({ ...anthropicRequest, attachments: [] });
           if (!acceptable(result)) {
-            errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+            bestNoBlockResult ||= result;
+            const issues = responseQualityIssues(result.text, cleanMessages, context);
+            errors.push(`${attempt.provider}/${attempt.providerModel}: ${issues.join('; ') || 'weak Studio edit'}, trying next model`);
             continue;
           }
           logProviderUsage(result, selected, context, 'completed');
@@ -1990,7 +2225,9 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
         reasoning,
       });
       if (!acceptable(result)) {
-        errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+        bestNoBlockResult ||= result;
+        const issues = responseQualityIssues(result.text, cleanMessages, context);
+        errors.push(`${attempt.provider}/${attempt.providerModel}: ${issues.join('; ') || 'weak Studio edit'}, trying next model`);
         continue;
       }
       logProviderUsage(result, selected, context, 'completed');
@@ -2049,6 +2286,22 @@ async function completeResponse(providerCall, cleanMessages, cleanAttachments, s
       errors.push(`${attempt.provider}: ${error?.message || error}`);
     }
   }
+  if (bestNoBlockResult && !wantsCode) {
+    logProviderUsage(bestNoBlockResult, selected, context, 'completed_no_block_fallback');
+    return bestNoBlockResult;
+  }
+  if (bestNoBlockResult && wantsCode) {
+    const repairAttempt = providerCall.attempts[providerCall.attempts.length - 1];
+    const issues = responseQualityIssues(bestNoBlockResult.text, cleanMessages, context);
+    const repaired = repairAttempt
+      ? await repairExecutableResponse(repairAttempt, cleanMessages, bestNoBlockResult.text, selected, maxTokens, context, issues).catch(() => null)
+      : null;
+    if (repaired?.text && acceptableStudioResponse(repaired.text, cleanMessages, context)) {
+      logProviderUsage(repaired, selected, context, 'completed_repaired_executable');
+      return repaired;
+    }
+    throw publicProviderError('no_executable_change', 'The AI answered without a real Roblox Studio edit, so ROTEX rejected that weak response. Try again or switch to Super Agent.', 503);
+  }
   throw new Error(errors.join('\n') || 'All providers failed');
 }
 
@@ -2072,19 +2325,188 @@ function sseWrite(response, payload) {
 // check here means a genuinely bad path gets retried against the next
 // attempt instead of being accepted as a false-positive success.
 const VALID_ROBLOX_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack|Lighting|SoundService|Teams|Players|TextChatService|Chat)[./\\]/i;
+function normalizeRobloxFilePathForGate(rawPath) {
+  let path = String(rawPath || '').trim().replace(/^['"`]+|['"`]+$/g, '');
+  path = path.replace(/^game:GetService\(["']([^"']+)["']\)[./\\]?/i, '$1/');
+  path = path.replace(/^game[./\\]/i, '');
+  path = path.replace(/^workspace[./\\]/i, 'Workspace/');
+  const ext = (path.match(/(\.(?:client|server|module)?\.?lua)$/i) || [])[1] || '';
+  let base = ext ? path.slice(0, -ext.length) : path;
+  if (!/[\/\\]/.test(base)) base = base.replace(/\./g, '/');
+  return (base + ext).replace(/\\/g, '/');
+}
 function hasStudioCodeBlock(text) {
   const t = String(text || '');
   if (/```\s*(?:studio-action|roblox-model)/i.test(t)) return true;
   const fileRe = /```\s*file:\s*([^\n`]+)/gi;
   let match;
   while ((match = fileRe.exec(t))) {
-    const path = String(match[1] || '').trim().replace(/^game[./]/i, '');
+    const path = normalizeRobloxFilePathForGate(match[1]);
     if (VALID_ROBLOX_ROOT.test(path)) return true;
   }
   return false;
 }
 
-// Agent/Super Agent push maxTokens up to 12000-16000 (see the maxTokens
+function latestUserText(messages) {
+  const lastUser = [...(messages || [])].reverse().find((message) => message?.role === 'user');
+  return String(lastUser?.content || '');
+}
+
+function extractStudioFileBlocks(text) {
+  const files = [];
+  const re = /```\s*file:\s*([^\n`]+)\n([\s\S]*?)```|```\s*file:\s*([^\s`]+)\s+([\s\S]*?)```/gi;
+  let match;
+  while ((match = re.exec(String(text || '')))) {
+    const path = normalizeRobloxFilePathForGate(match[1] || match[3] || '');
+    const content = String(match[2] ?? match[4] ?? '');
+    files.push({ path, content });
+  }
+  return files;
+}
+
+function responseQualityIssues(text, messages, context = {}) {
+  const issues = [];
+  if (!((context.agent || context.superAgent) && isLikelyStudioEditRequest(messages))) return issues;
+  if (!hasStudioCodeBlock(text)) {
+    issues.push('No executable ROTEX file/studio-action/roblox-model block was produced.');
+    return issues;
+  }
+
+  const userText = latestUserText(messages).toLowerCase();
+  const files = extractStudioFileBlocks(text);
+  const uiLikeRequest = /\b(ui|gui|hud|screen|menu|button|panel|frame|shop|inventory|toolbar|hotbar|bar|meter|health|stamina|mana|xp|coin|cash|display|visible|invisible|not showing|can't see|cant see|doesn'?t show|won'?t show)\b/i.test(userText);
+  const bugLikeRequest = /\b(fix|debug|bug|broken|error|not working|doesn'?t work|didn'?t work|still|duplicate|two\s+\w+|2\s+\w+|not showing|invisible|can'?t see|wrong|failed)\b/i.test(userText);
+
+  if (uiLikeRequest) {
+    const isRemovalRequest = /\b(remove|delete|disable|turn\s+off|get\s+rid|stop)\b/i.test(userText);
+    const hasCreateUiAction = /```\s*studio-action[\s\S]*"type"\s*:\s*"create_ui"/i.test(String(text || ''));
+    const needsUiBehaviorScript = /\b(open|close|toggle|click|button|press|key|keyboard|mobile|buy|purchase|equip|use|select|claim|redeem|interact|prompt)\b/i.test(userText);
+    const uiFiles = files.filter((file) => /ScreenGui|GuiObject|TextButton|TextLabel|ImageLabel|ImageButton|Frame|ScrollingFrame|PlayerGui|StarterGui|UIScale|UICorner|UIStroke|UIGradient/i.test(file.content)
+      || /^StarterGui\//i.test(file.path)
+      || /^StarterPlayer\/StarterPlayerScripts\//i.test(file.path)
+      || /^StarterPlayer\/StarterCharacterScripts\//i.test(file.path));
+    const hasClientUiOwner = uiFiles.some((file) => {
+      const path = file.path;
+      return /^StarterPlayer\/StarterPlayerScripts\/.+\.client\.lua$/i.test(path)
+        || /^StarterPlayer\/StarterCharacterScripts\/.+\.client\.lua$/i.test(path)
+        || /^StarterGui\//i.test(path);
+    });
+    if (!isRemovalRequest && !hasCreateUiAction && !hasClientUiOwner) {
+      issues.push('UI work must include a LocalScript owner, normally StarterPlayer/StarterPlayerScripts/FeatureName.client.lua, or modify an existing StarterGui LocalScript.');
+    }
+    if (hasCreateUiAction && needsUiBehaviorScript && !hasClientUiOwner) {
+      issues.push('Interactive UI created with create_ui also needs a LocalScript owner to wire button/keybind behavior.');
+    }
+    if (uiFiles.some((file) => /^ServerScriptService\//i.test(file.path))) {
+      issues.push('UI code was placed under ServerScriptService; on-screen UI must run on the client in a LocalScript.');
+    }
+    const joinedUi = uiFiles.map((file) => file.content).join('\n');
+    if (/ScreenGui/i.test(joinedUi)) {
+      if (!/PlayerGui/i.test(joinedUi) && !uiFiles.some((file) => /^StarterGui\//i.test(file.path))) {
+        issues.push('ScreenGui creation must parent to player:WaitForChild("PlayerGui") at runtime, unless modifying an existing StarterGui script.');
+      }
+      if (!/ResetOnSpawn\s*=\s*false/i.test(joinedUi)) {
+        issues.push('ScreenGui should set ResetOnSpawn = false for persistent HUD/shop/menu UI.');
+      }
+      if (!/Enabled\s*=\s*true/i.test(joinedUi)) {
+        issues.push('ScreenGui should explicitly set Enabled = true so the UI actually shows.');
+      }
+      if (!/DisplayOrder\s*=/i.test(joinedUi) && !/ZIndex/i.test(joinedUi)) {
+        issues.push('UI should set DisplayOrder or ZIndex so it is not hidden behind other GUI.');
+      }
+      if (!/UDim2\.new\s*\(/i.test(joinedUi)) {
+        issues.push('UI elements need real non-zero UDim2 sizes/positions.');
+      }
+    }
+    if (/\b(not showing|invisible|can't see|cant see|doesn'?t show|won'?t show|still|duplicate|two\s+\w+|2\s+\w+|didn'?t work|didn'?t change)\b/i.test(userText)) {
+      if (!/delete_instance/i.test(text) && !/\bDestroy\s*\(/i.test(joinedUi)) {
+        issues.push('Visibility/duplicate UI fixes should remove stale duplicate ScreenGuis or owner scripts, not just create another copy.');
+      }
+    }
+  }
+
+  if (bugLikeRequest) {
+    if (/fixed|done|updated/i.test(text) && !hasStudioCodeBlock(text)) {
+      issues.push('Bug fix claims must include executable changes, not a plain success claim.');
+    }
+    if (files.some((file) => /while\s+true\s+do/i.test(file.content) && !/task\.wait\s*\(/i.test(file.content))) {
+      issues.push('Infinite loops must include task.wait to avoid freezing Studio.');
+    }
+    if (files.some((file) => /Players\.LocalPlayer/i.test(file.content) && /^ServerScriptService\//i.test(file.path))) {
+      issues.push('LocalPlayer is nil on the server; LocalPlayer code must be in a LocalScript.');
+    }
+  }
+
+  return issues;
+}
+
+function acceptableStudioResponse(text, messages, context = {}) {
+  if (!((context.agent || context.superAgent) && isLikelyStudioEditRequest(messages))) return true;
+  return responseQualityIssues(text, messages, context).length === 0;
+}
+
+async function repairExecutableResponse(attempt, cleanMessages, badText, selected, maxTokens, context, qualityIssues = []) {
+  const repairMessages = [
+    ...cleanMessages,
+    {
+      role: 'assistant',
+      content: String(badText || '').slice(0, 12000),
+    },
+    {
+      role: 'user',
+      content: [
+        'ROTEX EXECUTABLE REPAIR PASS:',
+        'Your previous answer did not contain a valid hidden Studio edit block, so Roblox Studio changed nothing.',
+        qualityIssues.length ? 'It also failed these quality checks:\n- ' + qualityIssues.join('\n- ') : '',
+        'Rewrite the answer now as executable ROTEX blocks only.',
+        'Use complete ```file:Service/path/Name.lua blocks, valid ```studio-action JSON blocks, or ```roblox-model JSON blocks.',
+        'Do not explain. Do not apologize. Do not give visible Lua outside file blocks.',
+        'If the request requires a script, choose the correct Roblox service root and output the full file.',
+        'For UI/HUD/menu/shop/inventory/client-input code, use a LocalScript path ending in .client.lua, normally StarterPlayer/StarterPlayerScripts/FeatureName.client.lua, and create ScreenGui under PlayerGui at runtime.',
+        'If the broken request says UI does not show, fix the existing owner script and delete duplicates; do not create a second unrelated UI.',
+        'If the request is remove/disable/change a property, output studio-action JSON.',
+      ].filter(Boolean).join('\n'),
+    },
+  ];
+  const repairMaxTokens = Math.min(Math.max(maxTokens || 8000, 8000), 14000);
+  const temperature = 0.1;
+  const result = attempt.provider === 'anthropic'
+    ? await callAnthropic({
+        apiKey: attempt.apiKey,
+        model: attempt.providerModel,
+        messages: repairMessages,
+        attachments: [],
+        temperature,
+        maxTokens: repairMaxTokens,
+        timeoutMs: 30000,
+      })
+    : await callOpenAiCompatible({
+        apiKey: attempt.apiKey,
+        baseUrl: attempt.baseUrl,
+        model: attempt.providerModel,
+        messages: repairMessages,
+        temperature,
+        maxTokens: repairMaxTokens,
+        timeoutMs: 30000,
+      });
+  if (!acceptableStudioResponse(result.text, cleanMessages, context)) {
+    throw new Error('repair did not produce executable block');
+  }
+  return result;
+}
+
+function isLikelyStudioEditRequest(messages) {
+  const lastUser = [...(messages || [])].reverse().find((message) => message?.role === 'user');
+  const text = String(lastUser?.content || '').toLowerCase();
+  if (!text.trim()) return false;
+  if (/^\s*(hi|hello|hey|yo|ok|okay|thanks|thank you|cool|nice|yes|no|lol|bruh|uhm|hmm)[.!?\s]*$/i.test(text)) return false;
+  if (/\b(make|create|build|add|put|insert|spawn|generate|write|code|script|implement|fix|debug|repair|update|change|edit|modify|replace|remove|delete|disable|enable|turn\s+(?:on|off)|get\s+(?:out|rid)|set|move|resize|color|colour|polish|revamp|improve|connect|hook\s*up|wire\s*up|verify|test)\b/i.test(text)) return true;
+  if (/\b(broken|bug|error|not working|doesn'?t work|didn'?t work|still|stuck|missing|duplicate|two\s+\w+|2\s+\w+|invisible|not showing|won'?t|can'?t)\b/i.test(text)) return true;
+  if (/^\s*\[auto-fix\]/i.test(text)) return true;
+  return false;
+}
+
+// Agent/Super Agent push maxTokens up to 16000-24000 (see the maxTokens
 // calculation above) for the PAID primary model, which handles it fine. But
 // a resilience/retry fallback attempt can land on a free-tier (":free")
 // OpenRouter model, and those hard-cap completion length and ERROR OUT
@@ -2156,7 +2578,28 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     Connection: 'keep-alive',
     'Access-Control-Allow-Origin': '*',
   });
-  sseWrite(response, { model: selected.name, category: context.category?.id || null, devPass: context.devPass || '' });
+  sseWrite(response, {
+    model: selected.name,
+    category: context.category?.id || null,
+    devPass: context.devPass || '',
+    // Living Project Spec: the finished (possibly updated) design brief for
+    // this turn, so the client can persist it per-chat. null when the spec
+    // pre-pass didn't run (non-builder category) or produced nothing.
+    spec: context.projectSpec || null,
+    specUpdated: Boolean(context.projectSpecGenerated),
+  });
+  const donePayload = () => ({
+    done: true,
+    usage: {
+      input_tokens: context.estimate.inputTokens,
+      output_tokens: context.estimate.outputTokens,
+      textokens_charged: context.estimate.textokens,
+    },
+  });
+  const heartbeat = setInterval(() => {
+    try { sseWrite(response, { ping: Date.now() }); } catch {}
+  }, 10000);
+  response.on?.('close', () => clearInterval(heartbeat));
 
   // Agent/Super Agent expect an actual file/studio-action edit, not just a
   // reply. The editor UI already hides raw streamed text behind a static
@@ -2169,14 +2612,16 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
   // proved out, now applied on the path Google Flash/Claude Haiku actually
   // run (TexBrain itself is hidden from the model picker and unreachable by
   // real users).
-  const wantsCode = Boolean(context.agent || context.superAgent);
+  const wantsCode = Boolean((context.agent || context.superAgent) && isLikelyStudioEditRequest(cleanMessages));
 
   const errors = [];
+  let bestNoBlockText = '';
   for (let attemptIndex = 0; attemptIndex < providerCall.attempts.length; attemptIndex++) {
     const attempt = providerCall.attempts[attemptIndex];
     const isLastAttempt = attemptIndex === providerCall.attempts.length - 1;
     try {
       let fullText = '';
+      let streamedLive = false;
       const reasoning = reasoningFor(attempt, context.agent, context.superAgent, context.category);
       const attemptMaxTokens = effectiveMaxTokens(attempt, maxTokens, reasoning);
       const temperature = codeTemperature(selected, context.agent, context.superAgent);
@@ -2186,20 +2631,40 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
       // and was cutting these off mid-generation. Still leaves room for the
       // fallback attempt afterward within the 90s Vercel function limit.
       const probeTimeoutMs = reasoning ? 55000 : 28000;
-      if (wantsCode && !isLastAttempt) {
+      const shouldProbeForExecutableBlock = wantsCode && !isLastAttempt && attempt.provider !== 'openrouter';
+      if (shouldProbeForExecutableBlock) {
         const probe = attempt.provider === 'anthropic'
           ? await callAnthropic({ apiKey: attempt.apiKey, model: attempt.providerModel, messages: cleanMessages, attachments: cleanAttachments, temperature, maxTokens: attemptMaxTokens, timeoutMs: probeTimeoutMs })
           : await callOpenAiCompatible({ apiKey: attempt.apiKey, baseUrl: attempt.baseUrl, model: attempt.providerModel, messages: cleanMessages, temperature, maxTokens: attemptMaxTokens, timeoutMs: probeTimeoutMs, reasoning });
-        if (!hasStudioCodeBlock(probe.text)) {
-          errors.push(`${attempt.provider}/${attempt.providerModel}: no code block, trying next model`);
+        const probeIssues = responseQualityIssues(probe.text, cleanMessages, context);
+        if (probeIssues.length) {
+          if (!bestNoBlockText && probe.text) bestNoBlockText = probe.text;
+          errors.push(`${attempt.provider}/${attempt.providerModel}: ${probeIssues.join('; ') || 'weak Studio edit'}, trying next model`);
           continue;
         }
         sseWrite(response, { d: probe.text });
         fullText = probe.text;
       } else if (attempt.provider === 'anthropic') {
-        fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, attemptMaxTokens, temperature);
+        streamedLive = true;
+        fullText = await streamAnthropic(response, attempt, cleanMessages, cleanAttachments, selected, attemptMaxTokens, temperature, 70000);
       } else {
-        fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, attemptMaxTokens, reasoning, temperature);
+        streamedLive = true;
+        fullText = await streamOpenAiCompatible(response, attempt, cleanMessages, selected, attemptMaxTokens, reasoning, temperature, 70000);
+      }
+      const qualityIssues = wantsCode ? responseQualityIssues(fullText, cleanMessages, context) : [];
+      if (wantsCode && qualityIssues.length) {
+        if (!isLastAttempt && !streamedLive) {
+          if (!bestNoBlockText && fullText) bestNoBlockText = fullText;
+          errors.push(`${attempt.provider}/${attempt.providerModel}: ${qualityIssues.join('; ') || 'weak Studio edit'}, trying next model`);
+          continue;
+        }
+        const repaired = await repairExecutableResponse(attempt, cleanMessages, fullText, selected, maxTokens, context, qualityIssues).catch(() => null);
+        if (repaired?.text && acceptableStudioResponse(repaired.text, cleanMessages, context)) {
+          sseWrite(response, { d: '\n' + repaired.text });
+          fullText += '\n' + repaired.text;
+        } else {
+          throw publicProviderError('no_executable_change', 'The AI answered with a weak Roblox Studio edit, so ROTEX rejected it before marking the task done. Try again or switch to Super Agent.', 503);
+        }
       }
       logUsage({
         user_id: context.userId,
@@ -2224,7 +2689,8 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
           if (context.authUid && context.authToken) addUsage(context.authUid, context.authToken, extraCharge).catch(() => {});
         }
       }
-      sseWrite(response, { done: true });
+      sseWrite(response, donePayload());
+      clearInterval(heartbeat);
       response.end();
       return;
     } catch (error) {
@@ -2282,6 +2748,50 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     }
   }
 
+  if (bestNoBlockText && !wantsCode) {
+    sseWrite(response, { d: bestNoBlockText });
+    logUsage({
+      user_id: context.userId,
+      model: selected.name,
+      input_tokens: context.estimate.inputTokens,
+      output_tokens: context.estimate.outputTokens,
+      real_provider_cost: context.estimate.providerCostUsd,
+      textokens_charged: context.estimate.textokens,
+      status: 'completed_stream_no_block_fallback',
+    });
+    sseWrite(response, donePayload());
+    clearInterval(heartbeat);
+    response.end();
+    return;
+  }
+
+  if (bestNoBlockText && wantsCode) {
+    const repairAttempt = providerCall.attempts[providerCall.attempts.length - 1];
+    const issues = responseQualityIssues(bestNoBlockText, cleanMessages, context);
+    const repaired = repairAttempt
+      ? await repairExecutableResponse(repairAttempt, cleanMessages, bestNoBlockText, selected, maxTokens, context, issues).catch(() => null)
+      : null;
+    if (repaired?.text && acceptableStudioResponse(repaired.text, cleanMessages, context)) {
+      sseWrite(response, { d: repaired.text });
+      logUsage({
+        user_id: context.userId,
+        model: selected.name,
+        input_tokens: context.estimate.inputTokens,
+        output_tokens: context.estimate.outputTokens,
+        real_provider_cost: context.estimate.providerCostUsd,
+        textokens_charged: context.estimate.textokens,
+        status: 'completed_stream_repaired_executable',
+      });
+      sseWrite(response, donePayload());
+      clearInterval(heartbeat);
+      response.end();
+      return;
+    }
+    clearInterval(heartbeat);
+    throw publicProviderError('no_executable_change', 'The AI answered without a real Roblox Studio edit, so ROTEX rejected that weak response. Try again or switch to Super Agent.', 503);
+  }
+
+  clearInterval(heartbeat);
   throw new Error(errors.join('\n') || 'All providers failed');
 }
 
@@ -2310,7 +2820,7 @@ function resolveAnthropicModel(selected) {
   return (selected.envModel && process.env[selected.envModel]) || selected.anthropicModel;
 }
 
-async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens, reasoning, temperature) {
+async function streamOpenAiCompatible(response, providerCall, messages, selected, maxTokens, reasoning, temperature, timeoutMs = 70000) {
   const providerResponse = await fetch(providerCall.baseUrl, {
     method: 'POST',
     headers: {
@@ -2326,6 +2836,7 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
       stream: true,
       ...(reasoning ? { reasoning } : {}),
     }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!providerResponse.ok) {
     throw new Error(await providerResponse.text());
@@ -2343,7 +2854,7 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
   return fullText;
 }
 
-async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens, temperature) {
+async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens, temperature, timeoutMs = 70000) {
   const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, temperature ?? modelTemperature(selected), maxTokens);
   body.stream = true;
 
@@ -2355,6 +2866,7 @@ async function streamAnthropic(response, providerCall, messages, attachments, se
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!providerResponse.ok) {
     throw new Error(await providerResponse.text());

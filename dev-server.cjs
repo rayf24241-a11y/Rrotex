@@ -16,8 +16,10 @@ const mime = {
 };
 
 const routes = {
+  '/api/firebase-config': './api/firebase-config.js',
   '/api/models': './api/models.js',
   '/api/chat': './api/chat.js',
+  '/api/plugin-bridge': './api/chat.js',
 };
 
 http.createServer(async (request, response) => {
@@ -30,9 +32,14 @@ http.createServer(async (request, response) => {
     let pathname = decodeURIComponent(new URL(request.url, `http://localhost:${port}`).pathname);
     if (pathname === '/') pathname = '/index.html';
     if (pathname === '/app' || pathname === '/chat') pathname = '/index.html';
+    if (pathname === '/home' || pathname === '/community' || pathname === '/prompt-guide' || pathname === '/blog' || pathname === '/contact' || pathname === '/contact-us' || pathname === '/pricing') pathname = '/index.html';
     if (pathname === '/account') pathname = '/account.html';
+    if (pathname === '/pro') pathname = '/account.html';
     if (pathname === '/login')   pathname = '/login.html';
+    if (pathname === '/signup' || pathname === '/sign-up' || pathname === '/register') pathname = '/login.html';
+    if (pathname === '/projects' || pathname === '/dashboard' || pathname === '/my-chats') pathname = '/projects.html';
     if (pathname === '/tokens')  pathname = '/tokens.html';
+    if (pathname === '/documentation' || pathname === '/docs') pathname = '/docs.html';
     if (pathname === '/editor') pathname = '/editor.html';
 
     const filePath = path.resolve(root, `.${pathname}`);
@@ -55,6 +62,8 @@ http.createServer(async (request, response) => {
 });
 
 async function handleApi(request, response, modulePath) {
+  const parsedUrl = new URL(request.url, `http://localhost:${port}`);
+  request.query = Object.fromEntries(parsedUrl.searchParams.entries());
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
   const bodyText = Buffer.concat(chunks).toString('utf8');

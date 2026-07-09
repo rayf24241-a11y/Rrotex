@@ -253,7 +253,7 @@
       <div class="error" id="errBox"></div>
     </div>
 
-    <div class="footer">ROTEX v1.17.01</div>
+    <div class="footer">ROTEX v1.17.27</div>
   </div>
 
   <script src="./desktop-auth.js"></script>
@@ -457,7 +457,7 @@
           <div style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--text)">Connect ROTEX Desktop</div>
           <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:18px;">
             You are signed in on rrotex.com as <strong style="color:var(--text)">${email}</strong>.
-            Click below to connect this browser session to the desktop app.
+            Click below to connect this browser session to the ROTEX app.
           </p>
           <button class="btn-primary" id="connectDesktopBtn">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
@@ -491,6 +491,13 @@
       document.getElementById('viewIn').style.display = isIn ? 'block' : 'none';
       document.getElementById('viewUp').style.display = isIn ? 'none'  : 'block';
     };
+
+    const authParams = new URLSearchParams(window.location.search);
+    if (/\/(?:signup|sign-up|register)$/i.test(window.location.pathname)
+        || /^(signup|sign-up|register|up)$/i.test(authParams.get('mode') || '')
+        || /^(signup|sign-up|register|up)$/i.test(authParams.get('tab') || '')) {
+      window.switchTab('up');
+    }
 
     /* ── Sign In ────────────────────────────────────────────────────── */
     document.getElementById('inBtn').onclick = async () => {
@@ -561,12 +568,6 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
 
 
 

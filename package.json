@@ -1,6 +1,6 @@
 {
   "name": "rrotex",
-  "version": "1.17.2",
+  "version": "1.17.27",
   "private": true,
   "dependencies": {
     "adm-zip": "^0.5.17",

@@ -5,17 +5,13 @@ function cleanEnv(value) {
 }
 
 function stripeMode() {
-  const liveSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
-  const livePriceId   = cleanEnv(process.env.STRIPE_PRICE_ID);
-  const testSecretKey = cleanEnv(process.env.STRIPE_TEST_SECRET_KEY);
-  const testPriceId   = cleanEnv(process.env.STRIPE_TEST_PRICE_ID);
-  const hasTestKeys   = Boolean(testSecretKey && testPriceId);
-  const hasLiveKeys   = Boolean(liveSecretKey && livePriceId);
-  const testMode      = process.env.STRIPE_MODE === 'test' || (!hasLiveKeys && hasTestKeys);
+  const rawSecretKey = cleanEnv(process.env.STRIPE_SECRET_KEY);
+  const secretKey = rawSecretKey.startsWith('sk_test_') ? '' : rawSecretKey;
+  const priceId   = cleanEnv(process.env.STRIPE_PRICE_ID);
   return {
-    testMode,
-    secretKey: testMode ? testSecretKey : liveSecretKey,
-    priceId: testMode ? testPriceId : livePriceId,
+    testMode: false,
+    secretKey,
+    priceId,
   };
 }
 
