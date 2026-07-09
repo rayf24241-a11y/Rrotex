@@ -40,6 +40,20 @@ async function readUsage(uid, authToken) {
     };
   } catch { return null; }
 }
+// Server-authoritative purchased TexToken balance. Read from Firestore with the
+// user's own ID token -- the request body's texTokensLeft is NEVER trusted for
+// entitlement, so a user can't inflate their daily cap by sending a fake number.
+// Fail-safe: any error returns 0 (base free tier), never an inflated cap.
+async function readBalance(uid, authToken) {
+  if (!uid || !authToken || !FIREBASE_PROJECT_ID) return 0;
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/textokens`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${authToken}` } });
+    if (!res.ok) return 0;
+    const doc = await res.json();
+    return _fsNum(doc.fields?.balance);
+  } catch { return 0; }
+}
 async function addUsage(uid, authToken, amount) {
   if (!uid || !authToken || !FIREBASE_PROJECT_ID || !(amount > 0)) return;
   try {
@@ -971,23 +985,12 @@ module.exports = async function handler(request, response) {
     }
   }
 
-  // Emergency fallback: if the Pro pass signature is invalid but the payload still
-  // decodes to a UID with an active Stripe subscription, trust the subscription.
-  // This is a temporary safety net for existing users whose pass was signed with a
-  // rotated or different PRO_PASS_SECRET. It does not grant Pro access to arbitrary
-  // UIDs — the UID must have an active Stripe subscription.
-  if (!isPro && proPass) {
-    try {
-      const body = proPass.split('.', 2)[0];
-      const decodedPayload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-      if (decodedPayload?.uid) {
-        const hasSubscription = await userHasActiveProSubscription(decodedPayload.uid, '', '');
-        if (hasSubscription) {
-          isPro = true;
-        }
-      }
-    } catch {}
-  }
+  // (Removed) An old "emergency fallback" trusted the UID decoded from the
+  // UNSIGNED pass body and granted Pro if that UID had a Stripe subscription --
+  // meaning anyone who knew a paying user's Firebase UID could get Pro on their
+  // own request. The authenticated-identity path above (authResult.uid +
+  // userHasActiveProSubscription) already recovers legitimate Pro users whose
+  // signed pass is stale, without ever trusting an unsigned, caller-supplied UID.
 
   const userId = proPayload?.uid || authResult.uid || ipFromRequest(request) || 'unknown';
   const userEmail = authResult.email || '';
@@ -1064,12 +1067,13 @@ module.exports = async function handler(request, response) {
       : Math.max(usedByKey, usedByIp);
 
     // Authenticated users with purchased tokens get an extended daily cap.
-    // We trust their client-reported balance only when they have a valid Firebase
-    // token (authResult.ok) so unauthenticated callers can't fake a higher limit.
+    // The balance is read SERVER-SIDE from Firestore (readBalance) with the
+    // user's own token -- the client-sent texTokensLeft is never trusted, so a
+    // user can't unlock a 10M/day cap by sending a fake number in the request.
     const isAuth = authResult.ok && userId !== 'unknown' && userId !== ip;
-    const clientBalance = isAuth ? Math.max(0, Number(texTokensLeft) || 0) : 0;
-    const effectiveDailyLimit = clientBalance > FREE_DAILY_TEXTOKENS
-      ? Math.min(clientBalance, 10_000_000)
+    const serverBalance = isAuth ? await readBalance(authResult.uid, authToken) : 0;
+    const effectiveDailyLimit = serverBalance > FREE_DAILY_TEXTOKENS
+      ? Math.min(serverBalance, 10_000_000)
       : FREE_DAILY_TEXTOKENS;
 
     if (usedToday >= effectiveDailyLimit) {
