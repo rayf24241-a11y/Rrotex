@@ -1,6 +1,12 @@
 (() => {
   'use strict';
 
+  // Local development only: never blank/redirect on localhost so the app is
+  // debuggable while building it. Production (www.rrotex.com) is unaffected
+  // and stays fully protected.
+  const host = location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]' || host === '') return;
+
   const redirect = () => {
     // Blank the page hard so nothing sensitive stays inspectable.
     try { document.documentElement.innerHTML = '<body style="margin:0;background:#05070c"></body>'; } catch {}
