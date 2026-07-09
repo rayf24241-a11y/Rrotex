@@ -161,9 +161,22 @@
       #chatInput { width: 100%; border: none; background: transparent; resize: none; outline: none; font-size: 14.5px; line-height: 1.5; min-height: 26px; max-height: 150px; }
       #chatInput::placeholder { color: var(--quiet); }
       .composer-row { display: flex; align-items: center; gap: 10px; }
-      .model-select { position: relative; }
-      #modelSelect { appearance: none; padding: 7px 30px 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); font-size: 12.5px; font-weight: 700; cursor: pointer; }
-      .model-select::after { content: "▾"; position: absolute; right: 11px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--quiet); font-size: 11px; }
+      /* Custom model picker (native <select> kept hidden for web-app.js). */
+      .model-picker { position: relative; }
+      .mp-native { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; pointer-events: none; }
+      .model-picker-btn { display: inline-flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); font-size: 13px; font-weight: 800; cursor: pointer; transition: border-color .14s ease, background .14s ease; }
+      .model-picker-btn:hover { border-color: rgba(255,214,10,0.4); background: rgba(255,255,255,0.08); }
+      .model-picker-btn .mp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 10px var(--yellow); flex-shrink: 0; }
+      .model-picker-btn .mp-caret { color: var(--quiet); font-size: 11px; transition: transform .18s ease; }
+      .model-picker-btn[aria-expanded="true"] .mp-caret { transform: rotate(180deg); }
+      .model-picker-menu { position: absolute; bottom: calc(100% + 8px); left: 0; min-width: 220px; padding: 6px; border-radius: 13px; border: 1px solid var(--line); background: rgba(17,23,34,0.96); backdrop-filter: blur(20px); box-shadow: 0 24px 60px -24px rgba(0,0,0,0.85); z-index: 40; display: flex; flex-direction: column; gap: 3px; animation: mp-pop .16s ease; }
+      @keyframes mp-pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      .mp-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 11px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; transition: background .12s ease, color .12s ease; }
+      .mp-item:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+      .mp-item.active { color: var(--text); background: rgba(255,214,10,0.08); border-color: rgba(255,214,10,0.25); }
+      .mp-item .mp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--quiet); flex-shrink: 0; }
+      .mp-item.active .mp-dot { background: var(--yellow); box-shadow: 0 0 9px var(--yellow); }
+      .mp-item .mp-sub { margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--quiet); text-transform: uppercase; letter-spacing: .08em; }
       .composer-spacer { flex: 1; }
       .hint { font-size: 11.5px; color: var(--quiet); }
       .send { display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 11px; border: none; cursor: pointer; font-weight: 800; font-size: 13.5px; color: #10131a; background: linear-gradient(180deg, #ffe259, var(--yellow)); box-shadow: 0 12px 26px -12px rgba(255,214,10,0.7); transition: transform .12s ease, opacity .12s ease; }
@@ -269,7 +282,15 @@
           <form class="composer-box" id="chatForm">
             <textarea id="chatInput" rows="1" placeholder="Ask ROTEX..."></textarea>
             <div class="composer-row">
-              <div class="model-select"><select id="modelSelect"><option value="google-flash">Google Flash</option></select></div>
+              <div class="model-picker">
+                <button type="button" class="model-picker-btn" id="modelPickerBtn" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="mp-dot"></span>
+                  <span class="mp-name" id="modelPickerLabel">Google Flash</span>
+                  <span class="mp-caret">▾</span>
+                </button>
+                <div class="model-picker-menu" id="modelPickerMenu" role="listbox" hidden></div>
+                <select id="modelSelect" class="mp-native" tabindex="-1" aria-hidden="true"><option value="google-flash">Google Flash</option></select>
+              </div>
               <span class="hint">Enter to send · Shift+Enter for newline</span>
               <div class="composer-spacer"></div>
               <button class="send" id="sendBtn" type="submit">Send ➤</button>
@@ -318,5 +339,59 @@
 
     <script src="./rotex-tokens.js"></script>
     <script src="./web-app.js"></script>
+    <script>
+      // Custom model picker. web-app.js owns the real <select id="modelSelect">
+      // (loads options from /api/models, reads .value, listens for 'change'),
+      // so this only mirrors it: rebuild the menu whenever the select's options
+      // change, and write the choice back to the select + fire 'change'.
+      (function () {
+        var sel = document.getElementById('modelSelect');
+        var btn = document.getElementById('modelPickerBtn');
+        var menu = document.getElementById('modelPickerMenu');
+        var label = document.getElementById('modelPickerLabel');
+        if (!sel || !btn || !menu || !label) return;
+
+        function subFor(name) {
+          if (/haiku/i.test(name)) return 'Smart';
+          if (/flash/i.test(name)) return 'Fast';
+          return '';
+        }
+        function build() {
+          menu.innerHTML = '';
+          Array.prototype.forEach.call(sel.options, function (opt) {
+            var item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'mp-item' + (opt.value === sel.value ? ' active' : '');
+            item.setAttribute('role', 'option');
+            var sub = subFor(opt.textContent);
+            item.innerHTML = '<span class="mp-dot"></span><span>' + opt.textContent + '</span>' + (sub ? '<span class="mp-sub">' + sub + '</span>' : '');
+            item.addEventListener('click', function () {
+              sel.value = opt.value;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              syncLabel();
+              close();
+            });
+            menu.appendChild(item);
+          });
+        }
+        function syncLabel() {
+          var o = sel.options[sel.selectedIndex];
+          label.textContent = o ? o.textContent : 'Model';
+          Array.prototype.forEach.call(menu.children, function (c, i) {
+            c.classList.toggle('active', sel.options[i] && sel.options[i].value === sel.value);
+          });
+        }
+        function open() { build(); menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); }
+        function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+
+        btn.addEventListener('click', function (e) { e.stopPropagation(); if (menu.hidden) open(); else close(); });
+        document.addEventListener('click', function (e) { if (!menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) close(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+        sel.addEventListener('change', syncLabel);
+        new MutationObserver(function () { build(); syncLabel(); }).observe(sel, { childList: true });
+        build();
+        syncLabel();
+      })();
+    </script>
   </body>
 </html>

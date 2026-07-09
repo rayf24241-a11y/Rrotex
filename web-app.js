@@ -87,6 +87,45 @@ function addMessage(role, text, extraClass = '') {
   return div;
 }
 
+function fileNameFromPath(path) {
+  let base = String(path || 'Script').split(/[\\/]/).pop() || 'Script';
+  if (!/\.(lua|luau|txt|md|json)$/i.test(base)) base += '.lua';
+  return base;
+}
+
+function downloadTextFile(name, content) {
+  try {
+    const blob = new Blob([String(content || '')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch {}
+}
+
+// Adds a "Download" button to a message when the answer contains file blocks,
+// so Ask mode (no plugin) users can still grab the scripts.
+function addDownloadAction(bubble, files) {
+  if (!bubble || !Array.isArray(files) || !files.length) return;
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn';
+  btn.textContent = files.length === 1
+    ? `⬇ Download ${fileNameFromPath(files[0].path)}`
+    : `⬇ Download ${files.length} scripts`;
+  btn.addEventListener('click', () => {
+    files.forEach((f, i) => setTimeout(() => downloadTextFile(fileNameFromPath(f.path), f.content), i * 250));
+  });
+  actions.appendChild(btn);
+  bubble.appendChild(actions);
+}
+
 function setRunState(label, detail = '', mini = '') {
   if (els.runState) els.runState.textContent = label;
   if (els.runDetail) els.runDetail.textContent = detail;
@@ -117,11 +156,15 @@ function addEmptyWorkbench() {
 
 function pluginConnectText() {
   return [
-    'Connect the Roblox Studio plugin to let Agent edit the game.',
+    'Agent mode edits your real Roblox game, so it needs the ROTEX Studio plugin connected first.',
     '',
-    `1. Copy this bridge code: ${state.bridgeCode}`,
-    '2. Open the ROTEX plugin in Roblox Studio.',
-    '3. Paste the code, click Connect, then press Check Plugin here.',
+    'Get the plugin:',
+    '1. Install the ROTEX desktop app from rrotex.com — it adds the ROTEX plugin to Roblox Studio for you automatically.',
+    '2. Restart Roblox Studio, then open the ROTEX panel from the Plugins tab. (Full setup guide: rrotex.com/docs)',
+    '',
+    'Connect it:',
+    `3. In the ROTEX plugin, paste this bridge code:  ${state.bridgeCode}`,
+    '4. Click Connect in the plugin, then press "Check Plugin" below.',
   ].join('\n');
 }
 
@@ -598,10 +641,18 @@ async function sendMessage(rawText, options = {}) {
         if (payload.d) {
           gotAny = true;
           full += payload.d;
-          const hasExecutable = /```\s*(?:file:|studio-action|roblox-model)/i.test(full);
-          const visible = visibleAssistantText(full, hasExecutable ? taskStatusFor(text) : 'Thinking...');
-          assistantBubble.className = `msg assistant ${hasExecutable && state.mode !== 'ask' ? 'status' : ''}`.trim();
-          assistantBubble.textContent = visible;
+          if (state.mode === 'ask') {
+            // Ask mode is a plain chat answer -- show everything, including
+            // code, so a valid answer never renders blank (the old strip +
+            // looksLikeSourceCode fallback silently hid code-heavy replies,
+            // which is why Claude Haiku often appeared to "not respond").
+            assistantBubble.className = 'msg assistant';
+            assistantBubble.textContent = full;
+          } else {
+            const hasExecutable = /```\s*(?:file:|studio-action|roblox-model)/i.test(full);
+            assistantBubble.className = `msg assistant ${hasExecutable ? 'status' : ''}`.trim();
+            assistantBubble.textContent = visibleAssistantText(full, hasExecutable ? taskStatusFor(text) : 'Thinking...');
+          }
           els.messages.scrollTop = els.messages.scrollHeight;
         }
         if (payload.usage?.textokens_charged && window.rotexTokens?.spend) {
@@ -612,12 +663,23 @@ async function sendMessage(rawText, options = {}) {
     }
 
     if (!gotAny && !full.trim()) throw new Error('The AI started but did not send a response fast enough. Try again, or switch models for this message.');
-    const queued = await queueExecutableBlocks(full, text);
-    const visible = visibleAssistantText(full, queued && state.mode !== 'ask' ? taskStatusFor(text) : '');
-    assistantBubble.className = `msg assistant ${queued && state.mode !== 'ask' ? 'status' : ''}`.trim();
-    assistantBubble.textContent = visible || (queued ? taskStatusFor(text) : 'Done.');
-    pushHistory('assistant', assistantBubble.textContent);
-    setRunState(queued ? 'Queued edit' : 'Ready', queued ? 'Studio plugin is applying the generated change.' : 'Response complete.', queued ? 'Waiting for Studio result' : 'No action queued');
+    if (state.mode === 'ask') {
+      // Ask mode never queues Studio edits -- it is a chat answer. Show the
+      // full text and offer a download for any file blocks the answer includes.
+      assistantBubble.className = 'msg assistant';
+      assistantBubble.textContent = full || 'No response — try again, or switch models.';
+      addDownloadAction(assistantBubble, extractStudioFiles(full));
+      pushHistory('assistant', full);
+      setRunState('Ready', 'Ask mode answered. Switch to Agent to edit the game.', 'Chat workflow');
+    } else {
+      const queued = await queueExecutableBlocks(full, text);
+      const visible = visibleAssistantText(full, queued ? taskStatusFor(text) : '');
+      assistantBubble.className = `msg assistant ${queued ? 'status' : ''}`.trim();
+      assistantBubble.textContent = visible || (queued ? taskStatusFor(text) : 'Done.');
+      addDownloadAction(assistantBubble, extractStudioFiles(full));
+      pushHistory('assistant', assistantBubble.textContent);
+      setRunState(queued ? 'Queued edit' : 'Ready', queued ? 'Studio plugin is applying the generated change.' : 'Response complete.', queued ? 'Waiting for Studio result' : 'No action queued');
+    }
   } catch (error) {
     assistantBubble.className = 'msg assistant error';
     assistantBubble.textContent = error.message || 'No response.';
