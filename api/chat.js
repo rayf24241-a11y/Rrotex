@@ -5,6 +5,7 @@ const { userHasActiveProSubscription } = require('./_lib/stripe.js');
 const { CATEGORIES, routeCategory, THINKING_LEVEL_TO_EFFORT } = require('./_lib/categories.js');
 const { buildRobloxDevModeBrief } = require('./_lib/roblox-dev-mode.js');
 const { handlePluginBridge } = require('./_lib/plugin-bridge-core.js');
+const tokenWallet = require('./_lib/token-wallet.js');
 const {
   checkCreditSafety,
   estimateTexTokens,
@@ -83,6 +84,7 @@ const MODELING_COST_MULTIPLIER = 1.5;
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
 const FREE_DAILY_TEXTOKENS = 150_000;
+let _warnedNoWallet = false; // one-time warn when KV wallet isn't configured
 const freeTokenCounters  = new Map();
 const proCounters = new Map();
 
@@ -1067,11 +1069,29 @@ module.exports = async function handler(request, response) {
       : Math.max(usedByKey, usedByIp);
 
     // Authenticated users with purchased tokens get an extended daily cap.
-    // The balance is read SERVER-SIDE from Firestore (readBalance) with the
-    // user's own token -- the client-sent texTokensLeft is never trusted, so a
-    // user can't unlock a 10M/day cap by sending a fake number in the request.
+    // The balance is fully SERVER-AUTHORITATIVE: it lives in the KV wallet
+    // (token-wallet.js), a server-only store the user cannot write. The
+    // client-sent texTokensLeft is never trusted. If KV isn't configured we
+    // fall back to the Firestore read (still ignores the request body, just
+    // not yet tamper-proof against a direct Firestore write) and warn once.
     const isAuth = authResult.ok && userId !== 'unknown' && userId !== ip;
-    const serverBalance = isAuth ? await readBalance(authResult.uid, authToken) : 0;
+    let serverBalance = 0;
+    if (isAuth) {
+      if (tokenWallet.walletEnabled()) {
+        serverBalance = await tokenWallet.getBalance(authResult.uid);
+        if (serverBalance === null) {
+          // First time this user is seen by the wallet -- migrate their
+          // existing purchased balance from Firestore exactly once.
+          const legacy = await readBalance(authResult.uid, authToken);
+          await tokenWallet.seed(authResult.uid, legacy);
+          serverBalance = legacy;
+        }
+        request._walletDraw = serverBalance > FREE_DAILY_TEXTOKENS;
+      } else {
+        if (!_warnedNoWallet) { _warnedNoWallet = true; console.warn('[wallet] KV not configured — TexToken balance falls back to Firestore (add Vercel KV for a tamper-proof wallet).'); }
+        serverBalance = await readBalance(authResult.uid, authToken);
+      }
+    }
     const effectiveDailyLimit = serverBalance > FREE_DAILY_TEXTOKENS
       ? Math.min(serverBalance, 10_000_000)
       : FREE_DAILY_TEXTOKENS;
@@ -1260,6 +1280,13 @@ module.exports = async function handler(request, response) {
     // Also charge the IP-level pool so multiple accounts on the same IP share the quota
     if (request._ipKey && request._ipKey !== request._freeKey) {
       addFreeTokensUsed(request._ipKey, estimate.textokens);
+    }
+    // Deplete the KV wallet when this user is drawing on purchased balance
+    // (cap raised above the free tier). Server-side spend = the wallet is the
+    // single source of truth; the old client-side balance decrement no longer
+    // gates anything. Fire-and-forget, fail-safe.
+    if (request._walletDraw && authResult.uid) {
+      tokenWallet.spend(authResult.uid, estimate.textokens).catch(() => {});
     }
   }
 

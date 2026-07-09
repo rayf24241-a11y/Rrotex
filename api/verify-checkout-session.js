@@ -1,5 +1,6 @@
 const { signProPass } = require('./_lib/propass.js');
 const { sendEmail } = require('./_lib/email.js');
+const { credit } = require('./_lib/token-wallet.js');
 
 module.exports = async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -50,6 +51,13 @@ module.exports = async function handler(request, response) {
       response.status(400).json({ verified: false, message: 'Credit checkout is missing token metadata.' });
       return;
     }
+
+    // Server-authoritative credit: add the purchased tokens to the KV wallet.
+    // This is the ONLY place a balance can rise, and it runs only after Stripe
+    // has confirmed the paid session. Deduped by session id so a refreshed
+    // success page can't double-credit. No-op if KV isn't configured (the
+    // client-side Firestore credit below still updates the display).
+    await credit(uid, session.id, texTokens);
 
     const buyerEmail = session.metadata?.email || session.customer_details?.email || '';
     const millions = texTokens / 1_000_000;
