@@ -187,9 +187,23 @@ function setRunState(label, detail = '', mini = '') {
 function addEmptyWorkbench() {
   const shell = document.createElement('div');
   shell.className = 'forge-empty';
+  if (!state.user) {
+    // Signed-out: the login gate means chat won't send until you sign in, so
+    // lead with that instead of build prompts that would just bounce.
+    shell.innerHTML = `
+      <div class="forge-badge">ROTEX · Roblox Dev Studio</div>
+      <h1>Sign in to start building.</h1>
+      <p>Log in to chat with ROTEX and get full, copy-paste-ready Roblox scripts, UI, and systems — right from your browser.</p>
+      <button class="forge-signin" type="button" id="workbenchSignIn">Sign in to ROTEX</button>
+    `;
+    els.messages.appendChild(shell);
+    shell.querySelector('#workbenchSignIn')?.addEventListener('click', () => signIn());
+    return;
+  }
   shell.innerHTML = `
-    <h1>Build Roblox Studio features from the website.</h1>
-    <p>Ask mode can answer right away. Agent and Supreme connect to the plugin so ROTEX can edit scripts, create visible UI, delete stale duplicates, adjust terrain/lighting, and use Toolbox only for static map assets.</p>
+    <div class="forge-badge">ROTEX · Roblox Dev Studio</div>
+    <h1>What are we building?</h1>
+    <p>Ask mode writes complete, downloadable scripts right away. Agent and Supreme connect the plugin to edit your game live. Pick a starter or just type what you want.</p>
     <div class="forge-grid">
       <button class="forge-card" type="button" data-seed="Make a polished Roblox shop UI that appears in game, is mobile-safe, and has one LocalScript owner."><strong>UI Generator</strong><span>ScreenGui, buttons, mobile scale, visible layout, behavior owner.</span></button>
       <button class="forge-card" type="button" data-seed="Debug the latest broken feature. Search every likely owner script, fix the real cause, and remove duplicates."><strong>Bug Repair</strong><span>Find wrong paths, duplicate scripts, invisible GUI, nil errors, stale owners.</span></button>
@@ -345,6 +359,9 @@ function renderAccount() {
   } else {
     els.avatar.textContent = (user?.displayName || user?.email || '?').trim().charAt(0).toUpperCase() || '?';
   }
+  // Swap the empty state between signed-out (sign-in CTA) and signed-in (build
+  // cards) the moment auth resolves -- only while no real conversation exists.
+  if (!state.messages.length) renderHistory();
 }
 
 async function bridgePost(op, body = {}) {

@@ -508,7 +508,9 @@ async function generatePlannerBrief(currentSpec, userMessage, projectMode) {
       messages: buildPlannerPrompt(fallbackSpec, userMessage, projectMode),
       max_tokens: 1200,
       temperature: 0.3,
-    }, 9000);
+    }, 7000); // trimmed 9s -> 7s: the free planner model is usually 1-4s, so this
+              // cuts worst-case added latency before the real answer with no
+              // downside (fail-open drops the plan and proceeds if it's slow).
     const text = String(result?.choices?.[0]?.message?.content || '').trim();
     if (!text) return fallback;
 
