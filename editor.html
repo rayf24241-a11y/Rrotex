@@ -996,11 +996,10 @@
       // Server-authoritative usage for display.
       window.__rotexServerUsage = {
         dayUsed: Math.max(0, Number(data.dayUsed) || 0),
-        weekUsed: Math.max(0, Number(data.weekUsed) || 0),
         monthUsed: Math.max(0, Number(data.monthUsed) || 0),
         freeDaily: Number(data.freeDaily) || 150000,
         freeMonthly: Number(data.freeMonthly) || 750000,
-        proWeekly: Number(data.proWeekly) || 10500000,
+        proMonthly: Number(data.proMonthly) || 10500000,
       };
       if (Number.isFinite(Number(data.balance))) {
         if (window.rotexTokens?.savePurchased) window.rotexTokens.savePurchased(data.balance);
@@ -1081,12 +1080,10 @@
       const str = (x) => (x && x.stringValue) || '';
       const today = new Date().toISOString().slice(0, 10);
       const month = new Date().toISOString().slice(0, 7);
-      const weekStart = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
       window.__rotexServerUsage = {
         dayUsed: str(f.dayKey) === today ? num(f.dayUsed) : 0,
-        weekUsed: str(f.weekKey) === weekStart ? num(f.weekUsed) : 0,
         monthUsed: str(f.monthKey) === month ? num(f.monthUsed) : 0,
-        freeDaily: 150000, freeMonthly: 750000, proWeekly: 10500000,
+        freeDaily: 150000, freeMonthly: 750000, proMonthly: 10500000,
       };
       window.rotexTokens?.refreshBalanceDisplay?.();
     } catch {}

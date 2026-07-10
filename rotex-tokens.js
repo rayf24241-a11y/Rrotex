@@ -10,7 +10,7 @@
   var FREE_DAILY_BASE = 5 * TT_UNIT;    // "5 TexTokens/day"
   var PRO_DAILY_BASE  = 35 * TT_UNIT;   // "35 TexTokens/day"
   var FREE_MONTHLY    = 25 * TT_UNIT;   // "25 TexTokens/month"
-  var PRO_WEEKLY      = 350 * TT_UNIT;  // "350 TexTokens/week"
+  var PRO_MONTHLY     = 350 * TT_UNIT;  // "350 TexTokens/month" (profit-guard ceiling)
 
   // Matches the server's _dayKey()/_today() exactly (api/chat.js): UTC
   // calendar date, not the browser's local timezone. This local fallback
@@ -72,16 +72,12 @@
     return Math.max(0, getDailyAllowance() - getSpentToday());
   }
 
-  // Plan-window remaining, from the server. Free: 25 TT/month. Pro: 350
-  // TT/week. Returns null if server usage is unknown.
+  // Monthly remaining, from the server. Free: 25 TT/month. Pro: 350 TT/month.
+  // Returns null if server usage is unknown.
   function getMonthlyRemaining() {
     var su = getServerUsage();
     if (!su) return null;
-    if (isProUser()) {
-      var weekLimit = Number(su.proWeekly) || PRO_WEEKLY;
-      return Math.max(0, weekLimit - (Number(su.weekUsed) || 0));
-    }
-    var limit = Number(su.freeMonthly) || FREE_MONTHLY;
+    var limit = isProUser() ? (Number(su.proMonthly) || PRO_MONTHLY) : (Number(su.freeMonthly) || FREE_MONTHLY);
     return Math.max(0, limit - (Number(su.monthUsed) || 0));
   }
 
@@ -153,7 +149,7 @@
     var parts = [];
     if (purchased > 0) parts.push(formatTT(purchased) + ' purchased');
     parts.push(formatTT(free) + ' free today');
-    if (monthly != null) parts.push(formatTT(monthly) + (isProUser() ? ' left this week' : ' left this month'));
+    if (monthly != null) parts.push(formatTT(monthly) + ' left this month');
     el.title = parts.join(' · ');
   }
 

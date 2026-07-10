@@ -25,9 +25,17 @@ const {
 // changed. Free daily is the same real compute it always was (5 TT =
 // 150k internal); the monthly/Pro caps were deliberately tightened.
 const TT_UNIT = 30_000;
-const FREE_MONTHLY = 25 * TT_UNIT;  // "25 TexTokens/month" (was 1M internal)
-const PRO_DAILY    = 35 * TT_UNIT;  // "35 TexTokens/day"   (was 1M internal, client-side only)
-const PRO_WEEKLY   = 350 * TT_UNIT; // "350 TexTokens/week" (replaces the old 20M/30d cap)
+const FREE_MONTHLY = 25 * TT_UNIT;  // "25 TexTokens/month"
+const PRO_DAILY    = 35 * TT_UNIT;  // "35 TexTokens/day"
+// Pro monthly ceiling. This is the PROFIT GUARD: the internal cap directly
+// bounds a Pro user's worst-case provider cost. providerCostUsd = internal/1e6,
+// so 350 TT = 10.5M internal = at most $10.50 of provider-charge cost against
+// $20 revenue -> guaranteed >= $9.50 gross margin per Pro purchase (and real
+// provider cost is well under that, since the per-token charge rates carry a
+// ~3-5x markup over raw provider prices). The old 350-per-WEEK cap never bound
+// (35/day = 245/week < 350), so a daily maxer could reach 1,050 TT/month =
+// $31.50 cost and lose money; making 350 a MONTHLY cap fixes that.
+const PRO_MONTHLY  = 350 * TT_UNIT;
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'rotex-e0be7';
 function _usageDocUrl(uid) {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/usage`;
@@ -36,22 +44,16 @@ function _fsNum(field) { if (!field) return 0; return Math.max(0, Math.floor(Num
 function _fsStr(field) { return field?.stringValue || ''; }
 function _dayKey()   { return new Date().toISOString().slice(0, 10); }
 function _monthKey() { return new Date().toISOString().slice(0, 7); }
-function _weekKey()  { // UTC Monday of the current week — Pro's weekly cap window
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
-}
 async function readUsage(uid, authToken) {
   if (!uid || !authToken || !FIREBASE_PROJECT_ID) return null;
   try {
     const res = await fetch(_usageDocUrl(uid), { headers: { Authorization: `Bearer ${authToken}` } });
-    if (res.status === 404) return { dayUsed: 0, weekUsed: 0, monthUsed: 0 };
+    if (res.status === 404) return { dayUsed: 0, monthUsed: 0 };
     if (!res.ok) return null;
     const doc = await res.json();
     const f = doc.fields || {};
     return {
       dayUsed:   _fsStr(f.dayKey)   === _dayKey()   ? _fsNum(f.dayUsed)   : 0,
-      weekUsed:  _fsStr(f.weekKey)  === _weekKey()  ? _fsNum(f.weekUsed)  : 0,
       monthUsed: _fsStr(f.monthKey) === _monthKey() ? _fsNum(f.monthUsed) : 0,
     };
   } catch { return null; }
@@ -73,17 +75,15 @@ async function readBalance(uid, authToken) {
 async function addUsage(uid, authToken, amount) {
   if (!uid || !authToken || !FIREBASE_PROJECT_ID || !(amount > 0)) return;
   try {
-    const cur = (await readUsage(uid, authToken)) || { dayUsed: 0, weekUsed: 0, monthUsed: 0 };
+    const cur = (await readUsage(uid, authToken)) || { dayUsed: 0, monthUsed: 0 };
     const body = { fields: {
       dayKey:    { stringValue: _dayKey() },
       dayUsed:   { integerValue: String(cur.dayUsed + amount) },
-      weekKey:   { stringValue: _weekKey() },
-      weekUsed:  { integerValue: String((cur.weekUsed || 0) + amount) },
       monthKey:  { stringValue: _monthKey() },
       monthUsed: { integerValue: String(cur.monthUsed + amount) },
       updatedAt: { timestampValue: new Date().toISOString() },
     } };
-    const mask = ['dayKey', 'dayUsed', 'weekKey', 'weekUsed', 'monthKey', 'monthUsed', 'updatedAt'].map((k) => 'updateMask.fieldPaths=' + k).join('&');
+    const mask = ['dayKey', 'dayUsed', 'monthKey', 'monthUsed', 'updatedAt'].map((k) => 'updateMask.fieldPaths=' + k).join('&');
     await fetch(`${_usageDocUrl(uid)}?${mask}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
@@ -1060,21 +1060,22 @@ module.exports = async function handler(request, response) {
   }
 
   // Plan caps beyond the free daily budget. Only enforced with a real reading.
-  // Free: 25 TexTokens/month. Pro: 35/day + 350/week — now fully server-side
-  // (the old 1M/day Pro limit was only ever enforced by the client).
+  // Free: 25 TexTokens/month. Pro: 35/day + 350/month — the monthly ceiling is
+  // the profit guard (bounds worst-case provider cost at ~$10.50 vs $20). All
+  // fully server-side (the old 1M/day Pro limit was only ever client-enforced).
   if (!isDev && serverUsage) {
     if (isPro) {
+      if (serverUsage.monthUsed >= PRO_MONTHLY) {
+        response.status(402).json({
+          error: 'no_textokens',
+          text: "You've used your 350 TexTokens for this month. They reset on the 1st (UTC), or add a pack at rrotex.com/tokens.",
+        });
+        return;
+      }
       if (serverUsage.dayUsed >= PRO_DAILY) {
         response.status(402).json({
           error: 'no_textokens',
           text: "You've used your 35 daily TexTokens. They reset tomorrow (UTC), or add a pack at rrotex.com/tokens.",
-        });
-        return;
-      }
-      if ((serverUsage.weekUsed || 0) >= PRO_WEEKLY) {
-        response.status(402).json({
-          error: 'no_textokens',
-          text: "You've used your 350 weekly TexTokens. They reset Monday (UTC), or add a pack at rrotex.com/tokens.",
         });
         return;
       }
@@ -1294,7 +1295,7 @@ module.exports = async function handler(request, response) {
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
         `ROTEX model ranking: 1st Claude Haiku (best quality) → 2nd TexBrain Thinking-beta (balanced Roblox-focused model). If asked which is best: Claude Haiku. If asked which is cheaper: TexBrain Thinking-beta.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 5 TexTokens/day, 25/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 35 TexTokens/day, 350/week, agent mode, 5 projects. Extra packs: $1 = 2 TexTokens. ROTEX is focused on coding today; 3D asset generation and advanced GUI building are planned for the future.',
+        'ROTEX is a web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 5 TexTokens/day, 25/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 35 TexTokens/day, 350/month, agent mode, 5 projects. Extra packs: $1 = 2 TexTokens. ROTEX is focused on coding today; 3D asset generation and advanced GUI building are planned for the future.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',
