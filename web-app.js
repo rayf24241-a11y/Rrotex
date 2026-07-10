@@ -98,8 +98,14 @@ function renderInline(escaped) {
 
 function renderMarkdown(text) {
   const blocks = [];
-  const withPlaceholders = String(text || '').replace(/\r\n/g, '\n').replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    blocks.push('<pre class="code"><code>' + escapeHtml(code.replace(/\n$/, '')) + '</code></pre>');
+  const withPlaceholders = String(text || '').replace(/\r\n/g, '\n').replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_, info, code) => {
+    // A ```file:Service/Name.lua fence gets a filename header; a plain ```lang
+    // fence just shows the code. Keeps Ask-mode "build" output clean.
+    const infoStr = String(info || '').trim();
+    const fileMatch = infoStr.match(/^file:\s*(.+)$/i);
+    const label = fileMatch ? fileMatch[1].trim() : '';
+    const header = label ? '<div class="code-file">' + escapeHtml(label) + '</div>' : '';
+    blocks.push('<div class="code-wrap">' + header + '<pre class="code"><code>' + escapeHtml(code.replace(/\n$/, '')) + '</code></pre></div>');
     return 'RX0B' + (blocks.length - 1) + 'RX0';
   });
   const lines = withPlaceholders.split('\n');
@@ -555,7 +561,7 @@ function buildProjectContext() {
     `ROTEX UI MODE: ${state.mode === 'supreme' ? 'SUPER AGENT' : state.mode === 'agent' ? 'AGENT' : 'ASK'}.`,
     `PLUGIN CAPABILITIES: ${caps}.`,
     'The web app hides executable file/studio-action/roblox-model blocks and queues them to the Roblox Studio plugin.',
-    'Agent/Super Agent must edit the actual Studio game through executable blocks. Ask mode must not output code.',
+    'Agent/Super Agent edit the actual Studio game through executable blocks. Ask mode cannot auto-apply to Studio, but it MUST still fully build what the user asks: give complete, copy-paste-ready code (in ```file:Service/Name.lua blocks so it is clean and downloadable) with exact Studio placement and test steps. Never refuse, never just ask what they want, never tell them to switch modes -- make a smart assumption and build it.',
   ].join('\n');
   if (scripts.length) {
     out += `\n\nPROJECT SCRIPTS (live from Roblox Studio - ${scripts.length} scripts). Search these before editing:`;
