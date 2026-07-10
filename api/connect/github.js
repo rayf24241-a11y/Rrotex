@@ -1,6 +1,23 @@
+// GitHub connect — one function handles both the OAuth start and the callback
+// (Vercel Hobby caps at 12 functions, so they share a URL).
+// - No `code` param -> START: return the GitHub authorize URL (JSON).
+// - `code` present  -> CALLBACK: mark GitHub as pending-activation and return.
 module.exports = function handler(request, response) {
   const clientId = process.env.GITHUB_CLIENT_ID;
-  const redirectUri = `${canonicalOrigin(request)}/api/connect/github-callback`;
+  const redirectUri = `${canonicalOrigin(request)}/api/connect/github`;
+  const q = request.query || {};
+
+  // ── CALLBACK ──
+  if (q.code || q.error) {
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    response.statusCode = 200;
+    response.end(`<!doctype html><html><head><meta charset="utf-8"><title>GitHub connected</title></head><body>
+      <script>try{localStorage.setItem('rotex:pending-activation','GitHub')}catch(e){};window.location.href='/';</script>
+      <p>GitHub connected. Returning to ROTEX...</p></body></html>`);
+    return;
+  }
+
+  // ── START ──
   if (!clientId) {
     response.status(200).json({
       configured: false,
