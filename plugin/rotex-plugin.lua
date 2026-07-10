@@ -172,6 +172,35 @@ local function appendLog(text)
 	end)
 end
 
+-- Clear, on-screen guide shown when HTTP is off and we couldn't flip it on for
+-- the user. Guarded so the 5s auto-connect loop prints it once, not forever;
+-- a manual Connect click and a successful connect both re-arm it.
+local httpHelpShown = false
+local function showHttpHelp()
+	if httpHelpShown then return end
+	httpHelpShown = true
+	appendLog(table.concat({
+		"------------------------------",
+		"HTTP requests are OFF",
+		"ROTEX needs them ON to reach your game. Turn them on:",
+		"",
+		"1. Top of Studio -> HOME tab -> Game Settings",
+		"2. Click the SECURITY tab",
+		"3. Turn ON \"Allow HTTP Requests\"",
+		"4. Come back here and click Connect",
+		"",
+		"Fast way: open the Command Bar (VIEW tab ->",
+		"Command Bar), paste this, press Enter:",
+		"   game:GetService(\"HttpService\").HttpEnabled = true",
+		"",
+		"Then SAVE so the setting sticks:",
+		"   File -> Save to Roblox",
+		"   (Do NOT Publish - Publish pushes your game",
+		"    LIVE to players. Save just keeps your work.)",
+		"------------------------------",
+	}, "\n"))
+end
+
 -- ── HTTP: GET with timeout ────────────────────────────────────────────────────
 local function getJSON(port, path, timeoutSecs)
 	local token = currentToken:match("^%s*(.-)%s*$")
@@ -965,6 +994,7 @@ local function tryConnect()
 end
 
 local function onConnected(mode, connPort, connData)
+	httpHelpShown = false -- re-arm the HTTP guide for a future disconnect
 	bridgeMode = mode or "local"
 	if bridgeMode == "local" then HTTP_PORT = connPort end
 	connData = connData or {}
@@ -1025,9 +1055,9 @@ task.spawn(function()
 						appendLog("[ROTEX] HTTP is on now. Click Connect to finish.")
 					end
 				else
-					setStatus("Enable HTTP Requests (see log)", C.red)
+					setStatus("Turn on HTTP Requests (see steps below)", C.red)
 					connectBtn.Text = "Connect to ROTEX"
-					appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
+					showHttpHelp()
 				end
 			else
 				setStatus(hasWebCode and "ROTEX Web not connected" or "ROTEX Desktop not found", C.quiet)
@@ -1063,6 +1093,7 @@ end)
 -- Connect button (force immediate retry)
 connectBtn.MouseButton1Click:Connect(function()
 	if connected then return end
+	httpHelpShown = false -- a fresh manual attempt should re-show the guide if still off
 	setStatus("Connecting...", C.yellow)
 	connectBtn.Text = "Connecting..."
 	appendLog("[ROTEX] Connecting...")
@@ -1085,8 +1116,8 @@ connectBtn.MouseButton1Click:Connect(function()
 				end
 			else
 				connectBtn.Text = "Connect to ROTEX"
-				setStatus("Enable HTTP Requests (see log)", C.red)
-				appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
+				setStatus("Turn on HTTP Requests (see steps below)", C.red)
+				showHttpHelp()
 			end
 		else
 			connectBtn.Text = "Connect to ROTEX"
