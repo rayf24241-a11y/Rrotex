@@ -28,6 +28,13 @@ const els = {
   accountName: $('accountName'),
   accountEmail: $('accountEmail'),
   newChat: $('newChatBtn'),
+  pluginModal: $('pluginModal'),
+  pluginModalClose: $('pluginModalClose'),
+  pluginModalCode: $('pluginModalCode'),
+  pluginModalCopy: $('pluginModalCopy'),
+  pluginModalCheck: $('pluginModalCheck'),
+  pluginModalStatus: $('pluginModalStatus'),
+  pluginModalStatusRow: $('pluginModalStatusRow'),
 };
 
 const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack|Lighting|SoundService|Teams|Players|TextChatService|Chat)(\/|\\)/i;
@@ -235,39 +242,42 @@ function pluginConnectText() {
   ].join('\n');
 }
 
-function addPluginConnectPrompt(pendingText = '') {
+// ── Connect-plugin modal ────────────────────────────────────────────────
+// A centered popup that shows the bridge code + a Check Plugin button. Opens
+// whenever a signed-in user tries to send without the Studio plugin connected,
+// and auto-closes (resuming the queued message) the moment the plugin connects.
+function openPluginModal(pendingText = '') {
+  if (!els.pluginModal) return;
   state.pluginPromptOpen = true;
-  const div = addMessage('assistant', '', 'status');
-  // Text lives in its own element so status updates (below) can re-render it
-  // without wiping the Copy/Check buttons appended after it.
-  const textEl = document.createElement('div');
-  textEl.innerHTML = renderMarkdown(pluginConnectText());
-  div.appendChild(textEl);
-  div._textEl = textEl;
-  const actions = document.createElement('div');
-  actions.className = 'msg-actions';
+  state.pluginPending = pendingText || state.pluginPending || '';
+  if (els.pluginModalCode) els.pluginModalCode.textContent = state.bridgeCode;
+  setPluginModalStatus(state.pluginConnected);
+  els.pluginModal.hidden = false;
+}
 
-  const copyBtn = document.createElement('button');
-  copyBtn.className = 'btn';
-  copyBtn.type = 'button';
-  copyBtn.textContent = 'Copy Code';
-  copyBtn.addEventListener('click', async () => {
-    await navigator.clipboard?.writeText(state.bridgeCode).catch(() => {});
-    copyBtn.textContent = 'Copied';
-    setTimeout(() => { copyBtn.textContent = 'Copy Code'; }, 900);
-  });
+function closePluginModal() {
+  if (!els.pluginModal) return;
+  els.pluginModal.hidden = true;
+  state.pluginPromptOpen = false;
+}
 
-  const checkBtn = document.createElement('button');
-  checkBtn.className = 'btn primary';
-  checkBtn.type = 'button';
-  checkBtn.textContent = 'Check Plugin';
-  checkBtn.addEventListener('click', async () => {
-    await checkPluginAndResume(pendingText, checkBtn, div);
-  });
+function setPluginModalStatus(connected) {
+  if (!els.pluginModalStatusRow || !els.pluginModalStatus) return;
+  els.pluginModalStatusRow.classList.toggle('ok', Boolean(connected));
+  els.pluginModalStatus.textContent = connected ? 'Plugin connected!' : 'Waiting for the plugin…';
+}
 
-  actions.append(copyBtn, checkBtn);
-  div.appendChild(actions);
-  return div;
+// Called by the poll loop when the plugin connects while the modal is open:
+// close it and fire off whatever the user was trying to send.
+function onPluginConnectedWhileWaiting() {
+  if (!state.pluginPromptOpen) return;
+  setPluginModalStatus(true);
+  const pending = state.pluginPending || '';
+  state.pluginPending = '';
+  setTimeout(() => {
+    closePluginModal();
+    if (pending.trim()) sendMessage(pending, { skipUserRender: false, allowPluginPrompt: false });
+  }, 550);
 }
 
 function renderHistory() {
@@ -319,6 +329,17 @@ async function initAuth() {
       state.user = user || null;
       state.idToken = user ? await user.getIdToken(true).catch(() => '') : '';
       renderAccount();
+      // Login required: once Firebase confirms there's no signed-in user, send
+      // them straight to the sign-in page (returning here afterward). Firebase
+      // persists sessions, so a real signed-in user gets `user` here and is
+      // never bounced. replace() keeps /app out of history (no back-button loop).
+      if (!user) {
+        window.location.replace('/login?return=' + encodeURIComponent('/app'));
+      } else {
+        // Signed in and staying: deliver (and clear) any homepage handoff prompt
+        // that was preserved across the login redirect.
+        consumeLandingPrompt();
+      }
     });
   } catch (error) {
     console.warn('ROTEX auth init failed', error);
@@ -397,6 +418,10 @@ async function pollBridge() {
     state.pluginConnected = false;
     renderBridge({});
   }
+  // If the connect-plugin modal is waiting and Studio just connected, close it
+  // and fire off the message the user was trying to send.
+  if (state.pluginConnected && state.pluginPromptOpen) onPluginConnectedWhileWaiting();
+  else if (state.pluginPromptOpen) setPluginModalStatus(false);
 }
 
 async function checkPluginAndResume(pendingText = '', button = null, bubble = null) {
@@ -652,10 +677,11 @@ async function sendMessage(rawText, options = {}) {
   }
 
   // Every mode edits the game now, so the Studio plugin is always required.
+  // Pop the connect-plugin modal instead of sending; it auto-resumes this
+  // message once the plugin connects.
   if (!state.pluginConnected && options.allowPluginPrompt !== false) {
     if (!options.skipUserRender) addMessage('user', text);
-    if (!state.pluginPromptOpen) addPluginConnectPrompt(text);
-    else addMessage('assistant', 'Plugin still needs to connect first. Paste the bridge code into Studio, click Connect, then press Check Plugin.', 'status');
+    openPluginModal(text);
     els.input.value = '';
     autosizeInput();
     return;
@@ -812,6 +838,33 @@ function initEvents() {
     els.checkPlugin.disabled = false;
     els.checkPlugin.textContent = 'Check Plugin';
   });
+
+  // Connect-plugin modal controls
+  if (els.pluginModalClose) els.pluginModalClose.addEventListener('click', closePluginModal);
+  if (els.pluginModal) els.pluginModal.addEventListener('click', (e) => {
+    if (e.target === els.pluginModal) closePluginModal();
+  });
+  if (els.pluginModalCopy) els.pluginModalCopy.addEventListener('click', async () => {
+    await navigator.clipboard?.writeText(state.bridgeCode).catch(() => {});
+    els.pluginModalCopy.textContent = 'Copied';
+    setTimeout(() => { els.pluginModalCopy.textContent = 'Copy'; }, 900);
+  });
+  if (els.pluginModalCheck) els.pluginModalCheck.addEventListener('click', async () => {
+    const btn = els.pluginModalCheck;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span><span>Checking…</span>';
+    await pollBridge(); // its tail auto-resumes + closes the modal if connected
+    if (!state.pluginConnected) {
+      setPluginModalStatus(false);
+      els.pluginModalStatus.textContent = 'Not connected yet — check the code, then click Connect in Studio.';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<span>Check Plugin</span>';
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.pluginModal && !els.pluginModal.hidden) closePluginModal();
+  });
+
   els.signIn.addEventListener('click', signIn);
   els.signOut.addEventListener('click', signOut);
   els.model.addEventListener('change', () => localStorage.setItem('rotex_web_model', els.model.value));
@@ -829,21 +882,26 @@ function consumeLandingPrompt() {
   let prompt = '';
   try {
     const params = new URLSearchParams(window.location.search);
-    prompt = String(params.get('prompt') || '').slice(0, 2000);
-    if (prompt) {
+    const urlPrompt = String(params.get('prompt') || '').slice(0, 2000);
+    if (urlPrompt) {
+      // Stash in localStorage so the prompt survives the sign-in redirect
+      // (URL params are dropped when we bounce a signed-out user to /login).
+      localStorage.setItem('rotex_landing_prompt', urlPrompt);
       params.delete('prompt');
       const qs = params.toString();
       history.replaceState('', document.title, window.location.pathname + (qs ? `?${qs}` : ''));
     }
-    if (!prompt) {
-      prompt = String(localStorage.getItem('rotex_landing_prompt') || '').slice(0, 2000);
-    }
-    localStorage.removeItem('rotex_landing_prompt');
+    prompt = String(localStorage.getItem('rotex_landing_prompt') || '').slice(0, 2000);
+    // Only clear once a signed-in user is here to receive it — otherwise keep it
+    // through the login round-trip and deliver it when they come back.
+    if (prompt && state.user) localStorage.removeItem('rotex_landing_prompt');
   } catch {}
   if (!prompt || !els.input) return;
-  els.input.value = prompt;
-  els.input.focus();
-  try { els.input.setSelectionRange(prompt.length, prompt.length); } catch {}
+  if (!els.input.value) { // never clobber text the user has already typed
+    els.input.value = prompt;
+    els.input.focus();
+    try { els.input.setSelectionRange(prompt.length, prompt.length); } catch {}
+  }
 }
 
 async function init() {
