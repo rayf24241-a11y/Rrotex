@@ -38,6 +38,13 @@ const currentPlan = document.querySelector('#currentPlan');
 const authState = document.querySelector('#authState');
 const accountName = document.querySelector('#accountName');
 const accountEmail = document.querySelector('#accountEmail');
+const robloxLinkBtn = document.querySelector('#robloxLinkBtn');
+const robloxUnlinkBtn = document.querySelector('#robloxUnlinkBtn');
+const robloxLinked = document.querySelector('#robloxLinked');
+const robloxUsername = document.querySelector('#robloxUsername');
+const robloxId = document.querySelector('#robloxId');
+const robloxAvatar = document.querySelector('#robloxAvatar');
+const robloxMessage = document.querySelector('#robloxMessage');
 
 let auth = null;
 let db = null;
@@ -70,6 +77,8 @@ async function init() {
         await loadCreditBalance(user);
         await handleCheckoutReturn(user);
         await handleCreditCheckoutReturn(user);
+        await handleRobloxReturn(user); // capture an OAuth return before rendering
+        await renderRobloxLink(user);
       } else {
         creditBalance = readLocalCredits();
         renderCredits();
@@ -416,4 +425,99 @@ function firebaseMessage(error, fallback) {
   if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') return 'Email or password is not right.';
   if (code === 'auth/popup-closed-by-user') return 'Google login was closed before finishing.';
   return error?.message || fallback;
+}
+
+// ── Roblox account link (low-permission OAuth: identity only) ──────────────
+// Reads only the public Roblox profile (username + user id). The plugin uses
+// this to auto-pair with no bridge code once the Roblox OAuth app is set up.
+if (robloxLinkBtn) robloxLinkBtn.addEventListener('click', startRobloxLink);
+if (robloxUnlinkBtn) robloxUnlinkBtn.addEventListener('click', unlinkRoblox);
+
+async function startRobloxLink() {
+  if (!currentUser) { setRobloxMessage('Sign in first, then link your Roblox account.', true); return; }
+  setRobloxMessage('Opening Roblox…');
+  try {
+    const state = 'rx_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem('rotex_roblox_state', state);
+    const res = await fetch('/api/connect/roblox?state=' + encodeURIComponent(state));
+    const data = await res.json();
+    if (!data.configured) { setRobloxMessage(data.message || 'Roblox sign-in is not set up yet.', true); return; }
+    window.location.href = data.url;
+  } catch {
+    setRobloxMessage('Could not start Roblox sign-in. Try again.', true);
+  }
+}
+
+async function handleRobloxReturn(user) {
+  const hash = String(window.location.hash || '').replace(/^#/, '');
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  const err = params.get('roblox_error');
+  const payload = params.get('roblox');
+  if (!err && !payload) return;
+  // Clean the hash so a refresh can't re-process the return.
+  history.replaceState('', document.title, window.location.pathname + window.location.search);
+  if (err) { setRobloxMessage('Roblox link failed (' + err + '). Try again.', true); return; }
+  let profile = null;
+  try { profile = JSON.parse(atob(decodeURIComponent(payload))); } catch { profile = null; }
+  if (!profile || !profile.id) { setRobloxMessage('Roblox link failed. Try again.', true); return; }
+  // CSRF: the returned state must match the nonce this browser started with.
+  const expected = sessionStorage.getItem('rotex_roblox_state') || '';
+  sessionStorage.removeItem('rotex_roblox_state');
+  if (expected && profile.state && profile.state !== expected) {
+    setRobloxMessage('Roblox link could not be verified. Try again.', true);
+    return;
+  }
+  const link = {
+    id: String(profile.id),
+    username: String(profile.username || ''),
+    display: String(profile.display || ''),
+    picture: String(profile.picture || ''),
+    linkedAt: serverTimestamp(),
+  };
+  try {
+    localStorage.setItem('rotex_roblox_link', JSON.stringify({ id: link.id, username: link.username, display: link.display, picture: link.picture }));
+  } catch {}
+  if (db && user) {
+    try { await setDoc(doc(db, 'users', user.uid, 'connections', 'roblox'), link, { merge: true }); } catch {}
+  }
+  setRobloxMessage('Roblox account linked! The Studio plugin can now connect with no code.');
+}
+
+async function renderRobloxLink(user) {
+  if (!robloxLinked || !robloxLinkBtn) return;
+  let link = null;
+  if (db && user) {
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid, 'connections', 'roblox'));
+      if (snap.exists()) link = snap.data();
+    } catch {}
+  }
+  if (!link || !link.id) {
+    try { link = JSON.parse(localStorage.getItem('rotex_roblox_link') || 'null'); } catch { link = null; }
+  }
+  const linked = Boolean(link && link.id);
+  robloxLinked.hidden = !linked;
+  robloxUnlinkBtn.hidden = !linked;
+  robloxLinkBtn.textContent = linked ? 'Relink Roblox account' : 'Link Roblox account';
+  if (linked) {
+    robloxUsername.textContent = link.display || link.username || ('User ' + link.id);
+    robloxId.textContent = link.id;
+    if (robloxAvatar) robloxAvatar.src = link.picture || '';
+  }
+}
+
+async function unlinkRoblox() {
+  try { localStorage.removeItem('rotex_roblox_link'); } catch {}
+  if (db && currentUser) {
+    try { await setDoc(doc(db, 'users', currentUser.uid, 'connections', 'roblox'), { id: '', username: '', display: '', picture: '', unlinkedAt: serverTimestamp() }, { merge: true }); } catch {}
+  }
+  setRobloxMessage('Roblox account unlinked.');
+  await renderRobloxLink(currentUser);
+}
+
+function setRobloxMessage(text, error = false) {
+  if (!robloxMessage) return;
+  robloxMessage.textContent = text;
+  robloxMessage.classList.toggle('error', Boolean(error));
 }

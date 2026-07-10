@@ -20,6 +20,8 @@ const routes = {
   '/api/models': './api/models.js',
   '/api/chat': './api/chat.js',
   '/api/plugin-bridge': './api/chat.js',
+  '/api/connect/roblox': './api/connect/roblox.js',
+  '/api/connect/roblox-callback': './api/connect/roblox-callback.js',
 };
 
 http.createServer(async (request, response) => {
