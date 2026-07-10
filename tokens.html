@@ -220,6 +220,32 @@
       .success-banner.show { display: block; }
       .success-banner strong { color: #4ADE80; font-size: 16px; }
       .success-banner p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+      /* ── Model cost table ─────────────────────────────────────────── */
+      .cost-section { margin-top: 44px; }
+      .cost-section h2 { font-size: 22px; margin-bottom: 6px; }
+      .cost-section > p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+      .cost-table-wrap {
+        border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+        overflow-x: auto; background: rgba(255,255,255,0.02);
+        animation: cost-rise .7s cubic-bezier(.22,.9,.3,1) both;
+      }
+      @keyframes cost-rise { from { opacity: 0; transform: translateY(16px); } }
+      .cost-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 520px; }
+      .cost-table th, .cost-table td { padding: 13px 16px; text-align: left; white-space: nowrap; }
+      .cost-table thead th {
+        font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+        color: var(--muted); border-bottom: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.03);
+      }
+      .cost-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); transition: background .15s; }
+      .cost-table tbody tr:last-child { border-bottom: none; }
+      .cost-table tbody tr:hover { background: rgba(255,214,10,0.04); }
+      .cost-table td:first-child { font-weight: 700; }
+      .cost-table .tt { color: #FFD60A; font-weight: 700; }
+      .cost-table .model-sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+      .cost-note { margin-top: 12px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+      @media (prefers-reduced-motion: reduce) { .cost-table-wrap { animation: none; } }
     </style>
   </head>
   <body>
@@ -235,7 +261,7 @@
       <p class="eyebrow">TexTokens</p>
       <h1>Buy more tokens.</h1>
       <p class="subtitle">TexTokens power every AI message you send in ROTEX.</p>
-      <span class="rate-note"><strong>$2.50 = 1M TexTokens</strong> — any whole dollar amount, minimum $5</span>
+      <span class="rate-note"><strong>$1 = 2 TexTokens</strong> — any whole dollar amount, minimum $5</span>
 
       <div id="successBanner" class="success-banner">
         <strong id="successMsg">TexTokens added!</strong>
@@ -260,20 +286,59 @@
         <div id="signedInState" hidden>
           <div class="custom-section">
             <h2>Choose your amount</h2>
-            <p>Every $2.50 adds 1M TexTokens. Minimum $5, maximum $500.</p>
+            <p>Every $1 adds 2 TexTokens. Minimum $5, maximum $500.</p>
             <div class="amount-row">
               <div class="dollar-wrap">
                 <input id="dollarInput" type="number" min="5" max="500" step="1" value="10" />
               </div>
               <div class="token-preview">
-                <span id="tokenPreview">4M</span> TexTokens
-                <span class="sub" id="tokenSub">≈ 4,000,000</span>
+                <span id="tokenPreview">20</span> TexTokens
+                <span class="sub" id="tokenSub">$1 = 2 TexTokens</span>
               </div>
             </div>
             <button class="buy-btn" id="buyBtn" type="button">Buy TexTokens — $10</button>
             <p class="msg" id="buyMsg"></p>
           </div>
         </div>
+      </div>
+
+      <div class="cost-section" id="costs">
+        <h2>What each model costs</h2>
+        <p>Approximate TexTokens per message — longer chats and bigger builds cost more.</p>
+        <div class="cost-table-wrap">
+          <table class="cost-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Quick chat</th>
+                <th>Full build</th>
+                <th>Agent</th>
+                <th>Super Agent</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Google Flash<span class="model-sub">Gemini 3.5 Flash · Smart Mode default</span></td>
+                <td><span class="tt">~1</span></td>
+                <td><span class="tt">~3.5</span></td>
+                <td><span class="tt">~14</span></td>
+                <td><span class="tt">~28</span></td>
+              </tr>
+              <tr>
+                <td>Claude Haiku<span class="model-sub">Claude Haiku 4.5 · best quality</span></td>
+                <td><span class="tt">~0.4</span></td>
+                <td><span class="tt">~1.4</span></td>
+                <td><span class="tt">~5.5</span></td>
+                <td><span class="tt">~11</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="cost-note">
+          Quick chat ≈ a short question and answer. Full build ≈ a complete script or system in the editor.
+          Agent and Super Agent do real extra work per request (retry cascades, deeper reasoning, much larger project context), so they cost 4× and 8× a normal build.
+          3D modeling actions add 1.5× on top. Free plan: <strong>5 TexTokens/day · 25/month</strong>. Pro: <strong>35/day · 350/week</strong>.
+        </p>
       </div>
     </div>
 
@@ -282,7 +347,11 @@
       import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
       import { getFirestore, doc, getDoc, setDoc, increment, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
-      const TOKENS_PER_DOLLAR = 400_000; // $2.50 = 1M
+      // $1 = 2 displayed TexTokens. Internally 1 TexToken = 30,000 units
+      // (matches TT_UNIT in api/chat.js + create-checkout-session.js); the
+      // wallet keeps internal units so old balances stay worth the same.
+      const TT_UNIT = 30_000;
+      const TOKENS_PER_DOLLAR = 2 * TT_UNIT;
       const FIREBASE_API_KEY = 'AIzaSyBKg2g-hnMMLflCoDNkG810qRlIWktQ3oY';
 
       let auth, db, currentUser, desktopAuth;
@@ -433,11 +502,10 @@
 
       function updatePreview() {
         const d = getDollars();
-        const tokens = d ? d * TOKENS_PER_DOLLAR : 0;
-        const millions = tokens / 1_000_000;
-        tokenPreview.textContent = d ? (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M' : '—';
-        tokenSub.textContent     = d ? `≈ ${tokens.toLocaleString()}` : '';
-        buyBtn.textContent       = d ? `Buy TexTokens — $${d}` : 'Choose an amount';
+        const tt = d ? (d * TOKENS_PER_DOLLAR) / TT_UNIT : 0;
+        tokenPreview.textContent = d ? String(tt) : '—';
+        tokenSub.textContent     = d ? '$1 = 2 TexTokens' : '';
+        buyBtn.textContent       = d ? `Buy ${tt} TexTokens — $${d}` : 'Choose an amount';
         buyBtn.disabled          = !d;
       }
 
@@ -516,8 +584,7 @@
             } catch { /* Firestore update failed; localStorage is fallback */ }
           }
 
-          const millions = bal / 1_000_000;
-          const label    = (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M';
+          const label = (bal / TT_UNIT).toFixed(1).replace(/\.0$/, '');
           showSuccess(`${label} TexTokens added!`, 'Your balance has been updated.');
           if (cbPort) notifyDesktop(cbPort, { balance: next });
           history.replaceState('', document.title, '/tokens');

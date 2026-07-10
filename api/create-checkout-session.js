@@ -1,6 +1,10 @@
 const { verifyProPass } = require('./_lib/propass.js');
 
-const TOKENS_PER_DOLLAR = 400_000; // $2.50 per 1M tokens
+// 2026-07 re-denomination: $1 = 2 displayed TexTokens. Internally 1 displayed
+// TexToken = 30,000 units (see TT_UNIT in api/chat.js), so $1 credits 60k
+// internal units to the wallet. Existing balances keep their internal value.
+const TT_UNIT = 30_000;
+const TOKENS_PER_DOLLAR = 2 * TT_UNIT; // $1 = 2 TexTokens
 const PRO_PRICE_CENTS = 2000; // $20 - one-time charge, grants 30 days of Pro
 
 module.exports = async function handler(request, response) {
@@ -100,7 +104,7 @@ module.exports = async function handler(request, response) {
     body = new URLSearchParams({
       mode: 'payment',
       'line_items[0][price_data][currency]': 'usd',
-      'line_items[0][price_data][product_data][name]': `${(texTokens / 1_000_000).toFixed(1)}M ROTEX TexTokens`,
+      'line_items[0][price_data][product_data][name]': `${texTokens / TT_UNIT} ROTEX TexTokens`,
       'line_items[0][price_data][unit_amount]': String(amount * 100),
       'line_items[0][quantity]': '1',
       success_url: `${origin}/account?credits=success&session_id={CHECKOUT_SESSION_ID}${desktopCallbackQuery}`,

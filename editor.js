@@ -173,7 +173,8 @@
   })();
 
   function dailyTexTokenLimit() {
-    return userIsPro ? 1000000 : 150000;
+    // Internal units: 35 TT / 5 TT per day (1 displayed TexToken = 30k units).
+    return userIsPro ? 1050000 : 150000;
   }
 
   function extraTexTokens() {
@@ -484,11 +485,18 @@
     return Math.round(base * multiplier);
   }
 
+  // Display conversion: 1 shown TexToken = 30k internal units (TT_UNIT in api/chat.js).
+  function fmtTexTokens(internal) {
+    if (window.rotexTokens?.formatTT) return window.rotexTokens.formatTT(internal);
+    const tt = Math.max(0, Number(internal) || 0) / 30000;
+    return tt >= 100 ? String(Math.round(tt)) : Math.max(tt, tt > 0 ? 0.1 : 0).toFixed(1).replace(/\.0$/, '');
+  }
+
   function updateCostPreview() {
     if (!aiCostPreview) return;
     const estimate = estimateTaskCost();
     const mode = state.superAgentMode ? 'Super Agent' : state.agentMode ? 'Agent' : 'Chat';
-    aiCostPreview.textContent = `${state.projectMode} · ${mode} · est. ${estimate.toLocaleString()} TexTokens`;
+    aiCostPreview.textContent = `${state.projectMode} · ${mode} · est. ${fmtTexTokens(estimate)} TexTokens`;
   }
 
   function confirmLargeTaskIfNeeded() {
@@ -499,7 +507,7 @@
     }
     if (state.aiModel === 'pro-smart' && !confirm('Claude Haiku costs more TexTokens. Continue?')) return false;
     if (estimate <= 250000) return true;
-    return confirm(`This task is estimated to cost ${estimate.toLocaleString()} TexTokens. Tasks over 250k require confirmation. Run it?`);
+    return confirm(`This task is estimated to cost ${fmtTexTokens(estimate)} TexTokens. Big tasks (over ${fmtTexTokens(250000)}) need confirmation. Run it?`);
   }
 
   // Agent mode toggle: Pro multi-file edits in one reply.

@@ -42,7 +42,7 @@ async function checkCreditSafety({ selected, provider, model, userId, estimate, 
   const balance = providerBalanceUsd();
   const providerBusyText = 'The selected AI route is temporarily unavailable. Try again now, or switch models for this message.';
   const outText = isPro
-    ? "You've used your 1M TexTokens daily limit. Come back tomorrow, or buy more at rrotex.com/tokens."
+    ? "You've used your 35 TexTokens daily limit. Come back tomorrow, or buy more at rrotex.com/tokens."
     : 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.';
   if (texTokensLeft != null && Number.isFinite(Number(texTokensLeft)) && Number(texTokensLeft) <= 0) {
     return {

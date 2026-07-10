@@ -18,8 +18,16 @@ const {
 // function limit). Stored at users/{uid}/billing/usage, written with the user's
 // own ID token. Fail-open: any failure returns null and the caller falls back
 // to the in-memory limiter.
-const FREE_MONTHLY = 1_000_000;
-const PRO_MONTHLY  = 20_000_000;
+// ── 2026-07 TexToken re-denomination ────────────────────────────────────
+// 1 displayed TexToken = 30,000 internal units. Storage (Firestore usage
+// docs, the KV wallet, per-request estimates) STAYS in internal units so
+// existing balances keep their value — only plan caps and display strings
+// changed. Free daily is the same real compute it always was (5 TT =
+// 150k internal); the monthly/Pro caps were deliberately tightened.
+const TT_UNIT = 30_000;
+const FREE_MONTHLY = 25 * TT_UNIT;  // "25 TexTokens/month" (was 1M internal)
+const PRO_DAILY    = 35 * TT_UNIT;  // "35 TexTokens/day"   (was 1M internal, client-side only)
+const PRO_WEEKLY   = 350 * TT_UNIT; // "350 TexTokens/week" (replaces the old 20M/30d cap)
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'rotex-e0be7';
 function _usageDocUrl(uid) {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/usage`;
@@ -28,16 +36,22 @@ function _fsNum(field) { if (!field) return 0; return Math.max(0, Math.floor(Num
 function _fsStr(field) { return field?.stringValue || ''; }
 function _dayKey()   { return new Date().toISOString().slice(0, 10); }
 function _monthKey() { return new Date().toISOString().slice(0, 7); }
+function _weekKey()  { // UTC Monday of the current week — Pro's weekly cap window
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
 async function readUsage(uid, authToken) {
   if (!uid || !authToken || !FIREBASE_PROJECT_ID) return null;
   try {
     const res = await fetch(_usageDocUrl(uid), { headers: { Authorization: `Bearer ${authToken}` } });
-    if (res.status === 404) return { dayUsed: 0, monthUsed: 0 };
+    if (res.status === 404) return { dayUsed: 0, weekUsed: 0, monthUsed: 0 };
     if (!res.ok) return null;
     const doc = await res.json();
     const f = doc.fields || {};
     return {
       dayUsed:   _fsStr(f.dayKey)   === _dayKey()   ? _fsNum(f.dayUsed)   : 0,
+      weekUsed:  _fsStr(f.weekKey)  === _weekKey()  ? _fsNum(f.weekUsed)  : 0,
       monthUsed: _fsStr(f.monthKey) === _monthKey() ? _fsNum(f.monthUsed) : 0,
     };
   } catch { return null; }
@@ -59,15 +73,17 @@ async function readBalance(uid, authToken) {
 async function addUsage(uid, authToken, amount) {
   if (!uid || !authToken || !FIREBASE_PROJECT_ID || !(amount > 0)) return;
   try {
-    const cur = (await readUsage(uid, authToken)) || { dayUsed: 0, monthUsed: 0 };
+    const cur = (await readUsage(uid, authToken)) || { dayUsed: 0, weekUsed: 0, monthUsed: 0 };
     const body = { fields: {
       dayKey:    { stringValue: _dayKey() },
       dayUsed:   { integerValue: String(cur.dayUsed + amount) },
+      weekKey:   { stringValue: _weekKey() },
+      weekUsed:  { integerValue: String((cur.weekUsed || 0) + amount) },
       monthKey:  { stringValue: _monthKey() },
       monthUsed: { integerValue: String(cur.monthUsed + amount) },
       updatedAt: { timestampValue: new Date().toISOString() },
     } };
-    const mask = ['dayKey', 'dayUsed', 'monthKey', 'monthUsed', 'updatedAt'].map((k) => 'updateMask.fieldPaths=' + k).join('&');
+    const mask = ['dayKey', 'dayUsed', 'weekKey', 'weekUsed', 'monthKey', 'monthUsed', 'updatedAt'].map((k) => 'updateMask.fieldPaths=' + k).join('&');
     await fetch(`${_usageDocUrl(uid)}?${mask}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
@@ -149,7 +165,7 @@ function noTokensText(proPass, isPro, hasPurchased) {
   if (hasPurchased) {
     return "You've used all your TexTokens for today. Buy more at rrotex.com/tokens.";
   }
-  return "You've used your 150k free TexTokens daily limit. Come back tomorrow, or buy more at rrotex.com/tokens.";
+  return "You've used your 5 free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.";
 }
 
 function getFreeTokensUsed(key) {
@@ -471,42 +487,44 @@ async function tbOrPost(endpoint, body, timeoutMs = 25000) {
 const PROJECT_SPEC_CAP = 4000; // matches the projectMemory cap in buildEditorSystemPrompt
 const PLANNER_PLAN_CAP = 3000;
 
-function buildPlannerPrompt(currentSpec, userMessage, projectMode) {
+function buildPlannerPrompt(currentSpec, userMessage, projectMode, recentContext) {
   const spec = String(currentSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
   const message = String(userMessage || '').trim().slice(0, 4000);
+  const recent = String(recentContext || '').trim().slice(0, 2200);
   return [
     {
       role: 'system',
       content: [
-        'You are the ROTEX Free Planner Coach: a hidden planning AI that tells the main coding AI exactly what to do. For every user request, create a plan using these 5 upgrades:',
+        'You are the ROTEX Free Planner Coach: a hidden planning AI that tells the main coding AI exactly what to do. For every user request, create a plan using these 6 upgrades:',
         '1. Understand the real goal: explain what the user is actually trying to do in 1-2 sentences. If they are vague, make the best safe assumption and continue.',
         '2. Break it into steps: a short numbered TODO list. Each step simple, clear, and in the correct order.',
         '3. Choose the right mode. Pick exactly one: Roblox coding, Unity coding, Website coding, UI/design, Debugging, AI app builder, Asset/model help, Business/plans, General answer.',
         '4. Add context the main AI needs: the important details, files, scripts, bugs, tools, limits, and style it should remember. Do not include useless info.',
-        '5. Check before finishing: a verification checklist so the main AI can test its work, find bugs, and improve the answer before sending it.',
-        'You ALSO maintain the living PROJECT SPEC: a Markdown design brief for the whole project (one "# TITLE" line then "* bullet" lines, one short feature per bullet).',
+        '5. Search the PROJECT SPEC and RECENT CONVERSATION for plans and ideas: connect this request to what already exists (reuse names, systems, and decisions instead of inventing new ones), flag anything this change could break, and suggest 1-3 concrete NEXT IDEAS the user would probably want after this (small, buildable, matching the project — never generic filler).',
+        '6. Check before finishing: a verification checklist so the main AI can test its work, find bugs, and improve the answer before sending it.',
+        'You ALSO maintain the living PROJECT SPEC: a Markdown design brief for the whole project (one "# TITLE" line then "* bullet" lines, one short feature per bullet). Keep it updated on EVERY pass so it always reflects the full picture of the game.',
         'Spec rules: if the message introduces NO new project scope (a question, bug report, or tweak to something already listed), return the CURRENT SPEC completely unchanged, character for character. If it introduces new scope, merge it in -- add or rewrite affected bullets, keep unrelated bullets exactly as they were, never append duplicates. If CURRENT SPEC is empty and the message describes something to build, create a fresh spec with a short # TITLE and 2-6 bullets capturing only what was actually said. If CURRENT SPEC is empty and nothing is being built, output (none) for that section.',
         'Output EXACTLY this format, nothing else -- no preamble, no closing remarks, no code fences, no <think> tags:',
-        'REAL GOAL:\n[what the user wants]\n\nMODE:\n[chosen mode]\n\nTODO PLAN:\n1. [step]\n2. [step]\n3. [step]\n\nIMPORTANT CONTEXT:\n- [detail]\n- [detail]\n\nVERIFY BEFORE FINAL:\n- Does it actually solve what the user asked for?\n- Did it use the right mode (code vs prompt vs plan vs advice)?\n- Is it beginner-friendly and not too long?\n- Does it say where each file/script goes?\n- Are any files, scripts, or steps missing?\n- Could it break Roblox/Unity/website code?\n- Did it avoid guessing, and offer a better option if one exists?\n- Is the final answer ready to paste/use?\n\nPROJECT SPEC:\n# TITLE\n* bullet\n* bullet',
+        'REAL GOAL:\n[what the user wants]\n\nMODE:\n[chosen mode]\n\nTODO PLAN:\n1. [step]\n2. [step]\n3. [step]\n\nIMPORTANT CONTEXT:\n- [detail]\n- [detail]\n\nNEXT IDEAS:\n- [concrete idea that fits this project]\n- [concrete idea that fits this project]\n\nVERIFY BEFORE FINAL:\n- Does it actually solve what the user asked for?\n- Did it use the right mode (code vs prompt vs plan vs advice)?\n- Is it beginner-friendly and not too long?\n- Does it say where each file/script goes?\n- Are any files, scripts, or steps missing?\n- Could it break Roblox/Unity/website code?\n- Does it fit the existing project spec and reuse existing systems?\n- Did it avoid guessing, and offer a better option if one exists?\n- Is the final answer ready to paste/use?\n\nPROJECT SPEC:\n# TITLE\n* bullet\n* bullet',
       ].join('\n'),
     },
     {
       role: 'user',
-      content: `PROJECT ENGINE: ${String(projectMode || 'Roblox')}\n\nCURRENT SPEC:\n${spec || '(none yet)'}\n\nUSER'S LATEST MESSAGE:\n${message}\n\nNow create the plan for this user request.`,
+      content: `PROJECT ENGINE: ${String(projectMode || 'Roblox')}\n\nCURRENT SPEC:\n${spec || '(none yet)'}\n\nRECENT CONVERSATION (oldest first, condensed):\n${recent || '(none)'}\n\nUSER'S LATEST MESSAGE:\n${message}\n\nNow create the plan for this user request.`,
     },
   ];
 }
 
 // Never throws; on ANY failure (timeout, HTTP error, empty or shape-invalid
 // output) returns { plan: '', spec: <unchanged current spec> }.
-async function generatePlannerBrief(currentSpec, userMessage, projectMode) {
+async function generatePlannerBrief(currentSpec, userMessage, projectMode, recentContext) {
   const fallbackSpec = String(currentSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
   const fallback = { plan: '', spec: fallbackSpec };
   try {
     const result = await tbOrPost('/chat/completions', {
       model: process.env.PROJECT_SPEC_MODEL || 'qwen/qwen3-coder:free',
-      messages: buildPlannerPrompt(fallbackSpec, userMessage, projectMode),
-      max_tokens: 1200,
+      messages: buildPlannerPrompt(fallbackSpec, userMessage, projectMode, recentContext),
+      max_tokens: 1400,
       temperature: 0.3,
     }, 7000); // trimmed 9s -> 7s: the free planner model is usually 1-4s, so this
               // cuts worst-case added latency before the real answer with no
@@ -1041,15 +1059,29 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  // Monthly cap (free 1M, Pro 20M). Only enforced when we have a real reading.
+  // Plan caps beyond the free daily budget. Only enforced with a real reading.
+  // Free: 25 TexTokens/month. Pro: 35/day + 350/week — now fully server-side
+  // (the old 1M/day Pro limit was only ever enforced by the client).
   if (!isDev && serverUsage) {
-    const monthlyLimit = isPro ? PRO_MONTHLY : FREE_MONTHLY;
-    if (serverUsage.monthUsed >= monthlyLimit) {
+    if (isPro) {
+      if (serverUsage.dayUsed >= PRO_DAILY) {
+        response.status(402).json({
+          error: 'no_textokens',
+          text: "You've used your 35 daily TexTokens. They reset tomorrow (UTC), or add a pack at rrotex.com/tokens.",
+        });
+        return;
+      }
+      if ((serverUsage.weekUsed || 0) >= PRO_WEEKLY) {
+        response.status(402).json({
+          error: 'no_textokens',
+          text: "You've used your 350 weekly TexTokens. They reset Monday (UTC), or add a pack at rrotex.com/tokens.",
+        });
+        return;
+      }
+    } else if (serverUsage.monthUsed >= FREE_MONTHLY) {
       response.status(402).json({
         error: 'no_textokens',
-        text: isPro
-          ? "You've used your 20M monthly TexTokens. They reset next month, or add a pack at rrotex.com/tokens."
-          : "You've used your 1M monthly free TexTokens. Upgrade to Pro for 20M/month at rrotex.com/pro.",
+        text: "You've used your 25 monthly free TexTokens. Upgrade to Pro for 35/day at rrotex.com/pro.",
       });
       return;
     }
@@ -1198,17 +1230,18 @@ module.exports = async function handler(request, response) {
         : CATEGORIES[routeCategory(lastUser?.content || '', { projectMode }).category])
     : null;
 
-  // ROTEX Free Planner Coach pre-pass: runs for every real google-flash
-  // editor request (the user-facing default model), skipping only trivial
-  // greetings and the 'replace'-mode categories (Prompt Maker/Fast Explain
-  // are deliberately lean prompts that don't consume the plan). Awaited here
-  // so the result rides in the same system prompt built just below;
-  // generatePlannerBrief never throws and hard-caps at 9s, so the
-  // google-flash cascade's timeout budget under Vercel's 90s ceiling stays
-  // safe. Other models (Claude Haiku, TexBrain) are untouched.
+  // ROTEX Free Planner Coach pre-pass: runs for EVERY real editor request on
+  // every model (Google Flash, Claude Haiku) — the planner itself is a free
+  // model, so this adds zero provider cost. It plans the work, mines the
+  // living spec + recent conversation for connected ideas, and updates the
+  // spec on every pass. Skips only trivial greetings and the 'replace'-mode
+  // categories (Prompt Maker/Fast Explain are deliberately lean prompts that
+  // don't consume the plan). Awaited here so the result rides in the same
+  // system prompt built just below; generatePlannerBrief never throws and
+  // hard-caps at 7s, so the cascade's timeout budget under Vercel's 90s
+  // ceiling stays safe on every route.
   const trivialMessage = /^\s*(hi|hello|hey|yo|ok|okay|thanks|thank you|cool|nice|yes|no|lol|bruh|uhm|hmm)[.!?\s]*$/i.test(String(lastUser?.content || ''));
   const plannerEligible = isEditor
-    && modelId === 'google-flash'
     && !trivialMessage
     && String(lastUser?.content || '').trim().length >= 8
     && (!resolvedCategory || resolvedCategory.promptMode !== 'replace');
@@ -1216,7 +1249,15 @@ module.exports = async function handler(request, response) {
   let plannerPlanText = '';
   let projectSpecGenerated = false;
   if (plannerEligible) {
-    const brief = await generatePlannerBrief(projectSpecText, lastUser?.content || '', projectMode);
+    // Condensed recent turns (excluding the latest user message, sent
+    // separately) so the planner can search the conversation for plans and
+    // ideas already in flight instead of planning each message in a vacuum.
+    const recentContext = cleanMessages
+      .filter((m) => m.role !== 'system')
+      .slice(-7, -1)
+      .map((m) => `${m.role === 'user' ? 'USER' : 'ROTEX'}: ${String(m.content || '').replace(/\s+/g, ' ').slice(0, 320)}`)
+      .join('\n');
+    const brief = await generatePlannerBrief(projectSpecText, lastUser?.content || '', projectMode, recentContext);
     plannerPlanText = brief.plan;
     projectSpecText = brief.spec;
     projectSpecGenerated = true;
@@ -1249,11 +1290,11 @@ module.exports = async function handler(request, response) {
         'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
         'Never start a response with "Certainly", "Sure", "Of course", "Absolutely", or similar filler.',
         'Use Markdown in your responses: **bold** for emphasis, `code` for inline code, fenced code blocks for multi-line code.',
-        'When asked what models are available or to list the models, output EXACTLY these two lines and nothing else — no intro, no outro:\n**TexBrain Thinking-beta** (Free, 2.4x TexTokens/output token) — Balanced\n**Claude Haiku** (Claude Haiku 4.5, Free, 16x TexTokens/output token) — Expensive',
+        'When asked what models are available or to list the models, output EXACTLY these two lines and nothing else — no intro, no outro:\n**TexBrain Thinking-beta** (Free, ~0.2 TexTokens per answer) — Balanced\n**Claude Haiku** (Claude Haiku 4.5, Free, ~0.5-1.5 TexTokens per answer) — Best quality',
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
         `ROTEX model ranking: 1st Claude Haiku (best quality) → 2nd TexBrain Thinking-beta (balanced Roblox-focused model). If asked which is best: Claude Haiku. If asked which is cheaper: TexBrain Thinking-beta.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a desktop and web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 150k TexTokens/day, 1M/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 20M TexTokens/30 days, 1M/day, agent mode, 5 projects. Extra packs: $2.50 per 1M TexTokens.',
+        'ROTEX is a web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 5 TexTokens/day, 25/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 35 TexTokens/day, 350/week, agent mode, 5 projects. Extra packs: $1 = 2 TexTokens. ROTEX is focused on coding today; 3D asset generation and advanced GUI building are planned for the future.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',

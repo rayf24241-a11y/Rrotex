@@ -2,8 +2,15 @@
 (function () {
   'use strict';
 
-  var FREE_DAILY_BASE = 150000;
-  var PRO_DAILY_BASE = 1000000;
+  // Internal units. 1 displayed TexToken = 30,000 internal units (matches
+  // TT_UNIT in api/chat.js). All math/storage stays internal; only formatTT
+  // converts for display, so every balance readout site-wide re-denominated
+  // in one place.
+  var TT_UNIT = 30000;
+  var FREE_DAILY_BASE = 5 * TT_UNIT;    // "5 TexTokens/day"
+  var PRO_DAILY_BASE  = 35 * TT_UNIT;   // "35 TexTokens/day"
+  var FREE_MONTHLY    = 25 * TT_UNIT;   // "25 TexTokens/month"
+  var PRO_WEEKLY      = 350 * TT_UNIT;  // "350 TexTokens/week"
 
   // Matches the server's _dayKey()/_today() exactly (api/chat.js): UTC
   // calendar date, not the browser's local timezone. This local fallback
@@ -31,15 +38,16 @@
     return isProUser() ? PRO_DAILY_BASE : FREE_DAILY_BASE;
   }
 
+  // Converts an INTERNAL amount to displayed TexTokens ("5", "3.2", "0.4").
+  // One decimal below 100, whole numbers above; sub-0.05 non-zero amounts
+  // show as "0.1" so a real remaining balance never displays as zero.
   function formatTT(n) {
-    n = Math.max(0, Math.floor(Number(n) || 0));
-    if (n >= 1_000_000) {
-      var m = n / 1_000_000;
-      var s = Number.isInteger(m) ? String(m) : m.toFixed(2).replace(/\.?0+$/, '');
-      return s + 'M';
-    }
-    if (n >= 1_000) return Math.round(n / 1_000) + 'K';
-    return String(n);
+    n = Math.max(0, Number(n) || 0);
+    var tt = n / TT_UNIT;
+    if (tt === 0) return '0';
+    if (tt >= 100) return String(Math.round(tt));
+    var s = (Math.max(tt, 0.1)).toFixed(1).replace(/\.0$/, '');
+    return s;
   }
 
   function getPurchased() {
@@ -64,11 +72,16 @@
     return Math.max(0, getDailyAllowance() - getSpentToday());
   }
 
-  // Free 1M / Pro 20M monthly cap remaining, from the server. null if unknown.
+  // Plan-window remaining, from the server. Free: 25 TT/month. Pro: 350
+  // TT/week. Returns null if server usage is unknown.
   function getMonthlyRemaining() {
     var su = getServerUsage();
     if (!su) return null;
-    var limit = isProUser() ? (Number(su.proMonthly) || 20000000) : (Number(su.freeMonthly) || 1000000);
+    if (isProUser()) {
+      var weekLimit = Number(su.proWeekly) || PRO_WEEKLY;
+      return Math.max(0, weekLimit - (Number(su.weekUsed) || 0));
+    }
+    var limit = Number(su.freeMonthly) || FREE_MONTHLY;
     return Math.max(0, limit - (Number(su.monthUsed) || 0));
   }
 
@@ -140,7 +153,7 @@
     var parts = [];
     if (purchased > 0) parts.push(formatTT(purchased) + ' purchased');
     parts.push(formatTT(free) + ' free today');
-    if (monthly != null) parts.push(formatTT(monthly) + ' left this month');
+    if (monthly != null) parts.push(formatTT(monthly) + (isProUser() ? ' left this week' : ' left this month'));
     el.title = parts.join(' · ');
   }
 

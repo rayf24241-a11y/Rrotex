@@ -46,7 +46,10 @@ module.exports = async function handler(request, response) {
 
   if (session.metadata?.kind === 'textokens') {
     const dollars = Math.floor(Number(session.metadata?.dollars || 0));
-    const texTokens = Math.floor(Number(session.metadata?.textokens || dollars * 1000000));
+    // Fallback matches create-checkout-session.js: $1 = 2 TexTokens = 60k
+    // internal units (the old fallback of $1 = 1M internal would massively
+    // over-credit under the 2026-07 re-denomination).
+    const texTokens = Math.floor(Number(session.metadata?.textokens || dollars * 60_000));
     if (!dollars || !texTokens) {
       response.status(400).json({ verified: false, message: 'Credit checkout is missing token metadata.' });
       return;
@@ -60,8 +63,7 @@ module.exports = async function handler(request, response) {
     await credit(uid, session.id, texTokens);
 
     const buyerEmail = session.metadata?.email || session.customer_details?.email || '';
-    const millions = texTokens / 1_000_000;
-    const tokenLabel = (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M';
+    const tokenLabel = (texTokens / 30_000).toFixed(1).replace(/\.0$/, ''); // display TexTokens
     await sendEmail({
       to: buyerEmail,
       subject: 'Your ROTEX TexTokens purchase',

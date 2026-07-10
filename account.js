@@ -344,7 +344,7 @@ function normalizedCreditDollars() {
 
 function renderCreditPreview() {
   const dollars = normalizedCreditDollars();
-  const tokens = dollars ? Math.floor((dollars / 2.5) * 1_000_000) : 0;
+  const tokens = dollars ? dollars * 2 * TT_UNIT : 0; // $1 = 2 TexTokens
   creditPreview.textContent = dollars ? `${formatTokens(tokens)} TexTokens` : 'Choose $5–$500';
 }
 
@@ -381,13 +381,15 @@ function writeLocalCredits(amount) {
   localStorage.setItem('rotex_textokens_balance', String(Math.max(0, Math.floor(amount))));
 }
 
+// 1 displayed TexToken = 30,000 internal units (TT_UNIT in api/chat.js).
+// Balances are stored internal; only display converts.
+const TT_UNIT = 30000;
 function formatTokens(value) {
-  const amount = Math.max(0, Math.floor(Number(value) || 0));
-  if (amount >= 1000000) {
-    const millions = amount / 1000000;
-    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M`;
-  }
-  return amount.toLocaleString();
+  const internal = Math.max(0, Number(value) || 0);
+  const tt = internal / TT_UNIT;
+  if (tt === 0) return '0';
+  if (tt >= 100) return String(Math.round(tt));
+  return Math.max(tt, 0.1).toFixed(1).replace(/\.0$/, '');
 }
 
 

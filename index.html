@@ -206,9 +206,76 @@
       .lead { max-width: 560px; color: var(--muted); font-size: clamp(16px, 1.8vw, 19px); line-height: 1.65; }
       .lead strong { color: var(--text); font-weight: 600; }
 
-      .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
       .mini-note { margin-top: 14px; color: var(--quiet); font-size: 13px; display: flex; align-items: center; gap: 7px; }
       .mini-note::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); }
+
+      /* ── Live hero prompt: type here, land in the app with it ── */
+      .hero-prompt { margin-top: 28px; }
+      .hero-prompt-box {
+        position: relative;
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 6px 6px 16px;
+        border-radius: 16px;
+        border: 1px solid var(--border-2);
+        background: rgba(10,13,22,0.75);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 20px 50px -20px rgba(0,0,0,0.8), 0 0 0 0 var(--accent-d);
+        transition: border-color .2s, box-shadow .25s, transform .2s;
+      }
+      .hero-prompt-box:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 20px 50px -20px rgba(0,0,0,0.8), 0 0 0 4px var(--accent-d), 0 0 44px -10px var(--accent-g);
+        transform: translateY(-1px);
+      }
+      .hp-spark { width: 17px; height: 17px; color: var(--yellow); flex: 0 0 auto; animation: hp-spark 2.6s ease-in-out infinite; }
+      @keyframes hp-spark { 0%, 100% { opacity: .75; transform: scale(1); } 50% { opacity: 1; transform: scale(1.18); } }
+      .hero-prompt-box input {
+        flex: 1; min-width: 0;
+        background: none; border: none; outline: none;
+        color: var(--text); font-size: 15px; padding: 12px 0;
+      }
+      .hero-prompt-box input::placeholder { color: var(--quiet); }
+      .hp-send {
+        flex: 0 0 auto;
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 11px 18px; border: none; border-radius: 12px; cursor: pointer;
+        background: linear-gradient(180deg, #FFE066, var(--yellow));
+        color: #14130A; font-weight: 800; font-size: 13.5px;
+        box-shadow: 0 6px 20px -6px rgba(255,214,10,0.5);
+        transition: transform .15s, box-shadow .2s, filter .2s;
+      }
+      .hp-send:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: 0 10px 28px -6px rgba(255,214,10,0.6); }
+      .hp-send:active { transform: scale(.97); }
+      .hp-send:disabled { opacity: .7; cursor: wait; transform: none; }
+      .hero-prompt-hint { margin-top: 9px; font-size: 12px; color: var(--quiet); padding-left: 4px; }
+      .hero-prompt.launching .hero-prompt-box {
+        border-color: var(--mint);
+        box-shadow: 0 20px 50px -20px rgba(0,0,0,0.8), 0 0 0 4px rgba(46,232,122,0.15), 0 0 54px -8px rgba(46,232,122,0.5);
+        animation: hp-launch .5s ease;
+      }
+      @keyframes hp-launch { 30% { transform: scale(1.02); } }
+      .hp-spin {
+        width: 15px; height: 15px; border-radius: 50%;
+        border: 2px solid rgba(20,19,10,0.3); border-top-color: #14130A;
+        animation: hp-rot .6s linear infinite;
+      }
+      @keyframes hp-rot { to { transform: rotate(360deg); } }
+
+      /* ── Roadmap chip: coding today, 3D + GUI next ── */
+      .roadmap-chip {
+        margin-top: 14px;
+        display: inline-flex; align-items: center; gap: 9px;
+        padding: 9px 15px; border-radius: 999px;
+        font-size: 13px; font-weight: 600; color: #D7E2F5;
+        border: 1px solid rgba(255,214,10,0.22);
+        background: linear-gradient(90deg, rgba(255,214,10,0.07), rgba(75,157,255,0.07));
+        background-size: 200% 100%;
+        animation: roadmap-sheen 5s ease-in-out infinite alternate;
+      }
+      @keyframes roadmap-sheen { to { background-position: 100% 0; } }
+      .roadmap-chip svg { width: 14px; height: 14px; color: var(--yellow); flex: 0 0 auto; }
+      .roadmap-chip b { color: var(--yellow); font-weight: 800; }
 
       .surfaces { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
       .surfaces span {
@@ -562,6 +629,17 @@
               and edits your game <strong>live inside Roblox Studio</strong>. Free to start,
               right in your browser.
             </p>
+            <form class="hero-prompt" id="heroPrompt" autocomplete="off">
+              <div class="hero-prompt-box">
+                <svg class="hp-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <input id="heroPromptInput" type="text" maxlength="500" placeholder="make a shop that saves coins…" aria-label="Tell ROTEX what to build" />
+                <button class="hp-send" id="heroPromptBtn" type="submit">
+                  <span class="hp-send-label">Build it</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+                </button>
+              </div>
+              <div class="hero-prompt-hint">Press Enter — you'll land in ROTEX with this ready to send</div>
+            </form>
             <div class="hero-actions">
               <a class="btn primary" href="/app">Start building — it's free</a>
               <a class="btn" href="https://create.roblox.com/store/asset/136503150523656/ROTEX" target="_blank" rel="noopener">
@@ -570,6 +648,10 @@
               </a>
             </div>
             <div class="mini-note">Free plan included — no card required</div>
+            <div class="roadmap-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Built for coding today — <b>3D assets</b> and <b>INSANE GUIs</b> are coming
+            </div>
             <div class="surfaces" aria-label="Where ROTEX runs">
               <span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="#4B9DFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
@@ -578,10 +660,6 @@
               <span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="#FFD60A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 Roblox Studio plugin
-              </span>
-              <span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="#2EE87A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                Desktop app
               </span>
             </div>
           </div>
@@ -694,7 +772,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               </div>
               <h3>One account, everywhere</h3>
-              <p>Web app, desktop app, and the Studio plugin stay in sync — your chats and projects follow you.</p>
+              <p>The web app and the Studio plugin stay in sync — your chats, projects, and specs follow you.</p>
             </article>
           </div>
         </div>
@@ -745,7 +823,7 @@ grantReward(player,
         <div class="wrap">
           <div class="section-head">
             <h2>Start free. Go Pro when you're <span class="hl">hooked</span>.</h2>
-            <p>Pro is a one-time purchase — not a subscription. It never auto-renews.</p>
+            <p>Pro is a one-time purchase — not a subscription. It never auto-renews. $1 = 2 TexTokens for extra packs, and <a href="/tokens#costs" style="color:var(--accent-2)">here's exactly what each model costs</a>.</p>
           </div>
           <div class="pricing reveal">
             <article class="price-card card-base">
@@ -753,7 +831,7 @@ grantReward(player,
               <div class="price">$0</div>
               <p class="sub">Everything you need to start building today.</p>
               <ul class="list">
-                <li>100,000 TexTokens every day</li>
+                <li>5 TexTokens every day, 25 per month</li>
                 <li>Full chat builder in the browser</li>
                 <li>Roblox Studio plugin included</li>
                 <li>Project memory &amp; saved chats</li>
@@ -767,10 +845,10 @@ grantReward(player,
               <div class="badge">One-time · No subscription</div>
               <h3>ROTEX Pro</h3>
               <div class="price">$20 <span>/ 30 days</span></div>
-              <p class="sub">Ten times the budget, priority speed, and the best models.</p>
+              <p class="sub">Seven times the daily budget, priority speed, and the best models.</p>
               <ul class="list">
-                <li>1,000,000 TexTokens daily — 10× free</li>
-                <li>20M TexTokens per 30-day period</li>
+                <li>35 TexTokens daily — 7× the free plan</li>
+                <li>350 TexTokens weekly limit</li>
                 <li>More budget for all models, including Claude Haiku 4.5</li>
                 <li>Priority speed, Pro badge, early access</li>
                 <li>Pay once — it simply expires, never rebills</li>
@@ -1002,6 +1080,37 @@ grantReward(player,
             i++;
           }
         })();
+
+        /* Live hero prompt → hands the typed idea straight into /app.
+           The typed prompt animates into the demo chat + editor flips to
+           "building" so the connection feels real, then we navigate with the
+           prompt in both the URL and localStorage (web-app.js prefills it). */
+        const heroForm = document.getElementById('heroPrompt');
+        const heroInput = document.getElementById('heroPromptInput');
+        const heroBtn = document.getElementById('heroPromptBtn');
+        if (heroForm && heroInput && heroBtn) {
+          let launching = false;
+          heroForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (launching) return;
+            const prompt = heroInput.value.trim().slice(0, 500);
+            if (!prompt) { heroInput.focus(); return; }
+            launching = true;
+            try { localStorage.setItem('rotex_landing_prompt', prompt); } catch {}
+            heroForm.classList.add('launching');
+            heroBtn.disabled = true;
+            heroBtn.innerHTML = '<span class="hp-spin"></span><span class="hp-send-label">Connecting…</span>';
+            // Mirror the prompt into the showcase so it visibly "connects"
+            try {
+              chatEl.innerHTML = '';
+              bubble('user', prompt);
+              setStatus('building');
+            } catch {}
+            setTimeout(() => {
+              window.location.href = '/app?prompt=' + encodeURIComponent(prompt);
+            }, reduced ? 50 : 900);
+          });
+        }
 
         /* Editor 3D tilt */
         const stage = document.querySelector('.editor-stage');

@@ -841,12 +841,37 @@ function initEvents() {
   });
 }
 
+// Prompt handed off from the homepage hero ("type it on rrotex.com, land here
+// ready to send"). Prefill only — never auto-send, since the user may still
+// need to sign in and should see what they're about to spend a TexToken on.
+function consumeLandingPrompt() {
+  let prompt = '';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    prompt = String(params.get('prompt') || '').slice(0, 2000);
+    if (prompt) {
+      params.delete('prompt');
+      const qs = params.toString();
+      history.replaceState('', document.title, window.location.pathname + (qs ? `?${qs}` : ''));
+    }
+    if (!prompt) {
+      prompt = String(localStorage.getItem('rotex_landing_prompt') || '').slice(0, 2000);
+    }
+    localStorage.removeItem('rotex_landing_prompt');
+  } catch {}
+  if (!prompt || !els.input) return;
+  els.input.value = prompt;
+  els.input.focus();
+  try { els.input.setSelectionRange(prompt.length, prompt.length); } catch {}
+}
+
 async function init() {
   els.bridgeCode.textContent = state.bridgeCode;
   setMode(state.mode);
   renderHistory();
   renderAccount();
   initEvents();
+  consumeLandingPrompt();
   await Promise.allSettled([initAuth(), loadModels()]);
   renderBridge({});
   pollBridge();
