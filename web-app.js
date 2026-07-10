@@ -604,7 +604,7 @@ function buildProjectContext() {
   const selected = Array.isArray(ctx.selected) ? ctx.selected : [];
   const caps = Array.isArray(ctx.capabilities) && ctx.capabilities.length
     ? ctx.capabilities.join(', ')
-    : 'apply_files, create_model geometry, insert_toolbox_model for map/world assets only, terrain_edit, lighting_set, create_ui, create_ui_image, set_property, delete_instance, select_instances';
+    : 'apply_files, create_model geometry, insert_toolbox_model (any model/prop/vehicle/weapon/character/furniture the user wants), terrain_edit, lighting_set, create_ui, create_ui_image, set_property, delete_instance, select_instances';
   let out = [
     `ROTEX UI MODE: ${state.mode === 'supreme' ? 'SUPER AGENT' : 'AGENT'}.`,
     `PLUGIN CAPABILITIES: ${caps}.`,

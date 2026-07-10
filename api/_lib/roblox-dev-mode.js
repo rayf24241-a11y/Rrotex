@@ -130,7 +130,7 @@ const FORGE_GUI_ASSET_STANDARD = [
   '- For "make UI" requests, produce a complete UI set, not one raw Frame: root ScreenGui, main container, title/text, buttons, states, close/open behavior when relevant, padding/layout, visual hierarchy, and mobile scaling.',
   '- Use game-ready visual details: readable contrast, consistent spacing, UICorner, UIStroke, UIGradient only when tasteful, shadows via subtle extra frames only when needed, and text sizes that fit on desktop and mobile.',
   '- Prefer create_ui studio-actions for visible StarterGui objects, then add exactly one LocalScript owner for behavior. If the UI is already in PROJECT CONTEXT, modify that existing owner and delete/disable duplicates.',
-  '- If the user requests images/icons and a Roblox asset id is already available from context/tool results, use create_ui_image. Do not invent asset ids. Do not use Toolbox decal/icon search for map building; Toolbox is map/world static models only.',
+  '- If the user requests images/icons and a Roblox asset id is already available from context/tool results, use create_ui_image. Do not invent asset ids. Toolbox is for physical Workspace models/props/objects (map dressing, furniture, vehicles, weapons/characters as models, decorations, etc.), NOT for ScreenGui UI/icons.',
   '- If a UI does not show, fix visibility/root cause first: PlayerGui/StarterGui parent, Enabled, Visible, DisplayOrder/ZIndex, non-zero Size, on-screen Position, ResetOnSpawn, LocalScript placement, and connected opener controls.',
 ].join('\n');
 

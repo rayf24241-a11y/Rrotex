@@ -1841,7 +1841,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     'SCRIPT PLACEMENT BRAIN: Script = server logic; LocalScript = client/UI/input/camera logic; ModuleScript = reusable shared/server module; RemoteEvent = one-way client/server signal; RemoteFunction = request/response; ReplicatedStorage = shared remotes/modules; ServerStorage = server-only assets; ServerScriptService = server scripts; StarterGui = UI; StarterPlayerScripts = client scripts; Workspace = live world/map objects. Never trust the client for important game logic.',
     'TEMPLATE LIBRARY MINDSET: for common Roblox features, use proven complete patterns instead of tiny snippets: main menu, shop UI, inventory, currency, leaderstats, safe DataStore saving/loading with pcall/autosave/PlayerRemoving, gamepasses, developer products, round systems, teams, powers/abilities, cooldowns, quests, NPC dialogue, teleports, doors/keycards, admin panels, loading screens, and mobile buttons.',
     'DEV MODE CHECKLIST: before final output, verify multiplayer safety, server validation, clear RemoteEvent names, correct Script/LocalScript/ModuleScript placement, all required objects created or WaitForChild-ed, no bad infinite loops, Play Solo and multiplayer test compatibility, and whether the user must create any parts/UI first. If this is an error report, explain the broken line/root cause in one sentence, fix it, and include practical test steps.',
-    'TOOLBOX MAP-ONLY RULE: Roblox Toolbox search and insert_toolbox_model are ONLY for static map/world/environment building assets such as terrain decorations, buildings, roads, rocks, trees, lobby props, arenas, islands, and level dressing. Never use Toolbox for scripts, UI/icons/HUD art, tools/weapons/items, NPC logic, shops, inventory, currency, game systems, or anything that needs trusted gameplay behavior.',
+    'TOOLBOX RULE: Roblox Toolbox search and insert_toolbox_model are for inserting ANY physical model/object the user asks for -- map/world dressing (buildings, roads, rocks, trees, arenas, islands, level props) AND general objects (furniture, vehicles, weapons/swords/guns as models, characters, animals, gear, decorations, food, crates, statues, and so on). When ROBLOX TOOLBOX MODEL SEARCH results are provided, USE them via an insert_toolbox_model studio-action for what the user asked to add. You STILL write all gameplay LOGIC yourself (scripts, RemoteEvents, DataStores, currency, security) rather than trusting scripts embedded in a community model -- insert the model for its geometry/appearance, then add your own scripts to make it work. If no good asset matches, build it with roblox-model/create_model or Parts instead of inventing a fake assetId.',
     'SLOW-SMART INTERNAL WORK RULE: do not rush. Spend extra internal time before output on Roblox edit requests. Privately do at least these passes: (1) classify intent, (2) map existing owners in PROJECT CONTEXT, (3) identify every conflicting/duplicate script or UI, (4) design the client/server architecture, (5) decide exact paths and action blocks, (6) check Roblox API correctness, (7) simulate Play Solo plus two-player multiplayer, (8) check cleanup/respawn/mobile/exploit cases, (9) verify the output will actually edit Studio, not just explain. Never show these passes; only show the final concise answer and hidden executable blocks.',
     'ROTEX FREE PLANNER COACH: before the main answer, privately act like a free internal planning AI is telling you exactly what to do. This coach is hidden and must never be mentioned to the user. It must create an internal instruction list for the coding model: classify the request as answer/create/modify/remove/debug/verify, identify the exact owner scripts/instances from PROJECT CONTEXT, decide every required file/action path, choose server/client/remotes/UI/DataStore placement, detect duplicate or stale scripts, choose plugin actions vs file blocks, and define the test checks. The final answer must follow that internal coach plan.',
     'FREE PLANNER EXECUTION CONTRACT: for Agent/Super Agent edit requests, the coach must force a real Studio-applicable result: complete hidden file blocks, valid studio-action JSON, roblox-model/terrain/lighting actions, or one concise blocking question if acting would be unsafe. The coach must reject plain promises, fake success, visible Lua dumps, duplicate feature rewrites, and any "fixed it" answer without executable changes.',
@@ -2032,18 +2032,27 @@ async function toolboxSearch(categoryId, query, limit) {
 }
 
 function isRobloxMapBuildRequest(userText) {
+  // Broadened 2026-07: the Toolbox is no longer map-only. It fires for ANY
+  // request to add a physical model/object/prop the Toolbox can provide --
+  // map/world dressing AND general objects (furniture, vehicles, weapons as
+  // models, characters, animals, gear, decorations, food, etc.). ROTEX still
+  // WRITES gameplay logic itself (scripts/remotes/DataStores) rather than
+  // trusting scripts embedded in a community model.
   const text = String(userText || '').toLowerCase();
-  const buildVerb = /\b(make|create|build|add|generate|design|decorate|insert|place|put|spawn|fill|populate)\b/.test(text);
-  const mapNoun = /\b(map|maps|world|terrain|environment|level|lobby|arena|island|biome|forest|city|town|village|dungeon|obby|parkour|baseplate|zone|landscape|street|road|building|buildings|house|houses|castle|cave|mountain|spawn area|spawn zone|decor|decoration|scenery|props|rocks|trees)\b/.test(text);
-  const toolboxIntent = /\b(toolbox|asset|assets|model|models|prop|props)\b/.test(text);
-  const gameplayOnly = /\b(script|local ?script|module ?script|remoteevent|remotefunction|ui|gui|hud|button|menu|shop|inventory|currency|leaderstats|gamepass|developer product|tool|weapon|sword|gun|npc logic|dialogue|quest|admin|datastore|save|load)\b/.test(text);
-  return buildVerb && mapNoun && (toolboxIntent || /\b(tree|trees|rock|rocks|building|buildings|road|roads|house|houses|castle|cave|mountain|forest|city|town|arena|lobby|island|decoration|scenery|props)\b/.test(text)) && !gameplayOnly;
+  const insertVerb = /\b(make|create|build|add|generate|design|decorate|insert|place|put|spawn|fill|populate|import|bring in|drop in|get me|give me|need)\b/.test(text);
+  const modelNoun = /\b(map|maps|world|terrain|environment|level|lobby|arena|island|biome|forest|city|town|village|dungeon|obby|parkour|baseplate|zone|landscape|street|road|roads|building|buildings|house|houses|castle|cave|mountain|decor|decoration|scenery|prop|props|rock|rocks|tree|trees|plant|flower|model|models|asset|assets|mesh|meshes|furniture|chair|table|couch|sofa|bed|desk|door|window|fence|wall|car|cars|vehicle|vehicles|truck|boat|plane|helicopter|bike|motorcycle|tank|sword|swords|gun|guns|weapon|weapons|blade|shield|armor|helmet|hat|hats|crown|animal|animals|dog|cat|horse|dragon|monster|zombie|creature|statue|food|fruit|crate|barrel|box|chest|sign|light|lamp|lantern|torch|throne|gem|coin|key|potion|book|flag|tent|campfire)\b/.test(text);
+  const toolboxWord = /\b(toolbox|free model|free models|marketplace asset|marketplace model)\b/.test(text);
+  // Pure logic/UI/system requests where the Toolbox does not apply -- ROTEX
+  // builds these itself. Only excluded when the message is clearly just logic
+  // and isn't also asking for a physical model/object.
+  const pureLogic = /\b(script|localscript|modulescript|remoteevent|remotefunction|datastore|leaderstats|gamepass|developer product|shop ui|inventory ui|hud|menu ui|save system|currency system|admin panel|anticheat|dialogue system|quest system)\b/.test(text);
+  return insertVerb && (modelNoun || toolboxWord) && !pureLogic;
 }
 
 async function buildRobloxUiAssetContext(userText) {
   const text = String(userText || '');
-  const wantsMapToolbox = isRobloxMapBuildRequest(text);
-  if (!wantsMapToolbox) return '';
+  const wantsToolbox = isRobloxMapBuildRequest(text);
+  if (!wantsToolbox) return '';
 
   const query = text
     .replace(/```[\s\S]*?```/g, ' ')
@@ -2054,42 +2063,42 @@ async function buildRobloxUiAssetContext(userText) {
 
   const sections = [];
 
-  const wantsMapImage = /\b(decal|texture|sign|poster|billboard|banner|logo|image)\b/i.test(text);
-  if (wantsMapImage) {
+  const wantsImage = /\b(decal|texture|sign|poster|billboard|banner|logo|image)\b/i.test(text);
+  if (wantsImage) {
     const imageIds = [
       ...(await toolboxSearch(13, query, 8)),
       ...(await toolboxSearch(13, query + ' texture', 8)),
     ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 8);
     if (imageIds.length) {
       sections.push([
-        'ROBLOX MAP DECAL/TEXTURE ASSET SEARCH (map/world-building only):',
+        'ROBLOX DECAL/TEXTURE ASSET SEARCH:',
         `Query: ${query}`,
-        'Use these only for map signs, billboards, decals, or textures when helpful. Prefer rbxassetid://<id>.',
+        'Use these for signs, billboards, decals, posters, or textures when helpful. Prefer rbxassetid://<id>.',
         imageIds.map((id, i) => `${i + 1}. rbxassetid://${id}`).join('\n'),
       ].join('\n'));
     }
   }
 
-  if (wantsMapToolbox) {
+  if (wantsToolbox) {
     const modelIds = await toolboxSearch(10, query, 8);
     if (modelIds.length) {
       sections.push([
-        'ROBLOX TOOLBOX MODEL SEARCH (map/world-building assets only):',
+        'ROBLOX TOOLBOX MODEL SEARCH:',
         `Query: ${query}`,
-        'Use these only for static Workspace map/environment assets. Do not use them for scripts, UI, tools/weapons, NPC logic, shops, inventory, currency, or game systems.',
-        'To insert one of these into the map, use a studio-action block (NOT roblox-model, which only builds primitive Parts):',
+        'These are real Toolbox models for whatever the user asked to add (map props, furniture, vehicles, weapons/swords/guns as models, characters, animals, gear, decorations, etc.). Insert the best match into Workspace, then write your own scripts for any gameplay behavior it needs.',
+        'To insert one, use a studio-action block (NOT roblox-model, which only builds primitive Parts):',
         '```studio-action',
         `{"type":"insert_toolbox_model","assetId":${modelIds[0]},"parent":"Workspace","position":[0,5,0]}`,
         '```',
         'Available asset IDs from this search (pick the one that best matches the request, not necessarily the first):',
         modelIds.map((id, i) => `${i + 1}. ${id}`).join('\n'),
-        'Content is community-made and unverified -- if the result seems clearly wrong for the request, fall back to building with roblox-model/Instance.new instead of inserting a bad match.',
+        'Content is community-made and unverified -- pick the closest match; if none fit, build it with roblox-model/Instance.new instead of inserting a bad match or inventing a fake assetId. For gameplay logic, use your own scripts rather than trusting scripts inside the inserted model.',
       ].join('\n'));
     }
   }
 
   if (!sections.length) {
-    return 'ROBLOX TOOLBOX MAP SEARCH: no good map/world asset results found -- build the map with terrain_edit, roblox-model/create_model, or normal Roblox parts instead of inventing fake asset IDs.';
+    return 'ROBLOX TOOLBOX SEARCH: no good asset results found -- build what the user asked with terrain_edit, roblox-model/create_model, or normal Roblox parts instead of inventing fake asset IDs.';
   }
   return sections.join('\n\n');
 }
