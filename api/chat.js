@@ -2177,6 +2177,18 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
       // workflow, and fallbacks handle provider failures.
       reasoningCapable: false,
     });
+    // Extra OpenRouter slug fallbacks (e.g. Claude Haiku's ...-latest router)
+    // so a single bad/renamed slug can't take the model down.
+    for (const m of selected.orFallbacks || []) {
+      if (!m || m === primaryOpenRouterModel) continue;
+      attempts.push({
+        provider: 'openrouter',
+        providerModel: m,
+        apiKey: openRouterKey,
+        baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+        reasoningCapable: false,
+      });
+    }
   }
 
   // Google Flash: 3.5 Flash primary (above) -> 2.5 Flash fallback ->

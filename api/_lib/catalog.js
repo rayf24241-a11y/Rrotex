@@ -44,7 +44,13 @@ const MODELS = {
     route: 'anthropic-first',
     envModel: 'CLAUDE_HAIKU_MODEL',
     anthropicModel: process.env.CLAUDE_HAIKU_PINNED_MODEL || 'claude-haiku-4-5-20251001',
-    orModel: process.env.OPENROUTER_HAIKU_MODEL || 'anthropic/claude-haiku-4-5-20251001',
+    // OpenRouter fallback slug. OpenRouter uses the DOTTED, un-dated form
+    // (`anthropic/claude-haiku-4.5`) -- the date-suffixed Anthropic id
+    // (`...-4-5-20251001`) is NOT a valid OpenRouter model and 404s, which
+    // broke Claude Haiku whenever it fell through from the Anthropic API to
+    // OpenRouter (verified live against OpenRouter's model page 2026-07-10).
+    orModel: process.env.OPENROUTER_HAIKU_MODEL || 'anthropic/claude-haiku-4.5',
+    orFallbacks: ['anthropic/claude-haiku-latest'],
     blurb: 'Claude Haiku for higher quality answers. Costs more TexTokens.',
     maxTokens: 4096,
     proMaxTokens: 8192,
