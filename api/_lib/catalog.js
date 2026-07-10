@@ -51,7 +51,7 @@ const MODELS = {
     // OpenRouter (verified live against OpenRouter's model page 2026-07-10).
     orModel: process.env.OPENROUTER_HAIKU_MODEL || 'anthropic/claude-haiku-4.5',
     orFallbacks: ['anthropic/claude-haiku-latest'],
-    blurb: 'Claude Haiku for higher quality answers. Costs more TexTokens.',
+    blurb: 'Claude Haiku — the fast pick: quick, lightweight replies for simple edits and questions.',
     maxTokens: 4096,
     proMaxTokens: 8192,
   },
@@ -79,7 +79,7 @@ const MODELS = {
     // to 2.5 Flash is handled as a second attempt in resolveProviderCall,
     // not here -- this env-overridable default is only the PRIMARY attempt.
     orModel: process.env.GOOGLE_FLASH_MODEL || process.env.GEMINI_FLASH_MODEL || 'google/gemini-3.5-flash',
-    blurb: 'Google Gemini Flash for smart code and chat.',
+    blurb: 'Google Gemini — the smart pick: deeper reasoning and more thorough builds.',
     vision: false,
     temperature: 0.35,
     maxTokens: 4096,

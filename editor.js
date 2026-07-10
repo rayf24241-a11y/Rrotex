@@ -505,7 +505,6 @@
       alert('You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.');
       return false;
     }
-    if (state.aiModel === 'pro-smart' && !confirm('Claude Haiku costs more TexTokens. Continue?')) return false;
     if (estimate <= 250000) return true;
     return confirm(`This task is estimated to cost ${fmtTexTokens(estimate)} TexTokens. Big tasks (over ${fmtTexTokens(250000)}) need confirmation. Run it?`);
   }
