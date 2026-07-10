@@ -147,7 +147,15 @@
       .chat-item-del:hover { background: rgba(255,84,112,0.16); color: var(--red); }
       .chat-list:empty::after { content: 'No chats yet — hit New Chat.'; color: var(--quiet); font-size: 12px; padding: 8px 6px; }
 
-      .account { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255,255,255,0.03); }
+      .account { margin-top: auto; display: flex; flex-direction: column; gap: 9px; padding: 10px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255,255,255,0.03); }
+      .account-top { display: flex; align-items: center; gap: 10px; }
+      .account-plan { display: flex; align-items: center; gap: 8px; }
+      .account-plan[hidden] { display: none; }
+      .plan-badge { flex: 0 0 auto; font-size: 11px; font-weight: 800; letter-spacing: .03em; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--muted); text-transform: uppercase; }
+      .plan-badge.pro { border: none; color: #10131a; background: linear-gradient(180deg, #ffe259, var(--yellow)); }
+      .tok-balance { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .account-plan .get-pro { flex: 0 0 auto; padding: 6px 12px; text-decoration: none; }
+      .account-plan .tokens-link { flex: 0 0 auto; padding: 6px 12px; text-decoration: none; }
       .avatar { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #10131a; background: linear-gradient(135deg, var(--yellow), #ffb020); overflow: hidden; }
       .avatar img { width: 100%; height: 100%; object-fit: cover; }
       .account-meta { min-width: 0; flex: 1; }
@@ -159,7 +167,14 @@
 
       /* ── Center chat ───────────────────────────────────────── */
       .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line-soft); }
-      .chat-head .title { font-weight: 800; font-size: 14px; letter-spacing: -0.01em; }
+      .chat-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+      .back-btn {
+        flex: 0 0 auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05);
+        color: var(--text); font-size: 17px; line-height: 1; text-decoration: none; transition: background .14s ease;
+      }
+      .back-btn:hover { background: rgba(255,255,255,0.1); }
+      .chat-head .title { font-weight: 800; font-size: 14px; letter-spacing: -0.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .chat-head .title span { color: var(--quiet); font-weight: 600; }
       .chat-head-right { display: flex; align-items: center; gap: 10px; }
       .connect-studio {
@@ -418,20 +433,31 @@
         </div>
 
         <div class="account">
-          <div class="avatar" id="profileAvatar">?</div>
-          <div class="account-meta">
-            <b id="accountName">Guest</b>
-            <span id="accountEmail">Sign in for Pro + tokens</span>
+          <div class="account-top">
+            <div class="avatar" id="profileAvatar">?</div>
+            <div class="account-meta">
+              <b id="accountName">Guest</b>
+              <span id="accountEmail">Sign in for Pro + tokens</span>
+            </div>
+            <button class="account-btn primary" id="signInBtn" type="button">Sign in</button>
+            <button class="account-btn" id="signOutBtn" type="button" hidden>Out</button>
           </div>
-          <button class="account-btn primary" id="signInBtn" type="button">Sign in</button>
-          <button class="account-btn" id="signOutBtn" type="button" hidden>Out</button>
+          <div class="account-plan" id="accountPlanRow" hidden>
+            <span class="plan-badge" id="planBadge">Free</span>
+            <span class="tok-balance" id="rxTokenBalance" title="Your TexTokens">—</span>
+            <a class="account-btn primary get-pro" id="getProBtn" href="/account#pro">Get Pro</a>
+            <a class="account-btn tokens-link" id="buyTokensBtn" href="/tokens" hidden>Buy TexTokens</a>
+          </div>
         </div>
       </aside>
 
       <!-- ── Center chat ── -->
       <main class="col chat">
         <div class="chat-head">
-          <div class="title">ROTEX Roblox Dev Mode <span>· website studio</span></div>
+          <div class="chat-head-left">
+            <a class="back-btn" href="/" title="Back to rrotex.com" aria-label="Back to home">←</a>
+            <div class="title">ROTEX Roblox Dev Mode <span>· website studio</span></div>
+          </div>
           <div class="chat-head-right">
             <button class="connect-studio" id="connectStudioBtn" type="button" title="Connect the Roblox Studio plugin">
               <span class="cs-dot"></span>

@@ -27,6 +27,10 @@ const els = {
   avatar: $('profileAvatar'),
   accountName: $('accountName'),
   accountEmail: $('accountEmail'),
+  accountPlanRow: $('accountPlanRow'),
+  planBadge: $('planBadge'),
+  getPro: $('getProBtn'),
+  buyTokens: $('buyTokensBtn'),
   newChat: $('newChatBtn'),
   chatList: $('chatList'),
   connectStudio: $('connectStudioBtn'),
@@ -479,6 +483,11 @@ async function initAuth() {
         // Signed in and staying: deliver (and clear) any homepage handoff prompt
         // that was preserved across the login redirect.
         consumeLandingPrompt();
+        // Recognize Pro even on a fresh browser: mint/refresh the signed pass
+        // from the Firebase identity so the badge + higher caps show without a
+        // detour through /account. Fire-and-forget; the display re-renders when
+        // it resolves.
+        refreshProPass();
       }
     });
   } catch (error) {
@@ -517,9 +526,59 @@ function renderAccount() {
   } else {
     els.avatar.textContent = (user?.displayName || user?.email || '?').trim().charAt(0).toUpperCase() || '?';
   }
+  renderPlan();
   // Swap the empty state between signed-out (sign-in CTA) and signed-in (build
   // cards) the moment auth resolves -- only while no real conversation exists.
   if (!state.messages.length) renderHistory();
+}
+
+// Show the plan badge, TexToken balance, and the right upgrade CTA. Pro status
+// is read from the locally cached signed pass (rotexTokens.isProUser), so it
+// reflects a real purchase even before any server round-trip.
+function renderPlan() {
+  const row = els.accountPlanRow;
+  if (!row) return;
+  // Only surface plan/balance once signed in -- guests are redirected to /login
+  // anyway, and an empty "Free" chip on the sign-in screen just adds noise.
+  if (!state.user) { row.hidden = true; return; }
+  row.hidden = false;
+  const isPro = Boolean(window.rotexTokens && window.rotexTokens.isProUser && window.rotexTokens.isProUser());
+  if (els.planBadge) {
+    els.planBadge.textContent = isPro ? 'Pro' : 'Free';
+    els.planBadge.classList.toggle('pro', isPro);
+  }
+  // Free users get the "Get Pro" CTA; Pro users get a "Buy TexTokens" top-up link.
+  if (els.getPro) els.getPro.hidden = isPro;
+  if (els.buyTokens) els.buyTokens.hidden = !isPro;
+  if (window.rotexTokens && window.rotexTokens.refreshBalanceDisplay) {
+    window.rotexTokens.refreshBalanceDisplay();
+  }
+}
+
+// Ask the server to reissue the Pro pass from the signed-in identity. For a
+// one-time 30-day pass it hands the cached pass back unchanged; for a legacy
+// subscription it re-signs against Stripe. Stores the fresh pass and re-renders
+// the plan. Fail-open: a network hiccup just leaves the current display alone.
+async function refreshProPass() {
+  try {
+    const res = await fetch('/api/refresh-pro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proPass: localStorage.getItem('rotex_pro_pass') || '',
+        authToken: state.idToken || '',
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.refreshed && data.proPass) {
+      localStorage.setItem('rotex_pro_pass', data.proPass);
+    } else if (data.cancelled) {
+      localStorage.removeItem('rotex_pro_pass');
+    }
+  } catch (_) {
+    // Offline or endpoint unavailable -- keep whatever pass is already cached.
+  }
+  renderPlan();
 }
 
 async function bridgePost(op, body = {}) {

@@ -173,8 +173,8 @@
   })();
 
   function dailyTexTokenLimit() {
-    // Internal units: 8 TT / 1 TT per day (1 displayed TexToken = 30k units).
-    return userIsPro ? 240000 : 30000;
+    // Internal units: 40 TT / 1 TT per day (1 displayed TexToken = 30k units).
+    return userIsPro ? 1200000 : 30000;
   }
 
   function extraTexTokens() {
