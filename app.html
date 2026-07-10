@@ -133,6 +133,27 @@
       .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line-soft); }
       .chat-head .title { font-weight: 800; font-size: 14px; letter-spacing: -0.01em; }
       .chat-head .title span { color: var(--quiet); font-weight: 600; }
+      .chat-head-right { display: flex; align-items: center; gap: 10px; }
+      .connect-studio {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 7px 14px; border-radius: 999px; cursor: pointer;
+        border: 1px solid rgba(255,214,10,0.35);
+        background: rgba(255,214,10,0.08); color: var(--yellow);
+        font-weight: 800; font-size: 12px; white-space: nowrap;
+        transition: background .15s, border-color .15s, transform .12s, color .15s;
+      }
+      .connect-studio:hover { background: rgba(255,214,10,0.14); transform: translateY(-1px); }
+      .connect-studio:active { transform: scale(.97); }
+      .connect-studio .cs-dot {
+        width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
+        background: var(--yellow); box-shadow: 0 0 8px rgba(255,214,10,0.7);
+        animation: blink 1.4s ease-in-out infinite;
+      }
+      .connect-studio.ok {
+        border-color: rgba(46,232,122,0.4); background: rgba(46,232,122,0.1); color: var(--green);
+      }
+      .connect-studio.ok .cs-dot { background: var(--green); box-shadow: 0 0 10px var(--green); animation: none; }
+      @media (max-width: 520px) { .connect-studio #connectStudioLabel { display: none; } .connect-studio { padding: 8px; } }
       .run-pill { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); font-size: 12px; font-weight: 700; }
       .run-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
       .run-pill small { color: var(--quiet); font-weight: 600; }
@@ -389,7 +410,13 @@
       <main class="col chat">
         <div class="chat-head">
           <div class="title">ROTEX Roblox Dev Mode <span>· website studio</span></div>
-          <div class="run-pill"><i></i><span id="runState">Ready</span><small id="runMini">Chat workflow</small></div>
+          <div class="chat-head-right">
+            <button class="connect-studio" id="connectStudioBtn" type="button" title="Connect the Roblox Studio plugin">
+              <span class="cs-dot"></span>
+              <span id="connectStudioLabel">Connect Studio</span>
+            </button>
+            <div class="run-pill"><i></i><span id="runState">Ready</span><small id="runMini">Chat workflow</small></div>
+          </div>
         </div>
         <div class="messages" id="messages"></div>
         <div class="composer">

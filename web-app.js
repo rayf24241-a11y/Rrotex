@@ -28,6 +28,8 @@ const els = {
   accountName: $('accountName'),
   accountEmail: $('accountEmail'),
   newChat: $('newChatBtn'),
+  connectStudio: $('connectStudioBtn'),
+  connectStudioLabel: $('connectStudioLabel'),
   pluginModal: $('pluginModal'),
   pluginModalClose: $('pluginModalClose'),
   pluginModalCode: $('pluginModalCode'),
@@ -453,6 +455,13 @@ function renderBridge(meta = {}) {
   els.pluginDot.classList.toggle('ok', connected);
   els.pluginDot.classList.toggle('wait', !connected);
   els.pluginStatus.textContent = connected ? 'Studio plugin connected' : 'Waiting for Studio plugin';
+  if (els.connectStudio) {
+    els.connectStudio.classList.toggle('ok', connected);
+    if (els.connectStudioLabel) els.connectStudioLabel.textContent = connected ? 'Studio Connected' : 'Connect Studio';
+    els.connectStudio.title = connected ? 'Roblox Studio plugin is connected' : 'Connect the Roblox Studio plugin';
+  }
+  // Keep the modal's live status dot in sync while it's open.
+  if (state.pluginPromptOpen) setPluginModalStatus(connected);
   if (els.bridgeHealth) els.bridgeHealth.textContent = connected ? 'Live' : meta.bridgeStorage === 'memory' ? 'Syncing' : 'Waiting';
   els.ctxPlugin.textContent = connected ? (meta.pluginVersion || ctx.pluginVersion || 'Connected') : 'Disconnected';
   els.ctxGame.textContent = meta.gameName || ctx.gameName || ctx.project || 'Unknown';
@@ -838,6 +847,9 @@ function initEvents() {
     els.checkPlugin.disabled = false;
     els.checkPlugin.textContent = 'Check Plugin';
   });
+
+  // Permanent "Connect Studio" button in the top bar — opens the modal anytime.
+  if (els.connectStudio) els.connectStudio.addEventListener('click', () => openPluginModal(''));
 
   // Connect-plugin modal controls
   if (els.pluginModalClose) els.pluginModalClose.addEventListener('click', closePluginModal);
