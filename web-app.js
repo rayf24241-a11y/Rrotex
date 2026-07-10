@@ -621,6 +621,16 @@ async function sendMessage(rawText, options = {}) {
   const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/^\n+|\n+$/g, '');
   if (!text.trim()) return;
 
+  // Login required to chat -- guests can't send.
+  if (!state.user) {
+    if (!options.skipUserRender) addMessage('user', text);
+    addMessage('assistant', 'Please log in to chat with ROTEX. Opening sign-in now...', 'status');
+    els.input.value = '';
+    autosizeInput();
+    signIn();
+    return;
+  }
+
   const requiresPlugin = state.mode !== 'ask';
   if (requiresPlugin && !state.pluginConnected && options.allowPluginPrompt !== false) {
     if (!options.skipUserRender) addMessage('user', text);

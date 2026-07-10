@@ -6,6 +6,7 @@ const { CATEGORIES, routeCategory, THINKING_LEVEL_TO_EFFORT } = require('./_lib/
 const { buildRobloxDevModeBrief } = require('./_lib/roblox-dev-mode.js');
 const { handlePluginBridge } = require('./_lib/plugin-bridge-core.js');
 const tokenWallet = require('./_lib/token-wallet.js');
+const accountGuard = require('./_lib/account-guard.js');
 const {
   checkCreditSafety,
   estimateTexTokens,
@@ -1028,6 +1029,16 @@ module.exports = async function handler(request, response) {
   request._serverUsage = serverUsage;
   request._isAuthUser = isAuthUser;
 
+  // Login required to chat: guests can't use the editor/chat surface at all.
+  // (Uses mode directly -- the isEditor const is declared later in this handler.)
+  if (mode === 'editor' && !isAuthUser && !isDev) {
+    response.status(401).json({
+      error: 'login_required',
+      text: 'Please log in to chat with ROTEX. Sign in to continue.',
+    });
+    return;
+  }
+
   // Monthly cap (free 1M, Pro 20M). Only enforced when we have a real reading.
   if (!isDev && serverUsage) {
     const monthlyLimit = isPro ? PRO_MONTHLY : FREE_MONTHLY;
@@ -1050,10 +1061,24 @@ module.exports = async function handler(request, response) {
   // restrictive wins. This makes multi-accounting pointless: all accounts on
   // the same IP share a single pool.
   if (!isPro && !isDev) {
-    if (linkedMultiAccount) {
-      response.status(402).json({
-        error: 'no_textokens',
-        text: 'Multiple accounts detected from the same person. Only one free account is allowed — this account has 0 TexTokens. Sign in with your original account, or upgrade to Pro at rrotex.com/pro.',
+    // One account per person: the FIRST free account seen on this device (IP)
+    // or Gmail base address permanently claims it in KV -- any later account is
+    // blocked for good, so making more accounts never works. Only the original
+    // account can chat for free. Pro/dev are exempt (checked above), so a
+    // paying customer on a shared connection is never locked out. Falls back to
+    // the in-memory same-IP/Gmail check when KV isn't configured.
+    let blocked = linkedMultiAccount;
+    if (accountGuard.guardEnabled()) {
+      const ipOwner = await accountGuard.claimOwner('ip', ip, userId);
+      const emailOwner = userEmail
+        ? await accountGuard.claimOwner('email', normalizeGmail(userEmail), userId)
+        : { enforced: false, allowed: true };
+      blocked = (ipOwner.enforced && !ipOwner.allowed) || (emailOwner.enforced && !emailOwner.allowed);
+    }
+    if (blocked) {
+      response.status(403).json({
+        error: 'account_blocked',
+        text: 'This device already has a ROTEX account. Only your first account can chat for free — sign in with that one, or go Pro at rrotex.com/pro to use another account.',
       });
       return;
     }
