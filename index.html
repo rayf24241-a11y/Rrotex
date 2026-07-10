@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ROTEX - Roblox UI and Game Asset Studio</title>
-    <meta name="description" content="ROTEX is a Roblox-focused design studio landing page for UI, icons, thumbnails, and Studio-ready asset workflows." />
-    <meta name="theme-color" content="#05070c" />
+    <title>ROTEX — Build Roblox Games by Chatting | Roblox Dev AI</title>
+    <meta name="description" content="ROTEX writes complete, working Luau — scripts, UI, DataStores, whole systems — and edits your game live inside Roblox Studio. Free to start, right in your browser." />
+    <meta name="theme-color" content="#070A12" />
     <link rel="canonical" href="https://www.rrotex.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ROTEX" />
-    <meta property="og:title" content="ROTEX - Roblox UI and Game Asset Studio" />
-    <meta property="og:description" content="A clean static landing page for Roblox UI, icons, thumbnails, and game asset workflows." />
+    <meta property="og:title" content="ROTEX — Build Roblox Games by Chatting" />
+    <meta property="og:description" content="Complete, working Luau — scripts, UI, DataStores, whole systems — built by AI and applied live inside Roblox Studio." />
     <meta property="og:url" content="https://www.rrotex.com/" />
     <meta property="og:image" content="https://www.rrotex.com/og-image.svg" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -18,834 +18,517 @@
     <link rel="apple-touch-icon" href="/icon.png" />
     <link rel="manifest" href="./site.webmanifest" />
     <script src="./dev-guard.js"></script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "ROTEX",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web, Windows, Roblox Studio",
+      "description": "AI that builds Roblox games: complete Luau scripts, UI, DataStores, and whole systems, applied live inside Roblox Studio.",
+      "url": "https://www.rrotex.com/",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+    </script>
     <style>
       :root {
         color-scheme: dark;
-        --bg: #05070c;
-        --panel: #0b1019;
-        --panel-2: #111827;
-        --panel-3: #161f31;
-        --line: rgba(255, 255, 255, 0.11);
-        --line-soft: rgba(255, 255, 255, 0.07);
-        --text: #f5f8ff;
-        --muted: #a0aec6;
-        --quiet: #65738d;
-        --yellow: #ffd60a;
-        --green: #2ee87a;
-        --blue: #5ca8ff;
-        --purple: #a985ff;
-        --red: #ff5470;
-        --radius: 18px;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg:        #070A12;
+        --surface:   #10141F;
+        --panel:     #171C2B;
+        --border:    #232B41;
+        --border-2:  #2E3852;
+        --text:      #EAF0FC;
+        --muted:     #8A93AA;
+        --quiet:     #525C78;
+        --accent:    #4B9DFF;
+        --accent-2:  #7DB9FF;
+        --accent-d:  rgba(75,157,255,0.15);
+        --accent-g:  rgba(75,157,255,0.30);
+        --yellow:    #FFD60A;
+        --yellow-d:  rgba(255,214,10,0.14);
+        --mint:      #2EE87A;
+        --red:       #FF5470;
+        --radius:    18px;
       }
 
-      * { box-sizing: border-box; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
       html { scroll-behavior: smooth; background: var(--bg); }
       body {
-        margin: 0;
         min-width: 320px;
         overflow-x: hidden;
-        background:
-          radial-gradient(circle at 52% -12%, rgba(255, 214, 10, 0.18), transparent 32rem),
-          radial-gradient(circle at 8% 18%, rgba(92, 168, 255, 0.14), transparent 28rem),
-          linear-gradient(180deg, #070a11 0%, #05070c 42%, #080b12 100%);
+        background: var(--bg);
         color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
-
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: -1;
-        background-image:
-          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-        background-size: 54px 54px;
-        mask-image: linear-gradient(180deg, rgba(0,0,0,0.8), transparent 78%);
-      }
-
+      ::selection { background: var(--accent-g); }
       a { color: inherit; text-decoration: none; }
       button, input { font: inherit; }
       img { max-width: 100%; display: block; }
 
-      .wrap {
-        width: min(1160px, calc(100% - 32px));
-        margin: 0 auto;
+      /* ══════════ Background stack (fixed, behind everything) ══════════ */
+      #bg3d {
+        position: fixed; inset: 0; z-index: -3;
+        width: 100%; height: 100%;
+        pointer-events: none;
+        opacity: 0; transition: opacity 1.6s ease;
+      }
+      #bg3d.live { opacity: 1; }
+
+      .bg-aurora {
+        position: fixed; inset: -20%; z-index: -4; pointer-events: none;
+        filter: blur(70px); opacity: .5;
+      }
+      .bg-aurora::before, .bg-aurora::after {
+        content: ''; position: absolute; border-radius: 50%; mix-blend-mode: screen;
+      }
+      .bg-aurora::before {
+        width: 55vw; height: 55vw; left: -8%; top: -10%;
+        background: radial-gradient(circle at 40% 40%, rgba(255,214,10,0.13), transparent 65%);
+        animation: aur-a 28s ease-in-out infinite alternate;
+      }
+      .bg-aurora::after {
+        width: 48vw; height: 48vw; right: -6%; top: 30%;
+        background: radial-gradient(circle at 55% 55%, rgba(75,157,255,0.16), transparent 70%);
+        animation: aur-b 34s ease-in-out infinite alternate;
+      }
+      @keyframes aur-a { to { transform: translate(8vw, 8vh) scale(1.14); } }
+      @keyframes aur-b { to { transform: translate(-7vw, -5vh) scale(0.92); } }
+      body.no3d .bg-aurora { opacity: .85; }
+
+      .bg-grid {
+        position: fixed; inset: 0; z-index: -2; pointer-events: none;
+        background-image:
+          linear-gradient(rgba(150,180,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(150,180,255,0.03) 1px, transparent 1px);
+        background-size: 46px 46px;
+        -webkit-mask-image: linear-gradient(180deg, black 40%, transparent 90%);
+        mask-image: linear-gradient(180deg, black 40%, transparent 90%);
+      }
+      .bg-noise {
+        position: fixed; inset: 0; z-index: -1; pointer-events: none;
+        opacity: .045; mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
       }
 
+      .wrap { width: min(1160px, calc(100% - 32px)); margin: 0 auto; }
+
+      /* ══════════ Nav ══════════ */
       .nav {
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        border-bottom: 1px solid var(--line-soft);
-        background: rgba(5, 7, 12, 0.82);
-        backdrop-filter: blur(18px);
+        position: sticky; top: 0; z-index: 50;
+        border-bottom: 1px solid transparent;
+        background: rgba(7,10,18,0.6);
+        backdrop-filter: blur(18px) saturate(1.3);
+        transition: box-shadow .25s, border-color .25s, background .25s;
       }
-
-      .nav-inner {
-        height: 74px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
+      .nav.scrolled {
+        box-shadow: 0 14px 34px -16px rgba(0,0,0,0.7);
+        border-bottom-color: var(--border);
+        background: rgba(7,10,18,0.88);
       }
-
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        min-width: 0;
-        font-weight: 900;
-        letter-spacing: -0.02em;
-      }
-
+      .nav-inner { height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+      .brand { display: flex; align-items: center; gap: 11px; font-weight: 900; letter-spacing: .05em; font-size: 18px; }
       .brand img {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        box-shadow: 0 0 24px rgba(255, 214, 10, 0.24);
+        width: 36px; height: 36px; border-radius: 10px;
+        box-shadow: 0 0 24px var(--accent-g);
       }
-
-      .links {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 24px;
-        color: var(--muted);
-        font-size: 14px;
-        white-space: nowrap;
-      }
-
+      .links { display: flex; align-items: center; gap: 26px; color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
+      .links a { transition: color .15s; }
       .links a:hover { color: var(--text); }
+      .nav-actions { display: flex; align-items: center; gap: 10px; }
 
-      .nav-actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
+      /* ══════════ Buttons ══════════ */
       .btn {
         min-height: 42px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.045);
-        color: var(--text);
-        padding: 0 18px;
-        font-weight: 800;
-        cursor: pointer;
-        transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        border: 1px solid var(--border-2); border-radius: 999px;
+        background: rgba(255,255,255,0.045); color: var(--text);
+        padding: 0 20px; font-weight: 700; font-size: 14px; cursor: pointer;
+        transition: transform .15s, border-color .15s, background .15s, box-shadow .2s;
       }
-
-      .btn:hover {
-        transform: translateY(-1px);
-        border-color: rgba(255, 214, 10, 0.45);
-        background: rgba(255, 255, 255, 0.075);
-      }
-
+      .btn:hover { transform: translateY(-1px); border-color: rgba(125,185,255,0.5); background: rgba(255,255,255,0.075); }
       .btn.primary {
-        background: var(--yellow);
-        border-color: var(--yellow);
-        color: #11110a;
-        box-shadow: 0 14px 38px rgba(255, 214, 10, 0.22);
+        position: relative; overflow: hidden; isolation: isolate;
+        background: linear-gradient(180deg, #FFE066, var(--yellow));
+        border-color: var(--yellow); color: #14130A;
+        box-shadow: 0 14px 38px rgba(255,214,10,0.22);
       }
-
-      .hero {
-        min-height: calc(100vh - 74px);
-        display: grid;
-        align-items: center;
-        padding: 74px 0 42px;
-        position: relative;
+      .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 20px 50px rgba(255,214,10,0.38); }
+      .btn.primary::after {
+        content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 42%;
+        transform: skewX(-18deg); z-index: -1;
+        background: linear-gradient(100deg, transparent, rgba(255,255,255,0.55), transparent);
       }
+      .btn.blue {
+        background: linear-gradient(180deg, #5CA8FF, #3E8EF0);
+        border-color: transparent; color: #fff;
+        box-shadow: 0 6px 22px -4px var(--accent-g);
+      }
+      .btn.blue:hover { box-shadow: 0 10px 32px -4px var(--accent-g); }
 
+      /* ══════════ Hero ══════════ */
+      .hero { position: relative; padding: clamp(48px, 8vh, 96px) 0 56px; }
       .hero-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
-        gap: 42px;
-        align-items: center;
+        display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(420px, 1.05fr);
+        gap: 48px; align-items: center;
       }
-
+      /* grid items must never inherit the code editor's pre min-content width */
+      .hero-grid > * { min-width: 0; }
       .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px solid rgba(46, 232, 122, 0.28);
-        background: rgba(46, 232, 122, 0.08);
-        color: #9ff6bf;
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 13px;
-        font-weight: 800;
+        display: inline-flex; align-items: center; gap: 9px;
+        font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+        color: var(--yellow);
+        padding: 8px 14px; border-radius: 999px;
+        background: rgba(255,214,10,0.06); border: 1px solid rgba(255,214,10,0.18);
       }
-
-      .pulse {
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: var(--green);
-        box-shadow: 0 0 16px rgba(46, 232, 122, 0.65);
+      .eyebrow::before {
+        content: ''; width: 8px; height: 8px; border-radius: 50%;
+        background: var(--mint); box-shadow: 0 0 12px var(--mint);
+        animation: pulse 2s infinite;
       }
+      @keyframes pulse { 50% { opacity: .3; } }
 
       h1 {
-        margin: 22px 0 18px;
-        max-width: 720px;
-        font-size: clamp(42px, 6.2vw, 86px);
-        line-height: 0.94;
-        letter-spacing: 0;
+        margin: 22px 0 18px; max-width: 700px;
+        font-size: clamp(40px, 5.4vw, 74px);
+        line-height: 1.02; letter-spacing: -0.025em; font-weight: 900;
       }
-
-      .lead {
-        margin: 0;
-        max-width: 620px;
-        color: var(--muted);
-        font-size: clamp(17px, 2vw, 21px);
-        line-height: 1.65;
+      h1 .grad {
+        background: linear-gradient(100deg, var(--yellow) 10%, #FFB13D 38%, var(--accent) 72%, var(--accent-2) 95%);
+        background-size: 220% 100%;
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; color: transparent;
+        animation: grad-slide 6s ease-in-out infinite alternate;
       }
+      @keyframes grad-slide { to { background-position: 100% 0; } }
 
-      .hero-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 30px;
+      .lead { max-width: 560px; color: var(--muted); font-size: clamp(16px, 1.8vw, 19px); line-height: 1.65; }
+      .lead strong { color: var(--text); font-weight: 600; }
+
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+      .mini-note { margin-top: 14px; color: var(--quiet); font-size: 13px; display: flex; align-items: center; gap: 7px; }
+      .mini-note::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); }
+
+      .surfaces { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+      .surfaces span {
+        border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+        border-radius: 999px; padding: 8px 14px;
+        color: #C8D4E9; font-size: 13px; font-weight: 700;
+        display: inline-flex; align-items: center; gap: 7px;
       }
+      .surfaces svg { width: 13px; height: 13px; }
 
-      .mini-note {
-        margin-top: 13px;
-        color: var(--quiet);
-        font-size: 13px;
-      }
-
-      .platforms {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 30px;
-      }
-
-      .platforms span {
-        border: 1px solid var(--line-soft);
-        background: rgba(255, 255, 255, 0.045);
-        border-radius: 999px;
-        padding: 8px 12px;
-        color: #c8d4e9;
-        font-size: 13px;
-        font-weight: 700;
-      }
-
-      .studio {
+      /* ══════════ Live editor demo (hero right) ══════════ */
+      .editor-stage { position: relative; perspective: 1400px; }
+      .editor {
         position: relative;
-        border: 1px solid rgba(255, 255, 255, 0.13);
-        background:
-          linear-gradient(180deg, rgba(255,255,255,0.08), transparent),
-          rgba(7, 11, 18, 0.94);
-        border-radius: 28px;
-        padding: 14px;
-        box-shadow: 0 32px 90px rgba(0, 0, 0, 0.48);
-        overflow: hidden;
+        border: 1px solid var(--border-2); border-radius: 16px; overflow: hidden;
+        background: rgba(8,11,19,0.85);
+        backdrop-filter: blur(10px);
+        box-shadow:
+          0 40px 90px -30px rgba(0,0,0,0.9),
+          0 0 0 1px rgba(255,255,255,0.03) inset,
+          0 0 80px -30px var(--accent-g);
+        transform-style: preserve-3d; will-change: transform;
+      }
+      .editor-top {
+        display: flex; align-items: center; gap: 7px; padding: 11px 15px;
+        background: linear-gradient(180deg, rgba(23,28,43,0.9), rgba(15,19,30,0.9));
+        border-bottom: 1px solid var(--border);
+      }
+      .editor-top .dot { width: 11px; height: 11px; border-radius: 50%; }
+      .editor-top .r { background: #ff5f57; } .editor-top .y { background: #febc2e; } .editor-top .g { background: #28c840; }
+      .editor-file {
+        margin-left: 8px; font: 600 11.5px/1 ui-monospace, 'Cascadia Code', Menlo, monospace;
+        color: var(--quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .editor-status {
+        margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+        font: 700 10.5px/1 inherit; letter-spacing: .06em; text-transform: uppercase;
+        padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+      }
+      .editor-status.building { color: var(--yellow); background: var(--yellow-d); }
+      .editor-status.building::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: pulse 1s infinite; }
+      .editor-status.shipped { color: var(--mint); background: rgba(46,232,122,0.1); }
+      .editor-status.shipped::before { content: '✓'; font-size: 10px; }
+
+      .editor-code {
+        margin: 0; padding: 16px 18px;
+        font: 12.5px/1.8 ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+        min-height: 326px;
+        overflow-x: auto; white-space: pre;
+      }
+      .editor-code .line { display: block; min-height: 1.8em; }
+      .editor-code .k { color: #C98BFF; }
+      .editor-code .s { color: #7EE787; }
+      .editor-code .f { color: #79C0FF; }
+      .editor-code .c { color: #5C6B82; font-style: italic; }
+      .editor-code .n { color: #FFBB66; }
+      .caret {
+        display: inline-block; width: 7px; height: 15px;
+        background: var(--yellow); vertical-align: -2px; margin-left: 1px;
+        box-shadow: 0 0 10px rgba(255,214,10,0.7);
+        animation: blink 1s steps(1) infinite;
+      }
+      @keyframes blink { 50% { opacity: 0; } }
+
+      .chip {
+        position: absolute; z-index: 2;
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 8px 13px; border-radius: 999px;
+        font-size: 12px; font-weight: 700; color: var(--text);
+        background: rgba(18,23,36,0.78); border: 1px solid var(--border-2);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 12px 30px -12px rgba(0,0,0,0.8);
+        animation: chip-float 6s ease-in-out infinite;
+        pointer-events: none; transform: translateZ(60px);
+      }
+      .chip svg { width: 13px; height: 13px; }
+      .chip.c1 { top: -16px; right: 22px; animation-delay: -1.2s; }
+      .chip.c2 { bottom: 54px; left: -18px; animation-delay: -3.4s; }
+      @keyframes chip-float {
+        0%, 100% { transform: translateZ(60px) translateY(0); }
+        50%      { transform: translateZ(60px) translateY(-9px); }
       }
 
-      .studio::before {
-        content: "";
-        position: absolute;
-        inset: -1px;
-        pointer-events: none;
-        border-radius: inherit;
-        background: linear-gradient(135deg, rgba(255, 214, 10, 0.26), transparent 32%, rgba(92, 168, 255, 0.2));
-        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-        -webkit-mask-composite: xor;
-        mask-composite: exclude;
-        padding: 1px;
+      .demo-chat { margin-top: 14px; display: flex; flex-direction: column; gap: 9px; min-height: 92px; }
+      .demo-msg {
+        max-width: 86%; padding: 10px 15px; border-radius: 14px;
+        font-size: 13.5px; line-height: 1.5;
+        opacity: 0; transform: translateY(10px) scale(.97);
+        transition: opacity .45s cubic-bezier(.22,.9,.3,1), transform .45s cubic-bezier(.22,.9,.3,1);
+      }
+      .demo-msg.show { opacity: 1; transform: none; }
+      .demo-msg.user {
+        align-self: flex-end;
+        background: linear-gradient(180deg, #FFE98A, var(--yellow));
+        color: #10131A; font-weight: 650; border-bottom-right-radius: 5px;
+        box-shadow: 0 8px 26px -10px rgba(255,214,10,0.45);
+      }
+      .demo-msg.ai {
+        align-self: flex-start;
+        background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+        border-bottom-left-radius: 5px; backdrop-filter: blur(6px);
       }
 
-      .studio-top {
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 8px 12px;
-        color: var(--muted);
-        font-size: 13px;
+      /* ══════════ Capability ticker ══════════ */
+      .ticker {
+        margin: 26px 0 0; overflow: hidden; position: relative;
+        -webkit-mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+        mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
       }
-
-      .traffic {
-        display: flex;
-        gap: 7px;
+      .ticker-track {
+        display: inline-flex; gap: 28px; white-space: nowrap;
+        animation: tick 36s linear infinite;
+        font-size: 12px; font-weight: 700; letter-spacing: .1em;
+        text-transform: uppercase; color: var(--quiet);
       }
+      .ticker-track i { font-style: normal; color: #38415C; }
+      @keyframes tick { to { transform: translateX(-50%); } }
 
-      .traffic i {
-        width: 11px;
-        height: 11px;
-        border-radius: 999px;
-        background: var(--red);
-      }
-
-      .traffic i:nth-child(2) { background: var(--yellow); }
-      .traffic i:nth-child(3) { background: var(--green); }
-
-      .studio-screen {
-        min-height: 530px;
-        display: grid;
-        grid-template-columns: 190px minmax(0, 1fr);
-        gap: 12px;
-      }
-
-      .studio-side,
-      .studio-main,
-      .prompt-bar,
-      .asset-card,
-      .floating-panel {
-        border: 1px solid var(--line-soft);
-        background: rgba(12, 18, 30, 0.88);
-        border-radius: 18px;
-      }
-
-      .studio-side {
-        padding: 14px;
-        display: grid;
-        align-content: start;
-        gap: 10px;
-      }
-
-      .side-title {
-        color: var(--quiet);
-        font-size: 11px;
-        font-weight: 900;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-      }
-
-      .tool {
-        min-height: 46px;
-        border-radius: 14px;
-        display: grid;
-        align-content: center;
-        padding: 0 12px;
-        color: #dbe6f8;
-        background: rgba(255, 255, 255, 0.045);
-        border: 1px solid transparent;
-        font-size: 13px;
-        font-weight: 800;
-      }
-
-      .tool.active {
-        border-color: rgba(255, 214, 10, 0.42);
-        background: rgba(255, 214, 10, 0.11);
-        color: var(--yellow);
-      }
-
-      .studio-main {
-        padding: 14px;
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr) auto;
-        gap: 12px;
-      }
-
-      .prompt-bar {
-        min-height: 72px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 14px;
-      }
-
-      .prompt-text {
-        color: #eaf1ff;
-        font-size: 14px;
-        line-height: 1.45;
-      }
-
-      .generate-pill {
-        flex: 0 0 auto;
-        border-radius: 999px;
-        background: var(--yellow);
-        color: #15140b;
-        padding: 10px 14px;
-        font-size: 13px;
-        font-weight: 1000;
-      }
-
-      .asset-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .asset-card {
-        min-height: 172px;
-        padding: 12px;
-        overflow: hidden;
-        position: relative;
-      }
-
-      .asset-card::after {
-        content: "";
-        position: absolute;
-        inset: auto -20px -32px auto;
-        width: 140px;
-        height: 140px;
-        border-radius: 50%;
-        background: rgba(255, 214, 10, 0.08);
-      }
-
-      .asset-title {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        color: #edf4ff;
-        font-size: 13px;
-        font-weight: 900;
-      }
-
-      .asset-tag {
-        border-radius: 999px;
-        background: rgba(92, 168, 255, 0.13);
-        color: #9dccff;
-        padding: 5px 8px;
-        font-size: 10px;
-        font-weight: 900;
-      }
-
-      .mock-ui {
-        margin-top: 16px;
-        display: grid;
-        gap: 9px;
-      }
-
-      .mock-row {
-        height: 34px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-      }
-
-      .mock-row.short { width: 64%; }
-      .mock-row.yellow { background: rgba(255, 214, 10, 0.2); border-color: rgba(255, 214, 10, 0.22); }
-      .mock-row.blue { background: rgba(92, 168, 255, 0.18); border-color: rgba(92, 168, 255, 0.2); }
-      .mock-row.green { background: rgba(46, 232, 122, 0.17); border-color: rgba(46, 232, 122, 0.2); }
-
-      .export-row {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-      }
-
-      .export {
-        min-height: 58px;
-        border: 1px solid var(--line-soft);
-        border-radius: 16px;
-        background: rgba(255,255,255,0.045);
-        display: grid;
-        place-items: center;
-        color: #dbe6f8;
-        font-size: 12px;
-        font-weight: 900;
-      }
-
-      .floating-panel {
-        position: absolute;
-        right: 24px;
-        bottom: 24px;
-        width: 250px;
-        padding: 14px;
-        box-shadow: 0 18px 54px rgba(0,0,0,0.35);
-      }
-
-      .floating-panel strong {
-        display: block;
-        margin-bottom: 8px;
-        font-size: 13px;
-      }
-
-      .meter {
-        height: 10px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.08);
-        overflow: hidden;
-      }
-
-      .meter span {
-        display: block;
-        height: 100%;
-        width: 78%;
-        background: linear-gradient(90deg, var(--yellow), var(--green));
-      }
-
-      section {
-        padding: 88px 0;
-      }
-
-      .section-head {
-        display: grid;
-        gap: 12px;
-        justify-items: center;
-        text-align: center;
-        margin-bottom: 34px;
-      }
-
+      /* ══════════ Sections ══════════ */
+      section { padding: 92px 0; position: relative; }
+      .section-head { display: grid; gap: 12px; justify-items: center; text-align: center; margin-bottom: 40px; }
       .section-head h2 {
-        margin: 0;
-        max-width: 760px;
-        font-size: clamp(32px, 4vw, 54px);
-        line-height: 1.02;
-        letter-spacing: 0;
+        max-width: 780px;
+        font-size: clamp(30px, 4vw, 52px);
+        line-height: 1.05; letter-spacing: -0.02em; font-weight: 900;
       }
+      .section-head h2 .hl { color: var(--yellow); }
+      .section-head p { max-width: 660px; color: var(--muted); font-size: 17px; line-height: 1.65; }
 
-      .section-head p {
-        margin: 0;
-        max-width: 680px;
-        color: var(--muted);
-        font-size: 17px;
-        line-height: 1.65;
-      }
-
-      .steps {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-      }
-
-      .step,
-      .feature,
-      .gallery-card,
-      .faq,
-      .price-card {
-        border: 1px solid var(--line-soft);
-        background:
-          linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02)),
-          rgba(11, 16, 25, 0.78);
+      .card-base {
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)), rgba(13,17,27,0.72);
         border-radius: var(--radius);
+        transition: transform .2s cubic-bezier(.22,.9,.3,1), border-color .2s, box-shadow .25s;
+      }
+      .card-base:hover {
+        transform: translateY(-4px);
+        border-color: var(--border-2);
+        box-shadow: 0 24px 60px -28px rgba(0,0,0,0.8), 0 0 40px -24px var(--accent-g);
       }
 
-      .step {
-        padding: 24px;
-        min-height: 230px;
-        display: grid;
-        align-content: start;
-        gap: 18px;
-      }
-
+      /* Steps */
+      .steps { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+      .step { padding: 26px; min-height: 220px; display: grid; align-content: start; gap: 16px; }
       .number {
-        width: 44px;
-        height: 44px;
-        display: grid;
-        place-items: center;
-        border-radius: 14px;
-        background: rgba(255, 214, 10, 0.13);
-        color: var(--yellow);
-        font-weight: 1000;
+        width: 46px; height: 46px; display: grid; place-items: center;
+        border-radius: 14px; font-weight: 900; font-size: 18px;
+        background: var(--yellow-d); color: var(--yellow);
+        box-shadow: 0 0 24px -8px rgba(255,214,10,0.5);
       }
-
-      .step h3,
-      .feature h3,
-      .price-card h3 {
-        margin: 0;
-        font-size: 20px;
+      .step h3 { font-size: 20px; }
+      .step p { color: var(--muted); line-height: 1.6; font-size: 14.5px; }
+      .step .demo-line {
+        font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--quiet);
+        border: 1px solid var(--border); border-radius: 10px;
+        padding: 9px 12px; background: rgba(8,11,19,0.6);
       }
+      .step .demo-line b { color: var(--accent-2); font-weight: 600; }
 
-      .step p,
-      .feature p,
-      .faq p,
-      .price-card p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-
-      .features {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-      }
-
-      .feature {
-        padding: 22px;
-        min-height: 210px;
-      }
-
+      /* Features */
+      .features { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+      .feature { padding: 24px; min-height: 190px; }
       .feature-icon {
-        width: 42px;
-        height: 42px;
-        display: grid;
-        place-items: center;
-        border-radius: 14px;
-        margin-bottom: 18px;
-        background: rgba(92, 168, 255, 0.13);
-        color: #aad4ff;
-        font-weight: 1000;
+        width: 44px; height: 44px; display: grid; place-items: center;
+        border-radius: 14px; margin-bottom: 16px;
+        background: var(--accent-d); color: var(--accent-2);
       }
+      .feature-icon svg { width: 20px; height: 20px; }
+      .feature h3 { font-size: 17.5px; margin-bottom: 8px; }
+      .feature p { color: var(--muted); line-height: 1.6; font-size: 14px; }
 
-      .gallery {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-      }
-
+      /* Build gallery */
+      .gallery { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
       .gallery-card {
-        min-height: 230px;
-        padding: 14px;
-        display: grid;
-        align-content: end;
-        overflow: hidden;
-        position: relative;
+        min-height: 230px; padding: 16px;
+        display: grid; align-content: end; gap: 4px;
+        overflow: hidden; position: relative;
       }
-
       .gallery-card::before {
-        content: "";
-        position: absolute;
-        inset: 14px;
-        border-radius: 16px;
-        background:
-          linear-gradient(135deg, rgba(255,214,10,0.35), transparent 45%),
-          linear-gradient(315deg, rgba(92,168,255,0.3), transparent 46%),
-          rgba(255,255,255,0.05);
+        content: ''; position: absolute; inset: 14px; border-radius: 14px;
         border: 1px solid rgba(255,255,255,0.08);
+        background:
+          linear-gradient(135deg, rgba(255,214,10,0.30), transparent 45%),
+          linear-gradient(315deg, rgba(75,157,255,0.28), transparent 46%),
+          rgba(255,255,255,0.04);
       }
-
       .gallery-card:nth-child(2)::before {
         background:
-          linear-gradient(135deg, rgba(169,133,255,0.34), transparent 45%),
-          linear-gradient(315deg, rgba(46,232,122,0.24), transparent 46%),
-          rgba(255,255,255,0.05);
+          linear-gradient(135deg, rgba(169,133,255,0.32), transparent 45%),
+          linear-gradient(315deg, rgba(46,232,122,0.22), transparent 46%),
+          rgba(255,255,255,0.04);
       }
-
       .gallery-card:nth-child(3)::before {
         background:
-          linear-gradient(135deg, rgba(255,84,112,0.28), transparent 45%),
-          linear-gradient(315deg, rgba(255,214,10,0.28), transparent 46%),
-          rgba(255,255,255,0.05);
+          linear-gradient(135deg, rgba(255,84,112,0.26), transparent 45%),
+          linear-gradient(315deg, rgba(255,214,10,0.26), transparent 46%),
+          rgba(255,255,255,0.04);
       }
-
       .gallery-card:nth-child(4)::before {
         background:
-          linear-gradient(135deg, rgba(92,168,255,0.34), transparent 45%),
-          linear-gradient(315deg, rgba(169,133,255,0.3), transparent 46%),
-          rgba(255,255,255,0.05);
+          linear-gradient(135deg, rgba(75,157,255,0.32), transparent 45%),
+          linear-gradient(315deg, rgba(169,133,255,0.28), transparent 46%),
+          rgba(255,255,255,0.04);
       }
-
-      .gallery-card strong,
-      .gallery-card span {
-        position: relative;
-        z-index: 1;
+      .gallery-card .g-code {
+        position: absolute; top: 26px; left: 28px; right: 28px; z-index: 1;
+        font: 10.5px/1.7 ui-monospace, Menlo, monospace; color: rgba(234,240,252,0.5);
+        white-space: pre; overflow: hidden;
+        -webkit-mask-image: linear-gradient(180deg, black 40%, transparent);
+        mask-image: linear-gradient(180deg, black 40%, transparent);
       }
+      .gallery-card strong, .gallery-card span { position: relative; z-index: 1; }
+      .gallery-card strong { font-size: 17px; }
+      .gallery-card span { color: var(--muted); font-size: 13px; }
 
-      .gallery-card strong {
-        display: block;
-        font-size: 17px;
-        margin-bottom: 4px;
-      }
-
-      .gallery-card span {
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .pricing {
-        display: grid;
-        grid-template-columns: 0.9fr 1.1fr;
-        gap: 18px;
-        align-items: stretch;
-      }
-
-      .price-card {
-        padding: 28px;
-      }
-
+      /* Pricing */
+      .pricing { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 18px; align-items: stretch; }
+      .price-card { padding: 30px; position: relative; }
+      .price-card h3 { font-size: 20px; }
+      .price-card .price { margin: 16px 0 6px; font-size: 46px; line-height: 1; font-weight: 900; }
+      .price-card .price span { font-size: 15px; font-weight: 500; color: var(--muted); }
+      .price-card .sub { color: var(--muted); font-size: 14px; line-height: 1.6; }
       .price-card.highlight {
-        border-color: rgba(255, 214, 10, 0.38);
-        background:
-          linear-gradient(180deg, rgba(255,214,10,0.11), rgba(255,255,255,0.025)),
-          rgba(11, 16, 25, 0.84);
+        border-color: rgba(255,214,10,0.4);
+        background: linear-gradient(180deg, rgba(255,214,10,0.09), rgba(255,255,255,0.02)), rgba(13,17,27,0.8);
+        box-shadow: 0 0 60px -30px rgba(255,214,10,0.45);
       }
-
-      .price {
-        margin: 18px 0;
-        font-size: 42px;
-        line-height: 1;
-        font-weight: 1000;
-        letter-spacing: 0;
+      .badge {
+        position: absolute; top: 22px; right: 22px;
+        font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+        color: #14130A; background: linear-gradient(180deg, #FFE066, var(--yellow));
+        border-radius: 999px; padding: 6px 12px;
+        box-shadow: 0 6px 18px rgba(255,214,10,0.35);
       }
-
-      .list {
-        display: grid;
-        gap: 12px;
-        margin: 22px 0 0;
-        padding: 0;
-        list-style: none;
-        color: #d7e2f5;
-      }
-
-      .list li {
-        display: flex;
-        gap: 10px;
-        align-items: flex-start;
-      }
-
+      .list { display: grid; gap: 12px; margin: 22px 0 0; padding: 0; list-style: none; color: #D7E2F5; font-size: 14.5px; }
+      .list li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; }
       .list li::before {
-        content: "";
-        width: 9px;
-        height: 9px;
-        margin-top: 8px;
-        flex: 0 0 auto;
-        border-radius: 999px;
-        background: var(--green);
-        box-shadow: 0 0 14px rgba(46, 232, 122, 0.35);
+        content: ''; width: 9px; height: 9px; margin-top: 7px; flex: 0 0 auto;
+        border-radius: 999px; background: var(--mint);
+        box-shadow: 0 0 14px rgba(46,232,122,0.35);
       }
+      .price-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
 
-      .faq-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-      }
+      /* FAQ */
+      .faq-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+      .faq { padding: 24px; }
+      .faq h3 { font-size: 17px; margin-bottom: 10px; }
+      .faq p { color: var(--muted); line-height: 1.6; font-size: 14.5px; }
+      .faq a { color: var(--accent-2); }
+      .faq a:hover { text-decoration: underline; }
 
-      .faq {
-        padding: 22px;
-      }
-
-      .faq h3 {
-        margin: 0 0 10px;
-        font-size: 17px;
-      }
-
-      .final-cta {
-        padding: 88px 0 100px;
-      }
-
+      /* Final CTA */
+      .final-cta { padding: 40px 0 110px; }
       .cta-panel {
-        border: 1px solid rgba(255, 214, 10, 0.25);
-        border-radius: 30px;
-        padding: clamp(28px, 6vw, 62px);
+        position: relative; overflow: hidden;
+        border: 1px solid rgba(255,214,10,0.25); border-radius: 30px;
+        padding: clamp(32px, 6vw, 68px);
         background:
-          radial-gradient(circle at 50% 0%, rgba(255,214,10,0.18), transparent 32rem),
-          rgba(11, 16, 25, 0.86);
+          radial-gradient(circle at 50% -20%, rgba(255,214,10,0.16), transparent 60%),
+          radial-gradient(circle at 85% 110%, rgba(75,157,255,0.14), transparent 55%),
+          rgba(13,17,27,0.85);
         text-align: center;
       }
-
       .cta-panel h2 {
-        margin: 0 auto 16px;
-        max-width: 760px;
-        font-size: clamp(34px, 5vw, 66px);
-        line-height: 1;
+        margin: 0 auto 16px; max-width: 720px;
+        font-size: clamp(32px, 4.6vw, 60px); line-height: 1.02; font-weight: 900; letter-spacing: -0.02em;
+      }
+      .cta-panel p { margin: 0 auto 28px; max-width: 620px; color: var(--muted); font-size: 17px; line-height: 1.6; }
+
+      footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--quiet); font-size: 13px; background: rgba(7,10,18,0.6); }
+      .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+      .footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
+      .footer-links a:hover { color: var(--text); }
+
+      /* ══════════ Reveal on scroll ══════════ */
+      @media (prefers-reduced-motion: no-preference) {
+        html.reveal-ready .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); will-change: opacity, transform; }
+        html.reveal-ready .reveal.in { opacity: 1; transform: none; }
+        html.reveal-ready .reveal.stagger.in > * { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; }
+        html.reveal-ready .reveal.stagger.in > *:nth-child(2) { animation-delay: .07s; }
+        html.reveal-ready .reveal.stagger.in > *:nth-child(3) { animation-delay: .14s; }
+        html.reveal-ready .reveal.stagger.in > *:nth-child(4) { animation-delay: .21s; }
+        html.reveal-ready .reveal.stagger.in > *:nth-child(n+5) { animation-delay: .28s; }
+        @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
       }
 
-      .cta-panel p {
-        margin: 0 auto 26px;
-        max-width: 650px;
-        color: var(--muted);
-        font-size: 17px;
-        line-height: 1.6;
-      }
-
-      footer {
-        border-top: 1px solid var(--line-soft);
-        padding: 26px 0;
-        color: var(--quiet);
-        font-size: 13px;
-      }
-
-      .footer-inner {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-      }
-
-      .footer-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-      }
-
+      /* ══════════ Responsive ══════════ */
       @media (max-width: 980px) {
         .links { display: none; }
-        .hero-grid { grid-template-columns: 1fr; }
-        .studio { max-width: 680px; margin: 0 auto; }
+        .hero-grid { grid-template-columns: 1fr; gap: 34px; }
+        .editor-stage { max-width: 640px; }
         .steps, .features, .pricing, .faq-grid { grid-template-columns: 1fr; }
-        .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .gallery { grid-template-columns: repeat(2, minmax(0,1fr)); }
       }
-
       @media (max-width: 640px) {
         .wrap { width: min(100% - 22px, 1160px); }
-        .nav-inner { height: auto; min-height: 68px; padding: 10px 0; }
+        .nav-inner { height: auto; min-height: 64px; padding: 10px 0; }
         .brand span { display: none; }
         .nav-actions .ghost { display: none; }
         .hero { padding-top: 44px; }
-        .hero-grid { gap: 28px; }
-        .studio-screen { grid-template-columns: 1fr; }
-        .studio-side { display: none; }
-        .asset-grid, .export-row, .gallery { grid-template-columns: 1fr; }
-        .floating-panel { position: static; width: auto; margin-top: 12px; }
-        section { padding: 58px 0; }
+        .gallery { grid-template-columns: 1fr; }
+        section { padding: 60px 0; }
         .footer-inner { align-items: flex-start; flex-direction: column; }
+        .chip { display: none; }
+        .editor-code { min-height: 280px; font-size: 11px; }
       }
 
-      /* ── Premium polish layer ─────────────────────────────────── */
-      /* Drifting aurora glow above the grid, behind all content. */
-      body::after {
-        content: "";
-        position: fixed;
-        inset: -10%;
-        z-index: -1;
-        pointer-events: none;
-        background:
-          radial-gradient(38rem 38rem at 22% 28%, rgba(255, 214, 10, 0.10), transparent 60%),
-          radial-gradient(34rem 34rem at 82% 16%, rgba(92, 168, 255, 0.10), transparent 60%),
-          radial-gradient(30rem 30rem at 62% 96%, rgba(169, 133, 255, 0.09), transparent 62%);
-      }
-
-      /* Nav gains depth once the page scrolls. */
-      .nav { transition: box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease; }
-      .nav.scrolled { box-shadow: 0 14px 34px -16px rgba(0, 0, 0, 0.7); border-bottom-color: var(--line); background: rgba(5, 7, 12, 0.9); }
-
-      /* Card lift on hover (works for both mockup and gallery cards). */
-      .asset-card, .step { transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
-      .asset-card:hover, .step:hover { transform: translateY(-3px); border-color: rgba(255, 214, 10, 0.35); }
-
-      /* Primary buttons: stronger glow + a slow sweeping sheen. */
-      .btn.primary { position: relative; overflow: hidden; isolation: isolate; }
-      .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 20px 50px rgba(255, 214, 10, 0.38); }
-      .btn.primary::after {
-        content: "";
-        position: absolute;
-        top: 0; bottom: 0; left: -60%;
-        width: 42%;
-        transform: skewX(-18deg);
-        background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-        z-index: -1;
-      }
-
-      @media (prefers-reduced-motion: no-preference) {
-        body::after { animation: rx-aurora 24s ease-in-out infinite alternate; }
-        @keyframes rx-aurora {
-          from { transform: translate3d(-2.5%, -2%, 0) scale(1.06); }
-          to   { transform: translate3d(3.5%, 3%, 0) scale(1.16); }
-        }
-        .pulse { animation: rx-pulse 2.4s ease-in-out infinite; }
-        @keyframes rx-pulse { 0%, 100% { box-shadow: 0 0 12px rgba(46, 232, 122, 0.5); } 50% { box-shadow: 0 0 22px rgba(46, 232, 122, 0.95); } }
-        .btn.primary::after { animation: rx-sheen 5s ease-in-out infinite; }
-        @keyframes rx-sheen { 0%, 62% { left: -60%; } 88%, 100% { left: 130%; } }
-
-        /* Scroll-reveal: only active once JS marks the doc ready, so nothing
-           is ever hidden without the observer that shows it again. */
-        html.reveal-ready .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); will-change: opacity, transform; }
-        html.reveal-ready .reveal.in { opacity: 1; transform: none; }
-        html.reveal-ready .reveal.stagger.in > * { animation: rx-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-        html.reveal-ready .reveal.stagger.in > *:nth-child(2) { animation-delay: 0.07s; }
-        html.reveal-ready .reveal.stagger.in > *:nth-child(3) { animation-delay: 0.14s; }
-        html.reveal-ready .reveal.stagger.in > *:nth-child(4) { animation-delay: 0.21s; }
-        html.reveal-ready .reveal.stagger.in > *:nth-child(5) { animation-delay: 0.28s; }
-        html.reveal-ready .reveal.stagger.in > *:nth-child(n + 6) { animation-delay: 0.35s; }
-        @keyframes rx-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+        .demo-msg { opacity: 1 !important; transform: none !important; }
+        #bg3d { transition: none; }
       }
     </style>
   </head>
   <body>
+    <canvas id="bg3d"></canvas>
+    <div class="bg-aurora"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-noise"></div>
+
     <nav class="nav">
       <div class="wrap nav-inner">
         <a class="brand" href="/">
@@ -853,12 +536,12 @@
           <span>ROTEX</span>
         </a>
         <div class="links" aria-label="Main navigation">
-          <a href="#how">Home</a>
-          <a href="#gallery">Community</a>
-          <a href="/docs">Documentation</a>
-          <a href="#prompt-guide">Prompt Guide</a>
-          <a href="#faq">Blog</a>
-          <a href="#footer">Contact Us</a>
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#builds">What it builds</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#faq">FAQ</a>
+          <a href="/docs">Docs</a>
         </div>
         <div class="nav-actions">
           <a class="btn ghost" href="/login">Log In</a>
@@ -868,216 +551,232 @@
     </nav>
 
     <main>
+      <!-- ══════════ HERO ══════════ -->
       <header class="hero">
         <div class="wrap hero-grid">
           <div>
-            <div class="eyebrow"><i class="pulse"></i> Roblox creators can ship cleaner UI faster.</div>
-            <h1>Create Roblox-ready assets from one clear idea.</h1>
+            <div class="eyebrow">ROTEX — Roblox Dev AI</div>
+            <h1>Build Roblox games by just <span class="grad">chatting</span>.</h1>
             <p class="lead">
-              ROTEX is a static preview site for a game asset studio focused on Roblox UI, icons,
-              thumbnails, panels, HUDs, and Studio handoff workflows.
+              ROTEX writes complete, working Luau — scripts, UI, DataStores, whole systems —
+              and edits your game <strong>live inside Roblox Studio</strong>. Free to start,
+              right in your browser.
             </p>
             <div class="hero-actions">
-              <a class="btn primary" href="/app">Open ROTEX Studio</a>
-              <a class="btn" href="#how">See how it works</a>
+              <a class="btn primary" href="/app">Start building — it's free</a>
+              <a class="btn" href="https://create.roblox.com/store/asset/136503150523656/ROTEX" target="_blank" rel="noopener">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Get the Studio plugin
+              </a>
             </div>
-            <div class="mini-note">Static website only. No chat, AI request, plugin bridge, or model call runs on this page.</div>
-            <div class="platforms" aria-label="Supported platforms">
-              <span>Roblox</span>
-              <span>Fortnite UEFN</span>
-              <span>Minecraft</span>
-              <span>Unity</span>
-              <span>Unreal Engine</span>
-              <span>Blender</span>
+            <div class="mini-note">Free plan included — no card required</div>
+            <div class="surfaces" aria-label="Where ROTEX runs">
+              <span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#4B9DFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                Web app
+              </span>
+              <span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#FFD60A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Roblox Studio plugin
+              </span>
+              <span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#2EE87A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                Desktop app
+              </span>
             </div>
           </div>
 
-          <div class="studio" aria-label="ROTEX studio preview">
-            <div class="studio-top">
-              <div class="traffic"><i></i><i></i><i></i></div>
-              <strong>ROTEX Asset Studio</strong>
-              <span>Preview</span>
+          <div class="editor-stage">
+            <div class="chip c1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#FFD60A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Live in Studio
             </div>
-            <div class="studio-screen">
-              <aside class="studio-side">
-                <div class="side-title">Create</div>
-                <div class="tool active">GUI Sets</div>
-                <div class="tool">Game Icons</div>
-                <div class="tool">Thumbnails</div>
-                <div class="tool">HUD Pieces</div>
-                <div class="tool">3D Props</div>
-              </aside>
-
-              <section class="studio-main" aria-label="Generated asset preview">
-                <div class="prompt-bar">
-                  <div class="prompt-text">Make a glossy simulator shop UI with coins, boosts, pets, and gamepass cards.</div>
-                  <div class="generate-pill">Generate</div>
-                </div>
-
-                <div class="asset-grid">
-                  <article class="asset-card">
-                    <div class="asset-title">Shop Window <span class="asset-tag">GUI</span></div>
-                    <div class="mock-ui">
-                      <div class="mock-row yellow"></div>
-                      <div class="mock-row"></div>
-                      <div class="mock-row short blue"></div>
-                    </div>
-                  </article>
-                  <article class="asset-card">
-                    <div class="asset-title">Currency HUD <span class="asset-tag">HUD</span></div>
-                    <div class="mock-ui">
-                      <div class="mock-row green"></div>
-                      <div class="mock-row short"></div>
-                      <div class="mock-row blue"></div>
-                    </div>
-                  </article>
-                  <article class="asset-card">
-                    <div class="asset-title">Boost Icon Set <span class="asset-tag">PNG</span></div>
-                    <div class="mock-ui">
-                      <div class="mock-row blue"></div>
-                      <div class="mock-row yellow"></div>
-                      <div class="mock-row short"></div>
-                    </div>
-                  </article>
-                  <article class="asset-card">
-                    <div class="asset-title">Game Thumbnail <span class="asset-tag">CTR</span></div>
-                    <div class="mock-ui">
-                      <div class="mock-row yellow"></div>
-                      <div class="mock-row green"></div>
-                      <div class="mock-row short blue"></div>
-                    </div>
-                  </article>
-                </div>
-
-                <div class="export-row">
-                  <div class="export">PNG</div>
-                  <div class="export">ZIP</div>
-                  <div class="export">RBX</div>
-                  <div class="export">GLB</div>
-                </div>
-              </section>
+            <div class="chip c2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#2EE87A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Full Luau
             </div>
-            <div class="floating-panel">
-              <strong>Style match</strong>
-              <div class="meter"><span></span></div>
+            <div class="editor" id="editor3d">
+              <div class="editor-top">
+                <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+                <span class="editor-file" id="edFile">ServerScriptService · ShopHandler.lua</span>
+                <span class="editor-status building" id="edStatus">building</span>
+              </div>
+              <pre class="editor-code" id="edCode"></pre>
+            </div>
+            <div class="demo-chat" id="demoChat"></div>
+          </div>
+        </div>
+
+        <div class="wrap">
+          <div class="ticker">
+            <div class="ticker-track" id="tickerTrack">
+              <span>DataStores</span><i>·</i><span>RemoteEvents</span><i>·</i><span>TweenService</span><i>·</i><span>Pathfinding</span><i>·</i><span>Leaderstats</span><i>·</i><span>UI Builder</span><i>·</i><span>VFX</span><i>·</i><span>Gamepasses</span><i>·</i><span>Badges</span><i>·</i><span>Teams</span><i>·</i><span>Sound</span><i>·</i><span>Animations</span><i>·</i>
             </div>
           </div>
         </div>
       </header>
 
+      <!-- ══════════ HOW IT WORKS ══════════ -->
       <section id="how">
         <div class="wrap">
           <div class="section-head">
-            <h2>Simple workflow for game UI assets.</h2>
-            <p>Describe the interface, preview the generated direction, then export clean assets for your game pipeline.</p>
+            <h2>From idea to <span class="hl">in-game</span> in three steps.</h2>
+            <p>No boilerplate, no copy-paste marathons. Describe what you want and watch it land in your game.</p>
           </div>
-          <div class="steps">
-            <article class="step">
+          <div class="steps reveal stagger">
+            <article class="step card-base">
               <div class="number">1</div>
-              <h3>Describe the asset.</h3>
-              <p>Write what you need, including style, game genre, colors, buttons, text, and target platform.</p>
+              <h3>Say what you want.</h3>
+              <p>Type it like you'd tell a friend. Genre, mechanics, style — plain English is enough.</p>
+              <div class="demo-line"><b>you:</b> make a pet system with eggs and rarities</div>
             </article>
-            <article class="step">
+            <article class="step card-base">
               <div class="number">2</div>
-              <h3>Review the set.</h3>
-              <p>Preview matching panels, icons, buttons, thumbnails, and HUD elements as one consistent pack.</p>
+              <h3>ROTEX builds it.</h3>
+              <p>Complete, working Luau — server scripts, client scripts, UI, remotes, and saves, all wired together.</p>
+              <div class="demo-line"><b>rotex:</b> PetService.lua · EggShop.client.lua · HatchUI ✓</div>
             </article>
-            <article class="step">
+            <article class="step card-base">
               <div class="number">3</div>
-              <h3>Export for production.</h3>
-              <p>Package assets for Roblox Studio, image editing, 3D pipelines, or your team handoff folder.</p>
+              <h3>It lands in Studio.</h3>
+              <p>The ROTEX plugin applies edits to your open place live — scripts appear exactly where they belong.</p>
+              <div class="demo-line"><b>studio:</b> 3 scripts created, 1 updated — play test ready</div>
             </article>
           </div>
         </div>
       </section>
 
-      <section id="prompt-guide">
+      <!-- ══════════ FEATURES ══════════ -->
+      <section id="features">
         <div class="wrap">
           <div class="section-head">
-            <h2>Built around the details Roblox UI needs.</h2>
-            <p>The page is static, but the product direction is clear: game-ready visuals, consistent UI sets, and exportable assets.</p>
+            <h2>Built like a senior Roblox dev, <span class="hl">not</span> a snippet bot.</h2>
+            <p>Every answer is a system that actually runs — with the boring-but-critical parts done right.</p>
           </div>
-          <div class="features">
-            <article class="feature">
-              <div class="feature-icon">R</div>
-              <h3>Reference style direction</h3>
-              <p>Match a target vibe using colors, borders, lighting, materials, and button shapes from your game.</p>
+          <div class="features reveal stagger">
+            <article class="feature card-base">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              </div>
+              <h3>Complete systems</h3>
+              <p>Shops, pets, obbies, rounds, daily rewards — full server + client + UI, wired and ready to run.</p>
             </article>
-            <article class="feature">
-              <div class="feature-icon">U</div>
-              <h3>Complete UI packs</h3>
-              <p>Create shops, inventories, HUDs, settings, popups, rewards, and button states as a connected set.</p>
+            <article class="feature card-base">
+              <div class="feature-icon" style="background:rgba(255,214,10,0.1);color:var(--yellow)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <h3>Live in Roblox Studio</h3>
+              <p>The ROTEX plugin edits your open place in real time — no exporting, no pasting, no hunting for the right service.</p>
             </article>
-            <article class="feature">
-              <div class="feature-icon">X</div>
-              <h3>Cross-platform exports</h3>
-              <p>Prepare PNGs, ZIPs, thumbnails, icons, and model-friendly assets for Roblox and other game tools.</p>
+            <article class="feature card-base">
+              <div class="feature-icon" style="background:rgba(46,232,122,0.1);color:var(--mint)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              </div>
+              <h3>Server-safe by default</h3>
+              <p>Remotes validated on the server, no client trust, exploit-aware patterns baked into every script.</p>
             </article>
-            <article class="feature">
-              <div class="feature-icon">C</div>
-              <h3>Clean control surface</h3>
-              <p>Keep the workflow focused with prompt, preview, style, layout, export, and account actions up front.</p>
+            <article class="feature card-base">
+              <div class="feature-icon" style="background:rgba(169,133,255,0.12);color:#C9AFFF">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 017 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 017-7z"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
+              </div>
+              <h3>Project memory</h3>
+              <p>ROTEX remembers your game's facts between sessions — names, systems, decisions — per project.</p>
             </article>
-            <article class="feature">
-              <div class="feature-icon">S</div>
-              <h3>Studio handoff mindset</h3>
-              <p>Design around real Roblox screens, readable sizing, mobile-safe shapes, and plugin handoff later.</p>
+            <article class="feature card-base">
+              <div class="feature-icon" style="background:rgba(255,84,112,0.1);color:#FF8CA0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              </div>
+              <h3>Smart Mode — zero settings</h3>
+              <p>Every request is automatically routed to the right brain for the job. Nothing to configure, ever.</p>
             </article>
-            <article class="feature">
-              <div class="feature-icon">P</div>
-              <h3>Production polish</h3>
-              <p>Use strong hierarchy, contrast, spacing, icons, and export states so the result feels shippable.</p>
+            <article class="feature card-base">
+              <div class="feature-icon" style="background:rgba(125,185,255,0.12);color:var(--accent-2)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <h3>One account, everywhere</h3>
+              <p>Web app, desktop app, and the Studio plugin stay in sync — your chats and projects follow you.</p>
             </article>
           </div>
         </div>
       </section>
 
-      <section id="gallery">
+      <!-- ══════════ WHAT IT BUILDS ══════════ -->
+      <section id="builds">
         <div class="wrap">
           <div class="section-head">
-            <h2>Preview the kind of assets creators ask for.</h2>
-            <p>A static gallery mockup showing the common Roblox asset categories ROTEX can be positioned around.</p>
+            <h2>The stuff creators actually ask for.</h2>
+            <p>Real requests from real sessions — each one shipped as a complete, working system.</p>
           </div>
-          <div class="gallery">
-            <article class="gallery-card"><strong>Simulator Shop</strong><span>Boost cards and currency rows</span></article>
-            <article class="gallery-card"><strong>Quest Dialog</strong><span>NPC panel and reward preview</span></article>
-            <article class="gallery-card"><strong>Game Icon</strong><span>High contrast square artwork</span></article>
-            <article class="gallery-card"><strong>Lobby HUD</strong><span>Buttons, stats, and daily reward</span></article>
+          <div class="gallery reveal stagger">
+            <article class="gallery-card card-base">
+              <div class="g-code">BuyRemote.OnServerEvent:Connect(
+  function(player, itemId)
+    if getCoins(player) >= price then</div>
+              <strong>Simulator Shop</strong>
+              <span>DataStore saves, server-validated buys</span>
+            </article>
+            <article class="gallery-card card-base">
+              <div class="g-code">local egg = EGGS[eggId]
+local pet = rollRarity(egg.table)
+hatchPet(player, pet)</div>
+              <strong>Pet System</strong>
+              <span>Eggs, rarities, hatching, inventory</span>
+            </article>
+            <article class="gallery-card card-base">
+              <div class="g-code">checkpoint.Touched:Connect(function(hit)
+  local plr = getPlayer(hit)
+  setStage(plr, stageNum)</div>
+              <strong>Obby Checkpoints</strong>
+              <span>Stages, respawns, leaderstats</span>
+            </article>
+            <article class="gallery-card card-base">
+              <div class="g-code">streak = days == 1 and streak + 1 or 1
+grantReward(player,
+  REWARDS[math.min(streak, 7)])</div>
+              <strong>Daily Rewards</strong>
+              <span>Streaks, UTC day math, safe saves</span>
+            </article>
           </div>
         </div>
       </section>
 
-      <section>
+      <!-- ══════════ PRICING ══════════ -->
+      <section id="pricing">
         <div class="wrap">
           <div class="section-head">
-            <h2>Keep plans and tokens on the real account pages.</h2>
-            <p>This landing page does not run AI. Billing and account actions still link to the existing ROTEX pages.</p>
+            <h2>Start free. Go Pro when you're <span class="hl">hooked</span>.</h2>
+            <p>Pro is a one-time purchase — not a subscription. It never auto-renews.</p>
           </div>
-          <div class="pricing">
-            <article class="price-card">
-              <h3>Start Free</h3>
+          <div class="pricing reveal">
+            <article class="price-card card-base">
+              <h3>Free</h3>
               <div class="price">$0</div>
-              <p>Use the public pages, sign in, and keep your account ready for the full app workflow.</p>
+              <p class="sub">Everything you need to start building today.</p>
               <ul class="list">
-                <li>Static website preview</li>
-                <li>Account login link</li>
-                <li>Documentation and guide links</li>
+                <li>100,000 TexTokens every day</li>
+                <li>Full chat builder in the browser</li>
+                <li>Roblox Studio plugin included</li>
+                <li>Project memory &amp; saved chats</li>
+                <li>No card required</li>
               </ul>
-              <div class="hero-actions">
-                <a class="btn" href="/login">Log In</a>
+              <div class="price-actions">
+                <a class="btn blue" href="/app">Open ROTEX</a>
               </div>
             </article>
-            <article class="price-card highlight">
+            <article class="price-card card-base highlight">
+              <div class="badge">One-time · No subscription</div>
               <h3>ROTEX Pro</h3>
-              <div class="price">Upgrade</div>
-              <p>Connect subscriptions, token packs, and future studio workflows through the existing account pages.</p>
+              <div class="price">$20 <span>/ 30 days</span></div>
+              <p class="sub">Ten times the budget, priority speed, and the best models.</p>
               <ul class="list">
-                <li>Upgrade page stays available</li>
-                <li>TexToken packs stay available</li>
-                <li>Desktop and plugin code stays preserved behind the scenes</li>
+                <li>1,000,000 TexTokens daily — 10× free</li>
+                <li>20M TexTokens per 30-day period</li>
+                <li>More budget for all models, including Claude Haiku 4.5</li>
+                <li>Priority speed, Pro badge, early access</li>
+                <li>Pay once — it simply expires, never rebills</li>
               </ul>
-              <div class="hero-actions">
-                <a class="btn primary" href="/account#pro">Upgrade Plan</a>
+              <div class="price-actions">
+                <a class="btn primary" href="/account#pro">Get Pro</a>
                 <a class="btn" href="/tokens">Buy TexTokens</a>
               </div>
             </article>
@@ -1085,41 +784,43 @@
         </div>
       </section>
 
+      <!-- ══════════ FAQ ══════════ -->
       <section id="faq">
         <div class="wrap">
           <div class="section-head">
-            <h2>Questions creators ask first.</h2>
-            <p>Short answers for the static website version.</p>
+            <h2>Questions builders ask first.</h2>
+            <p>Short, honest answers.</p>
           </div>
-          <div class="faq-grid">
-            <article class="faq">
-              <h3>Is the homepage connected to AI?</h3>
-              <p>No. This page is static and does not call chat, model, token, or plugin endpoints.</p>
+          <div class="faq-grid reveal stagger">
+            <article class="faq card-base">
+              <h3>Do I need the Studio plugin?</h3>
+              <p>Chat and build entirely in the browser if you want. The <a href="https://create.roblox.com/store/asset/136503150523656/ROTEX" target="_blank" rel="noopener">free plugin</a> is what lets ROTEX apply edits to your open place live in Roblox Studio.</p>
             </article>
-            <article class="faq">
-              <h3>Can users still log in?</h3>
-              <p>Yes. Login, account, Pro, and TexToken pages still exist as separate pages.</p>
+            <article class="faq card-base">
+              <h3>Is Pro a subscription?</h3>
+              <p>No. Pro is a one-time $20 purchase that lasts 30 days. It never auto-renews — when it ends, you just drop back to the free plan.</p>
             </article>
-            <article class="faq">
-              <h3>Is the desktop app deleted?</h3>
-              <p>No. The desktop, plugin, and backend files remain in the project for later.</p>
+            <article class="faq card-base">
+              <h3>What can ROTEX actually build?</h3>
+              <p>Whole systems: shops, pet systems, obbies, round-based games, daily rewards, leaderstats, UI, DataStores, remotes — complete scripts, not fragments.</p>
             </article>
-            <article class="faq">
-              <h3>Is this an exact clone?</h3>
-              <p>No. It follows the same broad product-page category, but uses ROTEX branding and original layout/copy.</p>
+            <article class="faq card-base">
+              <h3>Is the code safe for real games?</h3>
+              <p>ROTEX writes server-authoritative code by default — purchases and rewards are validated on the server, so exploiters can't fake them from the client.</p>
             </article>
           </div>
         </div>
       </section>
 
+      <!-- ══════════ FINAL CTA ══════════ -->
       <section class="final-cta">
         <div class="wrap">
-          <div class="cta-panel">
-            <h2>Launch ROTEX as a clean Roblox asset studio.</h2>
-            <p>Static page first, real workflows later. The public homepage now sells the idea without wiring into the AI app.</p>
+          <div class="cta-panel reveal">
+            <h2>Your game is one conversation away.</h2>
+            <p>Open ROTEX, say what you want to build, and watch it happen — free, in your browser, right now.</p>
             <div class="hero-actions" style="justify-content:center">
-              <a class="btn primary" href="/signup">Create Account</a>
-              <a class="btn" href="/docs">Read Docs</a>
+              <a class="btn primary" href="/signup">Create free account</a>
+              <a class="btn" href="/docs">Read the docs</a>
             </div>
           </div>
         </div>
@@ -1128,16 +829,18 @@
 
     <footer id="footer">
       <div class="wrap footer-inner">
-        <div>Copyright 2026 ROTEX. All rights reserved.</div>
+        <div>© 2026 ROTEX. All rights reserved.</div>
         <div class="footer-links">
           <a href="/docs">Documentation</a>
           <a href="/tokens">TexTokens</a>
           <a href="/account">Account</a>
           <a href="/login">Log In</a>
+          <a href="https://create.roblox.com/store/asset/136503150523656/ROTEX" target="_blank" rel="noopener">Studio Plugin</a>
         </div>
       </div>
     </footer>
 
+    <!-- ══════════ Nav + reveal + ticker ══════════ -->
     <script>
       (function () {
         var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1147,19 +850,14 @@
           onScroll();
           window.addEventListener('scroll', onScroll, { passive: true });
         }
+
+        var track = document.getElementById('tickerTrack');
+        if (track) track.innerHTML += track.innerHTML;
+
         if (reduce || !('IntersectionObserver' in window)) return;
 
-        var targets = [];
-        document.querySelectorAll('.hero-grid > div, main > section > .wrap').forEach(function (el) {
-          el.classList.add('reveal');
-          targets.push(el);
-        });
-        document.querySelectorAll('.gallery').forEach(function (el) {
-          el.classList.add('reveal', 'stagger');
-          if (targets.indexOf(el) === -1) targets.push(el);
-        });
+        var targets = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
         if (!targets.length) return;
-
         document.documentElement.classList.add('reveal-ready');
         var io = new IntersectionObserver(function (entries) {
           entries.forEach(function (e) {
@@ -1172,6 +870,378 @@
         setTimeout(function () {
           document.querySelectorAll('.reveal:not(.in)').forEach(function (el) { el.classList.add('in'); });
         }, 1800);
+      })();
+    </script>
+
+    <!-- ══════════ Hero demo — ROTEX types real Luau on loop ══════════ -->
+    <script>
+      (() => {
+        const codeEl   = document.getElementById('edCode');
+        const fileEl   = document.getElementById('edFile');
+        const statusEl = document.getElementById('edStatus');
+        const chatEl   = document.getElementById('demoChat');
+        if (!codeEl || !chatEl) return;
+
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        // token classes: k keyword · s string · f function · c comment · n number · p plain
+        const SNIPPETS = [
+          {
+            file: 'ServerScriptService · ShopHandler.lua',
+            prompt: 'make a shop that saves coins',
+            reply: 'Done — a ScreenGui shop, a BuyRemote, and a safe DataStore with autosave. It’s in your game. ⚡',
+            lines: [
+              [['c','-- ROTEX built this from: "make a shop that saves coins"']],
+              [['k','local'],['p',' DataStore = '],['f','game:GetService'],['p','('],['s','"DataStoreService"'],['p',')']],
+              [['k','local'],['p',' Coins = DataStore:'],['f','GetDataStore'],['p','('],['s','"Coins"'],['p',')']],
+              [['p',' ']],
+              [['p','BuyRemote.OnServerEvent:'],['f','Connect'],['p','('],['k','function'],['p','(player, itemId)']],
+              [['p','    '],['k','local'],['p',' price = ITEMS[itemId].price']],
+              [['p','    '],['k','if'],['p',' '],['f','getCoins'],['p','(player) >= price '],['k','then']],
+              [['p','        '],['f','addCoins'],['p','(player, -price)']],
+              [['p','        '],['f','grantItem'],['p','(player, itemId)']],
+              [['p','    '],['k','end']],
+              [['k','end'],['p',')']],
+            ],
+          },
+          {
+            file: 'StarterPlayerScripts · DoubleJump.client.lua',
+            prompt: 'add a double jump',
+            reply: 'Shipped — jump input with a Freefall window, all client-side, nothing a cheater can abuse on the server. 🎮',
+            lines: [
+              [['c','-- ROTEX built this from: "add a double jump"']],
+              [['k','local'],['p',' UIS = '],['f','game:GetService'],['p','('],['s','"UserInputService"'],['p',')']],
+              [['k','local'],['p',' canDouble = '],['k','false']],
+              [['p',' ']],
+              [['p','UIS.JumpRequest:'],['f','Connect'],['p','('],['k','function'],['p','()']],
+              [['p','    '],['k','if not'],['p',' canDouble '],['k','then return end']],
+              [['p','    hum:'],['f','ChangeState'],['p','(Enum.HumanoidStateType.Jumping)']],
+              [['p','    canDouble = '],['k','false']],
+              [['k','end'],['p',')']],
+              [['p',' ']],
+              [['p','hum.StateChanged:'],['f','Connect'],['p','('],['k','function'],['p','(_, state)']],
+              [['p','    canDouble = state == Enum.HumanoidStateType.Freefall']],
+              [['k','end'],['p',')']],
+            ],
+          },
+          {
+            file: 'ServerScriptService · DailyRewards.lua',
+            prompt: 'give players daily reward streaks',
+            reply: 'Built — a 7-day streak table, UTC day math, and DataStore saves that retry on failure. 🔥',
+            lines: [
+              [['c','-- ROTEX built this from: "daily reward streaks"']],
+              [['k','local'],['p',' Players = '],['f','game:GetService'],['p','('],['s','"Players"'],['p',')']],
+              [['k','local'],['p',' Streaks = DataStore:'],['f','GetDataStore'],['p','('],['s','"Streaks"'],['p',')']],
+              [['p',' ']],
+              [['p','Players.PlayerAdded:'],['f','Connect'],['p','('],['k','function'],['p','(player)']],
+              [['p','    '],['k','local'],['p',' last, streak = '],['f','loadStreak'],['p','(player)']],
+              [['p','    '],['k','local'],['p',' days = math.floor((os.time() - last) / '],['n','86400'],['p',')']],
+              [['p','    streak = days == '],['n','1'],['p',' '],['k','and'],['p',' streak + '],['n','1'],['p',' '],['k','or'],['p',' '],['n','1']],
+              [['p','    '],['f','grantReward'],['p','(player, REWARDS[math.min(streak, '],['n','7'],['p',')])']],
+              [['p','    '],['f','saveStreak'],['p','(player, os.time(), streak)']],
+              [['k','end'],['p',')']],
+            ],
+          },
+        ];
+
+        const wait = ms => new Promise(r => setTimeout(r, ms));
+        const caret = document.createElement('span');
+        caret.className = 'caret';
+
+        function setStatus(state) {
+          statusEl.className = 'editor-status ' + state;
+          statusEl.textContent = state === 'building' ? 'building' : 'shipped';
+        }
+
+        function bubble(kind, text) {
+          const el = document.createElement('div');
+          el.className = 'demo-msg ' + kind;
+          el.textContent = text;
+          chatEl.appendChild(el);
+          requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+          return el;
+        }
+
+        async function typeSnippet(sn) {
+          fileEl.textContent = sn.file;
+          codeEl.innerHTML = '';
+          chatEl.innerHTML = '';
+          setStatus('building');
+
+          bubble('user', sn.prompt);
+          if (!reduced) await wait(650);
+
+          for (const line of sn.lines) {
+            const lineEl = document.createElement('span');
+            lineEl.className = 'line';
+            codeEl.appendChild(lineEl);
+            for (const [cls, text] of line) {
+              const span = document.createElement('span');
+              if (cls !== 'p') span.className = cls;
+              lineEl.appendChild(span);
+              if (reduced) { span.textContent = text; continue; }
+              lineEl.appendChild(caret);
+              for (const ch of text) {
+                span.textContent += ch;
+                if (ch !== ' ') await wait(9 + Math.random() * 18);
+              }
+            }
+          }
+          caret.remove();
+
+          setStatus('shipped');
+          if (!reduced) await wait(450);
+          bubble('ai', sn.reply);
+        }
+
+        (async () => {
+          if (reduced) { await typeSnippet(SNIPPETS[0]); return; }
+          let i = 0;
+          for (;;) {
+            await typeSnippet(SNIPPETS[i % SNIPPETS.length]);
+            await wait(5200);
+            i++;
+          }
+        })();
+
+        /* Editor 3D tilt */
+        const stage = document.querySelector('.editor-stage');
+        const editor = document.getElementById('editor3d');
+        if (stage && editor && !reduced && matchMedia('(pointer: fine)').matches) {
+          let rx = 0, ry = 0, trx = 0, try_ = 0;
+          stage.addEventListener('pointermove', e => {
+            const r = stage.getBoundingClientRect();
+            try_ = ((e.clientX - r.left) / r.width - 0.5) * 8;
+            trx  = -((e.clientY - r.top) / r.height - 0.5) * 6;
+          });
+          stage.addEventListener('pointerleave', () => { trx = 0; try_ = 0; });
+          (function tilt() {
+            rx += (trx - rx) * 0.09; ry += (try_ - ry) * 0.09;
+            editor.style.transform = `rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+            requestAnimationFrame(tilt);
+          })();
+        }
+      })();
+    </script>
+
+    <!-- ══════════ 3D SCENE — voxel world with scroll parallax (Three.js)
+         Falls back to the CSS aurora background if WebGL/CDN is unavailable. ══════════ -->
+    <script type="module">
+      (async () => {
+        const canvas = document.getElementById('bg3d');
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let THREE;
+        try {
+          THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
+        } catch {
+          document.body.classList.add('no3d');
+          return;
+        }
+
+        let renderer;
+        try {
+          renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+        } catch {
+          document.body.classList.add('no3d');
+          return;
+        }
+
+        const small = matchMedia('(max-width: 940px)').matches;
+        renderer.setPixelRatio(Math.min(devicePixelRatio || 1, small ? 1.25 : 1.75));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x070a12, 0.028);
+
+        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+        camera.position.set(0, 0.6, 15);
+
+        /* ── Lights ── */
+        scene.add(new THREE.AmbientLight(0x8899cc, 0.55));
+        const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+        sun.position.set(6, 10, 8);
+        scene.add(sun);
+        const blueGlow = new THREE.PointLight(0x4b9dff, 60, 34, 2);
+        blueGlow.position.set(-7, 3, 2);
+        scene.add(blueGlow);
+        const warmGlow = new THREE.PointLight(0xffd60a, 45, 26, 2);
+        warmGlow.position.set(6, -2, 3);
+        scene.add(warmGlow);
+
+        /* ── Voxel island ── */
+        const island = new THREE.Group();
+        scene.add(island);
+
+        const box = new THREE.BoxGeometry(0.92, 0.92, 0.92);
+        const mats = {
+          slate:  new THREE.MeshStandardMaterial({ color: 0x1d2740, roughness: 0.4, metalness: 0.15 }),
+          slate2: new THREE.MeshStandardMaterial({ color: 0x27334f, roughness: 0.45, metalness: 0.1 }),
+          blue:   new THREE.MeshStandardMaterial({ color: 0x4b9dff, roughness: 0.3, metalness: 0.2, emissive: 0x1a4a8f, emissiveIntensity: 0.35 }),
+          gold:   new THREE.MeshStandardMaterial({ color: 0xffd60a, roughness: 0.3, metalness: 0.1, emissive: 0xffb300, emissiveIntensity: 0.9 }),
+        };
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x7db9ff, transparent: true, opacity: 0.14 });
+        const edgeGeo = new THREE.EdgesGeometry(box);
+
+        const cells = [];
+        for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
+          if (Math.abs(x) + Math.abs(z) <= 3) cells.push([x, 0, z]);
+        }
+        const towers = [[-1,1,-1,2],[1,1,0,3],[0,1,1,2],[2,1,0,1],[-2,1,0,1],[0,1,-2,1],[1,1,2,1],[-1,1,2,2]];
+        for (const [tx, ty, tz, h] of towers) for (let y = 0; y < h; y++) cells.push([tx, ty + y, tz]);
+        cells.push([0,-1,0],[0,-2,0],[1,-1,-1],[-1,-1,1]);
+
+        const cubes = [];
+        const rng = (seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647)(42);
+        cells.forEach(([cx, cy, cz]) => {
+          const r = rng();
+          const mat = r < 0.58 ? mats.slate : r < 0.78 ? mats.slate2 : r < 0.93 ? mats.blue : mats.gold;
+          const m = new THREE.Mesh(box, mat);
+          m.position.set(cx, cy, cz);
+          m.add(new THREE.LineSegments(edgeGeo, edgeMat));
+          const d = Math.hypot(cx, cy - 1, cz);
+          cubes.push({ mesh: m, delay: d * 0.16 + rng() * 0.12 });
+          island.add(m);
+        });
+
+        /* ── Drifting solo cubes ── */
+        const drifters = [];
+        for (let i = 0; i < 18; i++) {
+          const s = 0.25 + rng() * 0.5;
+          const g = new THREE.BoxGeometry(s, s, s);
+          const r = rng();
+          const m = new THREE.Mesh(g, r < 0.55 ? mats.slate2 : r < 0.85 ? mats.blue : mats.gold);
+          m.position.set((rng() - 0.5) * 28, (rng() - 0.5) * 16, -3 - rng() * 9);
+          drifters.push({ mesh: m, rs: (rng() - 0.5) * 0.6, bob: rng() * Math.PI * 2, speed: 0.2 + rng() * 0.5 });
+          scene.add(m);
+        }
+
+        /* ── Wireframe icosahedron ── */
+        const ico = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(5.5, 1),
+          new THREE.MeshBasicMaterial({ color: 0x4b9dff, wireframe: true, transparent: true, opacity: 0.07 })
+        );
+        ico.position.set(-8.5, -2, -7);
+        scene.add(ico);
+
+        /* ── Particles ── */
+        function dotTexture(colorStops) {
+          const c = document.createElement('canvas');
+          c.width = c.height = 64;
+          const ctx = c.getContext('2d');
+          const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+          for (const [o, col] of colorStops) g.addColorStop(o, col);
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, 64, 64);
+          return new THREE.CanvasTexture(c);
+        }
+        function makePoints(count, size, tex, spread) {
+          const pos = new Float32Array(count * 3);
+          for (let i = 0; i < count; i++) {
+            pos[i * 3]     = (rng() - 0.5) * spread[0];
+            pos[i * 3 + 1] = (rng() - 0.5) * spread[1];
+            pos[i * 3 + 2] = -2 - rng() * spread[2];
+          }
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+          const mat = new THREE.PointsMaterial({
+            size, map: tex, transparent: true, opacity: 0.85,
+            depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+          });
+          return new THREE.Points(geo, mat);
+        }
+        const starsBlue = makePoints(small ? 300 : 700, 0.09,
+          dotTexture([[0, 'rgba(190,215,255,1)'], [0.4, 'rgba(120,170,255,0.5)'], [1, 'rgba(120,170,255,0)']]),
+          [36, 24, 14]);
+        const starsGold = makePoints(small ? 45 : 100, 0.14,
+          dotTexture([[0, 'rgba(255,235,160,1)'], [0.4, 'rgba(255,214,10,0.4)'], [1, 'rgba(255,214,10,0)']]),
+          [36, 24, 12]);
+        scene.add(starsBlue, starsGold);
+
+        /* ── Layout (self-healing: re-checked every frame) ── */
+        let lastW = -1, lastH = -1;
+        function layout() {
+          const w = innerWidth, h = innerHeight;
+          if (!w || !h || (w === lastW && h === lastH)) return;
+          lastW = w; lastH = h;
+          renderer.setSize(w, h, false);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          const wide = w / h > 1.15 && !matchMedia('(max-width: 940px)').matches;
+          island.position.set(wide ? 6.2 : 0, 1.2, -4.5);
+          island.scale.setScalar(wide ? 0.9 : 0.65);
+        }
+        layout();
+        addEventListener('resize', layout);
+
+        /* ── Mouse parallax + scroll drift ── */
+        let mx = 0, my = 0;
+        addEventListener('pointermove', e => {
+          mx = (e.clientX / innerWidth - 0.5) * 2;
+          my = (e.clientY / innerHeight - 0.5) * 2;
+        }, { passive: true });
+
+        /* ── Build-loop easing ── */
+        const backOut = t => { const s = 1.7; t -= 1; return t * t * ((s + 1) * t + s) + 1; };
+        const clamp01 = t => Math.min(1, Math.max(0, t));
+        const CYCLE = 12;
+        function cubeScale(t, delay) {
+          const local = t % CYCLE;
+          if (local < 4)   return backOut(clamp01((local - delay) / 0.7));
+          if (local < 9.5) return 1;
+          if (local < 11)  return 1 - clamp01((local - 9.5 - delay * 0.4) / 0.8);
+          return 0;
+        }
+
+        /* ── Animate ── */
+        const clock = new THREE.Clock();
+        let running = true, t = 0;
+        document.addEventListener('visibilitychange', () => {
+          running = !document.hidden;
+          if (running) { clock.getDelta(); frame(); }
+        });
+
+        function frame() {
+          if (!running) return;
+          layout();
+          const dt = Math.min(clock.getDelta(), 0.05);
+          t += dt;
+
+          const scroll = (window.scrollY || 0) * 0.0045;
+
+          island.rotation.y = t * 0.14;
+          island.position.y = 1.2 + Math.sin(t * 0.5) * 0.28 + scroll * 2.2;
+
+          for (const c of cubes) {
+            c.mesh.scale.setScalar(Math.max(0.0001, cubeScale(t + 1.2, c.delay)));
+          }
+
+          for (const d of drifters) {
+            d.mesh.rotation.x += d.rs * dt;
+            d.mesh.rotation.y += d.rs * 1.3 * dt;
+            d.mesh.position.y += Math.sin(t * d.speed + d.bob) * 0.0035;
+          }
+
+          ico.rotation.y = t * 0.05;
+          ico.rotation.x = t * 0.02;
+          starsBlue.rotation.y = t * 0.008;
+          starsGold.rotation.y = -t * 0.011;
+
+          camera.position.x += (mx * 0.9 - camera.position.x) * 0.04;
+          camera.position.y += (-my * 0.55 + 0.6 - scroll - camera.position.y) * 0.06;
+          camera.lookAt(1.2, 0.2 - scroll, -2);
+
+          renderer.render(scene, camera);
+          if (!reduced) requestAnimationFrame(frame);
+        }
+
+        if (reduced) {
+          t = 6;
+          for (const c of cubes) c.mesh.scale.setScalar(1);
+          renderer.render(scene, camera);
+        } else {
+          frame();
+        }
+        canvas.classList.add('live');
       })();
     </script>
   </body>
