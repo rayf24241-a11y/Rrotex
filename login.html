@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#070A12">
   <title>ROTEX — Sign In</title>
   <link rel="icon" href="./favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" href="./icon.png" />
@@ -10,18 +11,30 @@
   <script src="./dev-guard.js"></script>
   <style>
     :root {
-      --bg:        #0D0F17;
-      --surface:   #141720;
-      --panel:     #1A1F2E;
-      --border:    #252D40;
-      --text:      #E8EDF8;
+      --bg:        #070A12;
+      --surface:   #10141F;
+      --panel:     #171C2B;
+      --border:    #232B41;
+      --border-2:  #2E3852;
+      --text:      #EAF0FC;
       --muted:     #8A93AA;
       --quiet:     #525C78;
       --accent:    #4B9DFF;
+      --accent-2:  #7DB9FF;
       --accent-d:  rgba(75,157,255,0.15);
       --accent-g:  rgba(75,157,255,0.30);
+      --yellow:    #FFD60A;
+      --yellow-d:  rgba(255,214,10,0.14);
+      --mint:      #2EE87A;
       --red:       #FF4757;
     }
+
+    @property --ang {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       height: 100%;
@@ -33,83 +46,342 @@
       user-select: none;
       -webkit-app-region: drag;
     }
+    ::selection { background: var(--accent-g); }
 
-    /* Background layers */
-    .bg-glow {
-      position: fixed; inset: 0; pointer-events: none;
-      background:
-        radial-gradient(ellipse 700px 500px at 15% -100px, rgba(75,157,255,0.10) 0%, transparent 60%),
-        radial-gradient(ellipse 600px 500px at 85% 110%,  rgba(75,157,255,0.08)  0%, transparent 60%);
+    /* ══════════ Background stack ══════════ */
+    #bg3d {
+      position: fixed; inset: 0; z-index: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      opacity: 0; transition: opacity 1.6s ease;
     }
+    #bg3d.live { opacity: 1; }
+
+    .bg-aurora {
+      position: fixed; inset: -20%; z-index: 0; pointer-events: none;
+      filter: blur(70px); opacity: .55;
+    }
+    .bg-aurora::before, .bg-aurora::after {
+      content: ''; position: absolute; border-radius: 50%;
+      mix-blend-mode: screen;
+    }
+    .bg-aurora::before {
+      width: 55vw; height: 55vw; left: -8%; top: -12%;
+      background: radial-gradient(circle at 40% 40%, rgba(75,157,255,0.20), transparent 65%);
+      animation: aur-a 26s ease-in-out infinite alternate;
+    }
+    .bg-aurora::after {
+      width: 48vw; height: 48vw; right: -6%; bottom: -14%;
+      background: radial-gradient(circle at 55% 55%, rgba(255,214,10,0.10), rgba(75,157,255,0.12) 55%, transparent 72%);
+      animation: aur-b 32s ease-in-out infinite alternate;
+    }
+    @keyframes aur-a { to { transform: translate(9vw, 7vh) scale(1.15); } }
+    @keyframes aur-b { to { transform: translate(-8vw, -6vh) scale(0.9); } }
+    body.no3d .bg-aurora { opacity: .85; }
+
     .bg-grid {
-      position: fixed; inset: 0; pointer-events: none;
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
-        linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
-      background-size: 44px 44px;
-      -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent);
-      mask-image:         radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent);
+        linear-gradient(rgba(150,180,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(150,180,255,0.035) 1px, transparent 1px);
+      background-size: 46px 46px;
+      -webkit-mask-image: radial-gradient(ellipse 90% 85% at 50% 45%, black 30%, transparent 78%);
+      mask-image:         radial-gradient(ellipse 90% 85% at 50% 45%, black 30%, transparent 78%);
+    }
+    .bg-noise {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      opacity: .05; mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    .bg-vignette {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: radial-gradient(ellipse 110% 110% at 50% 40%, transparent 55%, rgba(2,4,9,0.55) 100%);
+    }
+    #cursorGlow {
+      position: fixed; z-index: 0; pointer-events: none;
+      width: 560px; height: 560px; left: 0; top: 0;
+      margin: -280px 0 0 -280px;
+      background: radial-gradient(circle, rgba(75,157,255,0.09) 0%, transparent 62%);
+      mix-blend-mode: screen;
+      will-change: transform;
     }
 
-    /* Layout */
-    .wrap {
+    /* ══════════ Layout ══════════ */
+    .split {
       position: relative; z-index: 1;
       height: 100vh;
+      display: grid; grid-template-columns: 1.12fr 0.88fr;
+    }
+    .auth { display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .wrap {
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      padding: 40px 24px 24px;
-      gap: 28px;
+      gap: 22px;
+      width: 100%;
     }
 
-    /* Logo */
-    .logo {
-      display: flex; align-items: center; gap: 14px;
-      -webkit-app-region: no-drag;
+    /* ══════════ Showcase (left) ══════════ */
+    .showcase {
+      position: relative; overflow-y: auto; overflow-x: hidden;
+      padding: 44px clamp(26px, 4vw, 64px);
+      display: flex;
+      border-right: 1px solid rgba(46,56,82,0.55);
+      -webkit-app-region: drag;
+      background: linear-gradient(120deg, rgba(10,13,22,0.35), rgba(7,10,18,0.05) 55%);
     }
+    .showcase::-webkit-scrollbar { width: 0; }
+    .showcase-inner { max-width: 580px; width: 100%; margin: auto; }
+
+    .sc-anim { opacity: 0; animation: rise .8s cubic-bezier(.22,.9,.3,1) forwards; }
+    @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+
+    .sc-eyebrow {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--yellow); margin-bottom: 18px;
+      padding: 7px 14px; border-radius: 999px;
+      background: rgba(255,214,10,0.06);
+      border: 1px solid rgba(255,214,10,0.18);
+    }
+    .sc-eyebrow::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--mint); box-shadow: 0 0 12px var(--mint);
+      animation: sc-pulse 2s infinite;
+    }
+    @keyframes sc-pulse { 50% { opacity: .3; } }
+
+    .sc-title {
+      font-size: clamp(30px, 3.8vw, 52px);
+      font-weight: 900; line-height: 1.04; letter-spacing: -0.025em;
+      margin-bottom: 14px;
+    }
+    .sc-title .grad {
+      background: linear-gradient(100deg, var(--yellow) 10%, #FFB13D 38%, var(--accent) 72%, var(--accent-2) 95%);
+      background-size: 220% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      animation: grad-slide 6s ease-in-out infinite alternate;
+    }
+    @keyframes grad-slide { to { background-position: 100% 0; } }
+
+    .sc-sub {
+      color: var(--muted); font-size: 15.5px; line-height: 1.65;
+      margin-bottom: 26px; max-width: 480px;
+    }
+    .sc-sub strong { color: var(--text); font-weight: 600; }
+
+    /* ── 3D editor stage ── */
+    .editor-stage {
+      position: relative;
+      perspective: 1400px;
+    }
+    .editor {
+      position: relative;
+      border: 1px solid var(--border-2);
+      border-radius: 16px; overflow: hidden;
+      background: rgba(8,11,19,0.82);
+      backdrop-filter: blur(10px);
+      box-shadow:
+        0 40px 90px -30px rgba(0,0,0,0.9),
+        0 0 0 1px rgba(255,255,255,0.03) inset,
+        0 0 80px -30px var(--accent-g);
+      transform-style: preserve-3d;
+      will-change: transform;
+      transition: box-shadow .3s;
+    }
+    .editor-top {
+      display: flex; align-items: center; gap: 7px;
+      padding: 11px 15px;
+      background: linear-gradient(180deg, rgba(23,28,43,0.9), rgba(15,19,30,0.9));
+      border-bottom: 1px solid var(--border);
+    }
+    .editor-top .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .editor-top .r { background: #ff5f57; } .editor-top .y { background: #febc2e; } .editor-top .g { background: #28c840; }
+    .editor-file {
+      margin-left: 8px;
+      font: 600 11.5px/1 ui-monospace, 'Cascadia Code', Menlo, monospace;
+      color: var(--quiet);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .editor-status {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+      font: 700 10.5px/1 inherit; letter-spacing: .06em; text-transform: uppercase;
+      padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+    }
+    .editor-status.building { color: var(--yellow); background: var(--yellow-d); }
+    .editor-status.building::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--yellow); animation: sc-pulse 1s infinite;
+    }
+    .editor-status.shipped { color: var(--mint); background: rgba(46,232,122,0.1); }
+    .editor-status.shipped::before { content: '✓'; font-size: 10px; }
+
+    .editor-code {
+      margin: 0; padding: 16px 18px;
+      font: 12.5px/1.8 ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+      min-height: 326px; /* tallest snippet — keeps chat from shifting while typing */
+      overflow-x: auto; white-space: pre;
+      -webkit-mask-image: linear-gradient(180deg, black 94%, rgba(0,0,0,0.4));
+      mask-image: linear-gradient(180deg, black 94%, rgba(0,0,0,0.4));
+    }
+    .editor-code .line { display: block; min-height: 1.8em; }
+    .editor-code .k { color: #C98BFF; }
+    .editor-code .s { color: #7EE787; }
+    .editor-code .f { color: #79C0FF; }
+    .editor-code .c { color: #5C6B82; font-style: italic; }
+    .editor-code .n { color: #FFBB66; }
+    .caret {
+      display: inline-block; width: 7px; height: 15px;
+      background: var(--yellow); vertical-align: -2px; margin-left: 1px;
+      box-shadow: 0 0 10px rgba(255,214,10,0.7);
+      animation: blink 1s steps(1) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* Floating chips orbiting the editor */
+    .chip {
+      position: absolute; z-index: 2;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 13px; border-radius: 999px;
+      font-size: 12px; font-weight: 700; color: var(--text);
+      background: rgba(18,23,36,0.78);
+      border: 1px solid var(--border-2);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 12px 30px -12px rgba(0,0,0,0.8);
+      animation: chip-float 6s ease-in-out infinite;
+      pointer-events: none;
+      transform: translateZ(60px);
+    }
+    .chip svg { width: 13px; height: 13px; }
+    .chip.c1 { top: -16px; right: 22px; animation-delay: -1.2s; }
+    .chip.c2 { bottom: -14px; left: -14px; animation-delay: -3.4s; }
+    .chip.c3 { top: 38%; right: -22px; animation-delay: -5.1s; }
+    @keyframes chip-float {
+      0%, 100% { transform: translateZ(60px) translateY(0); }
+      50%      { transform: translateZ(60px) translateY(-9px); }
+    }
+
+    /* ── Chat strip ── */
+    .sc-chat { margin-top: 18px; display: flex; flex-direction: column; gap: 9px; min-height: 96px; }
+    .sc-msg {
+      max-width: 86%; padding: 10px 15px; border-radius: 14px;
+      font-size: 13.5px; line-height: 1.5;
+      opacity: 0; transform: translateY(10px) scale(.97);
+      transition: opacity .45s cubic-bezier(.22,.9,.3,1), transform .45s cubic-bezier(.22,.9,.3,1);
+    }
+    .sc-msg.show { opacity: 1; transform: none; }
+    .sc-msg.user {
+      align-self: flex-end;
+      background: linear-gradient(180deg, #FFE98A, var(--yellow));
+      color: #10131A; font-weight: 650;
+      border-bottom-right-radius: 5px;
+      box-shadow: 0 8px 26px -10px rgba(255,214,10,0.45);
+    }
+    .sc-msg.ai {
+      align-self: flex-start;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 5px;
+      backdrop-filter: blur(6px);
+    }
+
+    /* ── Stats ── */
+    .sc-stats { margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .sc-stat {
+      position: relative; overflow: hidden;
+      border: 1px solid var(--border); border-radius: 13px;
+      padding: 13px 14px;
+      background: rgba(255,255,255,0.02);
+      transition: transform .25s cubic-bezier(.22,.9,.3,1), border-color .25s, background .25s;
+    }
+    .sc-stat:hover { transform: translateY(-3px); border-color: var(--border-2); background: rgba(255,255,255,0.035); }
+    .sc-stat svg { width: 16px; height: 16px; margin-bottom: 8px; display: block; }
+    .sc-stat b { display: block; font-size: 13.5px; margin-bottom: 2px; }
+    .sc-stat span { font-size: 11.5px; color: var(--quiet); }
+
+    /* ── Capability ticker ── */
+    .ticker {
+      margin-top: 22px; overflow: hidden; position: relative;
+      -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+      mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+    }
+    .ticker-track {
+      display: inline-flex; gap: 26px; white-space: nowrap;
+      animation: tick 34s linear infinite;
+      font-size: 11.5px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--quiet);
+    }
+    .ticker-track i { font-style: normal; color: #38415C; }
+    @keyframes tick { to { transform: translateX(-50%); } }
+
+    /* ══════════ Auth (right) ══════════ */
+    .logo { display: flex; align-items: center; gap: 14px; -webkit-app-region: no-drag; }
     .logo-mark {
-      width: 54px; height: 54px;
-      border-radius: 15px;
-      overflow: hidden;
-      box-shadow: 0 0 44px var(--accent-g), 0 8px 24px rgba(0,0,0,0.45);
+      width: 56px; height: 56px; border-radius: 16px; overflow: hidden;
+      position: relative;
+      box-shadow: 0 0 44px var(--accent-g), 0 8px 24px rgba(0,0,0,0.5);
+      animation: logo-glow 4s ease-in-out infinite alternate;
+    }
+    @keyframes logo-glow {
+      from { box-shadow: 0 0 34px var(--accent-g), 0 8px 24px rgba(0,0,0,0.5); }
+      to   { box-shadow: 0 0 58px var(--accent-g), 0 0 24px rgba(255,214,10,0.18), 0 8px 24px rgba(0,0,0,0.5); }
     }
     .logo-mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .logo-name {
-      font-size: 28px; font-weight: 800; letter-spacing: 0.07em; color: var(--text);
-    }
+    .logo-name { font-size: 28px; font-weight: 800; letter-spacing: 0.07em; }
     .logo-tag {
-      font-size: 11px; color: var(--quiet); letter-spacing: 0.14em;
+      font-size: 11px; color: var(--quiet); letter-spacing: 0.16em;
       text-transform: uppercase; margin-top: 3px;
     }
 
-    /* Card */
-    .card {
-      width: 100%; max-width: 400px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 30px;
-      box-shadow: 0 32px 96px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+    /* Animated gradient frame around the card */
+    .card-frame {
+      position: relative;
+      width: 100%; max-width: 404px;
+      border-radius: 20px; padding: 1px;
+      background:
+        conic-gradient(from var(--ang) at 50% 50%,
+          rgba(75,157,255,0.0) 0%,
+          rgba(75,157,255,0.55) 12%,
+          rgba(255,214,10,0.45) 22%,
+          rgba(75,157,255,0.0) 38%,
+          rgba(75,157,255,0.0) 62%,
+          rgba(125,185,255,0.4) 78%,
+          rgba(75,157,255,0.0) 95%),
+        linear-gradient(var(--border), var(--border));
+      animation: frame-spin 7s linear infinite;
       -webkit-app-region: no-drag;
     }
+    @keyframes frame-spin { to { --ang: 360deg; } }
 
-    /* Tab switcher */
+    .card {
+      width: 100%;
+      background: linear-gradient(165deg, rgba(19,24,38,0.86), rgba(11,14,23,0.92));
+      backdrop-filter: blur(20px) saturate(1.35);
+      border-radius: 19px;
+      padding: 30px;
+      box-shadow: 0 36px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+      animation: card-in .7s cubic-bezier(.22,.9,.3,1) both;
+    }
+    @keyframes card-in { from { opacity: 0; transform: translateY(16px) scale(.98); } }
+
+    /* Tabs */
     .tabs {
       display: flex; gap: 4px;
-      background: var(--panel);
+      background: rgba(10,13,22,0.65);
       border: 1px solid var(--border);
-      border-radius: 11px;
-      padding: 4px;
+      border-radius: 12px; padding: 4px;
       margin-bottom: 26px;
     }
     .tab {
-      flex: 1; padding: 9px; border-radius: 8px;
+      flex: 1; padding: 9px; border-radius: 9px;
       font: 600 13px/1 inherit; color: var(--muted);
-      background: none; border: none; cursor: pointer;
-      transition: all 0.14s;
+      background: transparent; border: none; cursor: pointer;
+      transition: color .18s, background .18s, box-shadow .18s;
     }
     .tab.on {
-      background: var(--surface); color: var(--text);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+      background: linear-gradient(180deg, #1D2436, #161B2A);
+      color: var(--text);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
     }
 
     /* Fields */
@@ -119,28 +391,58 @@
       color: var(--muted); margin-bottom: 6px;
       text-transform: uppercase; letter-spacing: 0.07em;
     }
+    .inp { position: relative; }
+    .inp > svg {
+      position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+      width: 15px; height: 15px; color: var(--quiet); pointer-events: none;
+      transition: color .18s;
+    }
+    .inp:focus-within > svg { color: var(--accent); }
     .field input {
       width: 100%;
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: 10px; color: var(--text);
-      font: inherit; font-size: 14px; padding: 11px 14px;
-      outline: none; transition: border-color 0.14s, box-shadow 0.14s;
+      background: rgba(10,13,22,0.6);
+      border: 1px solid var(--border);
+      border-radius: 11px; color: var(--text);
+      font: inherit; font-size: 14px;
+      padding: 11.5px 14px 11.5px 38px;
+      outline: none;
+      transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
     }
-    .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-d); }
+    .field input:focus {
+      border-color: var(--accent);
+      background: rgba(12,16,27,0.8);
+      box-shadow: 0 0 0 3px var(--accent-d), 0 0 24px -8px var(--accent-g);
+    }
     .field input::placeholder { color: var(--quiet); }
+    .eye {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; padding: 5px;
+      color: var(--quiet); display: flex; transition: color .15s;
+    }
+    .eye:hover { color: var(--muted); }
+    .eye svg { width: 15px; height: 15px; }
 
     /* Primary button */
     .btn-primary {
+      position: relative; overflow: hidden;
       width: 100%; margin-top: 18px;
-      padding: 13px;
-      background: var(--accent); color: #fff;
-      border: none; border-radius: 11px;
+      padding: 13.5px;
+      background: linear-gradient(180deg, #5CA8FF, #3E8EF0);
+      color: #fff;
+      border: none; border-radius: 12px;
       font: 700 14px/1 inherit; cursor: pointer;
       display: flex; align-items: center; justify-content: center; gap: 8px;
-      transition: all 0.14s;
-      box-shadow: 0 4px 18px var(--accent-d);
+      transition: transform .15s, box-shadow .2s, filter .2s;
+      box-shadow: 0 6px 22px -4px var(--accent-g), inset 0 1px 0 rgba(255,255,255,0.25);
     }
-    .btn-primary:hover { background: #6AACFF; box-shadow: 0 4px 28px var(--accent-g); }
+    .btn-primary::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(110deg, transparent 32%, rgba(255,255,255,0.28) 50%, transparent 68%);
+      transform: translateX(-120%);
+      transition: transform .6s ease;
+    }
+    .btn-primary:hover { filter: brightness(1.07); box-shadow: 0 8px 32px -4px var(--accent-g), inset 0 1px 0 rgba(255,255,255,0.25); }
+    .btn-primary:hover::after { transform: translateX(120%); }
     .btn-primary:active { transform: scale(0.98); }
     .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
@@ -149,31 +451,43 @@
       display: flex; align-items: center; gap: 12px;
       margin: 18px 0; color: var(--quiet); font-size: 12px;
     }
-    .divider::before, .divider::after {
-      content: ''; flex: 1; height: 1px; background: var(--border);
-    }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
     /* Google button */
     .btn-google {
       width: 100%; padding: 12px;
-      background: var(--panel); color: var(--text);
-      border: 1px solid var(--border); border-radius: 11px;
+      background: rgba(23,28,43,0.6); color: var(--text);
+      border: 1px solid var(--border); border-radius: 12px;
       font: 600 13px/1 inherit; cursor: pointer;
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      transition: all 0.14s;
+      transition: background .16s, border-color .16s, transform .15s;
     }
-    .btn-google:hover { background: var(--surface); border-color: #364460; }
+    .btn-google:hover { background: rgba(30,37,56,0.75); border-color: var(--border-2); }
     .btn-google:active { transform: scale(0.98); }
     .btn-google:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .free-note {
+      margin-top: 16px; text-align: center;
+      font-size: 12px; color: var(--quiet);
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .free-note::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--mint); box-shadow: 0 0 8px var(--mint);
+    }
 
     /* Error */
     .error {
       margin-top: 14px; padding: 10px 13px;
       background: rgba(255,71,87,0.09); border: 1px solid rgba(255,71,87,0.28);
-      border-radius: 9px; color: var(--red); font-size: 12px; line-height: 1.45;
+      border-radius: 10px; color: var(--red); font-size: 12px; line-height: 1.45;
       display: none;
     }
-    .error.show { display: block; }
+    .error.show { display: block; animation: shake .4s; }
+    @keyframes shake {
+      20% { transform: translateX(-5px); } 40% { transform: translateX(5px); }
+      60% { transform: translateX(-3px); } 80% { transform: translateX(3px); }
+    }
 
     /* Spinner */
     .spin {
@@ -185,84 +499,88 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Footer */
     .footer { font-size: 11px; color: var(--quiet); -webkit-app-region: no-drag; }
 
-    /* ── ForgeGUI-style split layout ─────────────────────────────── */
-    .split { position: relative; z-index: 1; height: 100vh; display: grid; grid-template-columns: 1.12fr 0.88fr; }
-    .auth { display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .split .wrap { height: auto; padding: 0; gap: 22px; }
-
-    .showcase {
-      position: relative; overflow-y: auto; padding: 44px clamp(26px, 4vw, 60px);
-      display: flex; border-right: 1px solid var(--border);
-      -webkit-app-region: drag;
-      background:
-        radial-gradient(circle at 18% 8%, rgba(255,214,10,0.10), transparent 42%),
-        radial-gradient(circle at 92% 96%, rgba(75,157,255,0.10), transparent 46%);
+    /* Focus visibility for keyboard users */
+    .tab:focus-visible, .btn-primary:focus-visible, .btn-google:focus-visible, .eye:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
     }
-    .showcase-inner { max-width: 560px; width: 100%; margin: auto; }
-    .sc-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #ffd60a; margin-bottom: 18px; }
-    .sc-eyebrow::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #2ee87a; box-shadow: 0 0 12px #2ee87a; animation: sc-pulse 2s infinite; }
-    @keyframes sc-pulse { 50% { opacity: .35; } }
-    .sc-title { font-size: clamp(28px, 3.6vw, 44px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 12px; }
-    .sc-title span { color: #ffd60a; }
-    .sc-sub { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 24px; max-width: 470px; }
 
-    .editor { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #0a0d14; box-shadow: 0 30px 70px -30px rgba(0,0,0,0.85); animation: sc-rise .55s ease both; }
-    .editor-top { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: #11151f; border-bottom: 1px solid var(--border); }
-    .editor-top .dot { width: 11px; height: 11px; border-radius: 50%; }
-    .editor-top .r { background: #ff5f57; } .editor-top .y { background: #febc2e; } .editor-top .g { background: #28c840; }
-    .editor-file { margin-left: 8px; font: 600 11.5px/1 ui-monospace, Menlo, monospace; color: var(--quiet); }
-    .editor-code { margin: 0; padding: 15px 18px; font: 12.5px/1.75 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; white-space: pre; }
-    .editor-code .line { display: block; }
-    .editor-code .k { color: #c98bff; } .editor-code .s { color: #7ee787; } .editor-code .f { color: #79c0ff; } .editor-code .c { color: #5c6b82; font-style: italic; } .editor-code .n { color: #ffbb66; }
-    .caret { display: inline-block; width: 7px; height: 15px; background: #ffd60a; vertical-align: -2px; margin-left: 1px; animation: sc-blink 1s steps(1) infinite; }
-    @keyframes sc-blink { 50% { opacity: 0; } }
-    @keyframes sc-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-
-    .sc-chat { margin-top: 16px; display: flex; flex-direction: column; gap: 9px; }
-    .sc-msg { max-width: 84%; padding: 10px 14px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; animation: sc-rise .55s ease both; }
-    .sc-msg.user { align-self: flex-end; background: linear-gradient(180deg, #ffe98a, #ffd60a); color: #10131a; font-weight: 600; border-bottom-right-radius: 5px; }
-    .sc-msg.ai { align-self: flex-start; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-bottom-left-radius: 5px; animation-delay: .45s; }
-
-    .sc-stats { margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .sc-stat { border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px; background: rgba(255,255,255,0.02); }
-    .sc-stat b { display: block; font-size: 14px; }
-    .sc-stat span { font-size: 11.5px; color: var(--quiet); }
-
-    @media (max-width: 900px) {
+    /* ══════════ Responsive ══════════ */
+    @media (max-width: 940px) {
       .split { grid-template-columns: 1fr; }
       .showcase { display: none; }
       html, body { overflow: auto; }
+      .auth { min-height: 100vh; padding: 36px 20px; }
+    }
+
+    /* ══════════ Reduced motion ══════════ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .sc-anim, .sc-msg { opacity: 1 !important; transform: none !important; }
+      #bg3d { transition: none; }
     }
   </style>
 </head>
 <body>
-  <div class="bg-glow"></div>
+  <canvas id="bg3d"></canvas>
+  <div class="bg-aurora"></div>
   <div class="bg-grid"></div>
+  <div class="bg-noise"></div>
+  <div class="bg-vignette"></div>
+  <div id="cursorGlow"></div>
 
   <div class="split">
     <aside class="showcase">
       <div class="showcase-inner">
-        <div class="sc-eyebrow">ROTEX Roblox Dev AI</div>
-        <h1 class="sc-title">Build Roblox games by just <span>chatting</span>.</h1>
-        <p class="sc-sub">ROTEX writes complete, working Luau — scripts, UI, DataStores, whole systems — and edits your game live inside Roblox Studio.</p>
+        <div class="sc-eyebrow sc-anim" style="animation-delay:.05s">ROTEX Roblox Dev AI</div>
+        <h1 class="sc-title sc-anim" style="animation-delay:.12s">Build Roblox games by just <span class="grad">chatting</span>.</h1>
+        <p class="sc-sub sc-anim" style="animation-delay:.2s">ROTEX writes complete, working Luau — scripts, UI, DataStores, whole systems — and edits your game <strong>live inside Roblox Studio</strong>.</p>
 
-        <div class="editor">
-          <div class="editor-top"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="editor-file">ServerScriptService · ShopHandler.lua</span></div>
-          <pre class="editor-code"><span class="line"><span class="c">-- Written by ROTEX from "make a shop that saves coins"</span></span><span class="line"><span class="k">local</span> DataStore = <span class="f">game:GetService</span>(<span class="s">"DataStoreService"</span>)</span><span class="line"><span class="k">local</span> Coins = DataStore:<span class="f">GetDataStore</span>(<span class="s">"Coins"</span>)</span><span class="line"> </span><span class="line">BuyRemote.OnServerEvent:<span class="f">Connect</span>(<span class="k">function</span>(player, itemId)</span><span class="line">    <span class="k">local</span> price = ITEMS[itemId].price</span><span class="line">    <span class="k">if</span> <span class="f">getCoins</span>(player) >= price <span class="k">then</span></span><span class="line">        <span class="f">grantItem</span>(player, itemId)<span class="caret"></span></span><span class="line">    <span class="k">end</span></span><span class="line"><span class="k">end</span>)</span></pre>
+        <div class="editor-stage sc-anim" style="animation-delay:.3s">
+          <div class="chip c1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#FFD60A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Live in Studio
+          </div>
+          <div class="chip c2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4B9DFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            DataStores
+          </div>
+          <div class="chip c3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2EE87A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Full Luau
+          </div>
+          <div class="editor" id="editor3d">
+            <div class="editor-top">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="editor-file" id="edFile">ServerScriptService · ShopHandler.lua</span>
+              <span class="editor-status building" id="edStatus">building</span>
+            </div>
+            <pre class="editor-code" id="edCode"></pre>
+          </div>
         </div>
 
-        <div class="sc-chat">
-          <div class="sc-msg user">make a shop that saves coins</div>
-          <div class="sc-msg ai">Done — a ScreenGui shop, a BuyRemote, and a safe DataStore with autosave. Full code is ready above. ⚡</div>
+        <div class="sc-chat sc-anim" id="scChat" style="animation-delay:.4s"></div>
+
+        <div class="sc-stats sc-anim" style="animation-delay:.5s">
+          <div class="sc-stat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4B9DFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <b>Full systems</b><span>not snippets</span>
+          </div>
+          <div class="sc-stat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2EE87A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+            <b>Server-safe</b><span>exploit-proof</span>
+          </div>
+          <div class="sc-stat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#FFD60A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <b>Instant</b><span>paste &amp; run</span>
+          </div>
         </div>
 
-        <div class="sc-stats">
-          <div class="sc-stat"><b>Full scripts</b><span>not snippets</span></div>
-          <div class="sc-stat"><b>Server-safe</b><span>exploit-proof</span></div>
-          <div class="sc-stat"><b>Instant</b><span>paste &amp; run</span></div>
+        <div class="ticker sc-anim" style="animation-delay:.6s">
+          <div class="ticker-track" id="tickerTrack">
+            <span>DataStores</span><i>·</i><span>RemoteEvents</span><i>·</i><span>TweenService</span><i>·</i><span>Pathfinding</span><i>·</i><span>Leaderstats</span><i>·</i><span>UI Builder</span><i>·</i><span>VFX</span><i>·</i><span>Gamepasses</span><i>·</i><span>Badges</span><i>·</i><span>Teams</span><i>·</i><span>Sound</span><i>·</i><span>Animations</span><i>·</i>
+          </div>
         </div>
       </div>
     </aside>
@@ -277,6 +595,7 @@
       </div>
     </div>
 
+    <div class="card-frame">
     <div class="card">
       <div class="tabs">
         <button class="tab on" id="tabIn"  onclick="switchTab('in')">Sign In</button>
@@ -287,11 +606,20 @@
       <div id="viewIn">
         <div class="field">
           <label>Email</label>
-          <input type="email" id="inEmail" placeholder="you@example.com" autocomplete="email">
+          <div class="inp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <input type="email" id="inEmail" placeholder="you@example.com" autocomplete="email">
+          </div>
         </div>
         <div class="field">
           <label>Password</label>
-          <input type="password" id="inPass" placeholder="••••••••" autocomplete="current-password">
+          <div class="inp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <input type="password" id="inPass" placeholder="••••••••" autocomplete="current-password">
+            <button class="eye" type="button" tabindex="-1" data-eye="inPass" aria-label="Show password">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
         </div>
         <button class="btn-primary" id="inBtn"><span>Sign In</span></button>
       </div>
@@ -300,15 +628,27 @@
       <div id="viewUp" style="display:none">
         <div class="field">
           <label>Display Name</label>
-          <input type="text" id="upName" placeholder="Your name" autocomplete="name">
+          <div class="inp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <input type="text" id="upName" placeholder="Your name" autocomplete="name">
+          </div>
         </div>
         <div class="field">
           <label>Email</label>
-          <input type="email" id="upEmail" placeholder="you@example.com" autocomplete="email">
+          <div class="inp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <input type="email" id="upEmail" placeholder="you@example.com" autocomplete="email">
+          </div>
         </div>
         <div class="field">
           <label>Password</label>
-          <input type="password" id="upPass" placeholder="Min. 6 characters" autocomplete="new-password">
+          <div class="inp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <input type="password" id="upPass" placeholder="Min. 6 characters" autocomplete="new-password">
+            <button class="eye" type="button" tabindex="-1" data-eye="upPass" aria-label="Show password">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
         </div>
         <button class="btn-primary" id="upBtn"><span>Create Account</span></button>
       </div>
@@ -325,7 +665,10 @@
         Continue with Google
       </button>
 
+      <div class="free-note">Free plan included — no card required</div>
+
       <div class="error" id="errBox"></div>
+    </div>
     </div>
 
     <div class="footer">ROTEX v1.17.27</div>
@@ -651,8 +994,421 @@
     boot();
     } // end else (web path)
   </script>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       UI POLISH — password eyes, cursor glow, editor tilt (auth-agnostic)
+       ══════════════════════════════════════════════════════════════════ -->
+  <script>
+    (() => {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      /* Password show/hide */
+      document.querySelectorAll('.eye').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const inp = document.getElementById(btn.dataset.eye);
+          if (!inp) return;
+          const show = inp.type === 'password';
+          inp.type = show ? 'text' : 'password';
+          btn.style.color = show ? 'var(--accent)' : '';
+        });
+      });
+
+      /* Cursor-follow glow */
+      const glow = document.getElementById('cursorGlow');
+      let gx = innerWidth / 2, gy = innerHeight / 2, tx = gx, ty = gy;
+      addEventListener('pointermove', e => { tx = e.clientX; ty = e.clientY; }, { passive: true });
+      if (!reduced) {
+        (function gl() {
+          gx += (tx - gx) * 0.08; gy += (ty - gy) * 0.08;
+          glow.style.transform = `translate(${gx}px, ${gy}px)`;
+          requestAnimationFrame(gl);
+        })();
+      } else if (glow) {
+        glow.style.display = 'none';
+      }
+
+      /* Editor 3D tilt */
+      const stage = document.querySelector('.editor-stage');
+      const editor = document.getElementById('editor3d');
+      if (stage && editor && !reduced && matchMedia('(pointer: fine)').matches) {
+        let rx = 0, ry = 0, trx = 0, try_ = 0;
+        stage.addEventListener('pointermove', e => {
+          const r = stage.getBoundingClientRect();
+          try_ = ((e.clientX - r.left) / r.width - 0.5) * 10;
+          trx  = -((e.clientY - r.top) / r.height - 0.5) * 8;
+        });
+        stage.addEventListener('pointerleave', () => { trx = 0; try_ = 0; });
+        (function tilt() {
+          rx += (trx - rx) * 0.09; ry += (try_ - ry) * 0.09;
+          editor.style.transform = `rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+          requestAnimationFrame(tilt);
+        })();
+      }
+
+      /* Duplicate ticker content for a seamless loop */
+      const track = document.getElementById('tickerTrack');
+      if (track) track.innerHTML += track.innerHTML;
+    })();
+  </script>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SHOWCASE — ROTEX types real Luau, chat reacts, loops forever
+       ══════════════════════════════════════════════════════════════════ -->
+  <script>
+    (() => {
+      const codeEl   = document.getElementById('edCode');
+      const fileEl   = document.getElementById('edFile');
+      const statusEl = document.getElementById('edStatus');
+      const chatEl   = document.getElementById('scChat');
+      if (!codeEl || !chatEl) return;
+
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // token classes: k keyword · s string · f function · c comment · n number · p plain
+      const SNIPPETS = [
+        {
+          file: 'ServerScriptService · ShopHandler.lua',
+          prompt: 'make a shop that saves coins',
+          reply: 'Done — a ScreenGui shop, a BuyRemote, and a safe DataStore with autosave. Paste it in and it runs. ⚡',
+          lines: [
+            [['c','-- ROTEX built this from: "make a shop that saves coins"']],
+            [['k','local'],['p',' DataStore = '],['f','game:GetService'],['p','('],['s','"DataStoreService"'],['p',')']],
+            [['k','local'],['p',' Coins = DataStore:'],['f','GetDataStore'],['p','('],['s','"Coins"'],['p',')']],
+            [['p',' ']],
+            [['p','BuyRemote.OnServerEvent:'],['f','Connect'],['p','('],['k','function'],['p','(player, itemId)']],
+            [['p','    '],['k','local'],['p',' price = ITEMS[itemId].price']],
+            [['p','    '],['k','if'],['p',' '],['f','getCoins'],['p','(player) >= price '],['k','then']],
+            [['p','        '],['f','addCoins'],['p','(player, -price)']],
+            [['p','        '],['f','grantItem'],['p','(player, itemId)']],
+            [['p','    '],['k','end']],
+            [['k','end'],['p',')']],
+          ],
+        },
+        {
+          file: 'StarterPlayerScripts · DoubleJump.client.lua',
+          prompt: 'add a double jump',
+          reply: 'Shipped — jump input with a Freefall window, all client-side, nothing a cheater can abuse on the server. 🎮',
+          lines: [
+            [['c','-- ROTEX built this from: "add a double jump"']],
+            [['k','local'],['p',' UIS = '],['f','game:GetService'],['p','('],['s','"UserInputService"'],['p',')']],
+            [['k','local'],['p',' canDouble = '],['k','false']],
+            [['p',' ']],
+            [['p','UIS.JumpRequest:'],['f','Connect'],['p','('],['k','function'],['p','()']],
+            [['p','    '],['k','if not'],['p',' canDouble '],['k','then return end']],
+            [['p','    hum:'],['f','ChangeState'],['p','(Enum.HumanoidStateType.Jumping)']],
+            [['p','    canDouble = '],['k','false']],
+            [['k','end'],['p',')']],
+            [['p',' ']],
+            [['p','hum.StateChanged:'],['f','Connect'],['p','('],['k','function'],['p','(_, state)']],
+            [['p','    canDouble = state == Enum.HumanoidStateType.Freefall']],
+            [['k','end'],['p',')']],
+          ],
+        },
+        {
+          file: 'ServerScriptService · DailyRewards.lua',
+          prompt: 'give players daily reward streaks',
+          reply: 'Built — a 7-day streak table, UTC day math, and DataStore saves that retry on failure. 🔥',
+          lines: [
+            [['c','-- ROTEX built this from: "daily reward streaks"']],
+            [['k','local'],['p',' Players = '],['f','game:GetService'],['p','('],['s','"Players"'],['p',')']],
+            [['k','local'],['p',' Streaks = DataStore:'],['f','GetDataStore'],['p','('],['s','"Streaks"'],['p',')']],
+            [['p',' ']],
+            [['p','Players.PlayerAdded:'],['f','Connect'],['p','('],['k','function'],['p','(player)']],
+            [['p','    '],['k','local'],['p',' last, streak = '],['f','loadStreak'],['p','(player)']],
+            [['p','    '],['k','local'],['p',' days = math.floor((os.time() - last) / '],['n','86400'],['p',')']],
+            [['p','    streak = days == '],['n','1'],['p',' '],['k','and'],['p',' streak + '],['n','1'],['p',' '],['k','or'],['p',' '],['n','1']],
+            [['p','    '],['f','grantReward'],['p','(player, REWARDS[math.min(streak, '],['n','7'],['p',')])']],
+            [['p','    '],['f','saveStreak'],['p','(player, os.time(), streak)']],
+            [['k','end'],['p',')']],
+          ],
+        },
+      ];
+
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const caret = document.createElement('span');
+      caret.className = 'caret';
+
+      function setStatus(state) {
+        statusEl.className = 'editor-status ' + state;
+        statusEl.textContent = state === 'building' ? 'building' : 'shipped';
+      }
+
+      function bubble(kind, text) {
+        const el = document.createElement('div');
+        el.className = 'sc-msg ' + kind;
+        el.textContent = text;
+        chatEl.appendChild(el);
+        requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+        return el;
+      }
+
+      async function typeSnippet(sn) {
+        fileEl.textContent = sn.file;
+        codeEl.innerHTML = '';
+        chatEl.innerHTML = '';
+        setStatus('building');
+
+        bubble('user', sn.prompt);
+        if (!reduced) await wait(650);
+
+        for (const line of sn.lines) {
+          const lineEl = document.createElement('span');
+          lineEl.className = 'line';
+          codeEl.appendChild(lineEl);
+          for (const [cls, text] of line) {
+            const span = document.createElement('span');
+            if (cls !== 'p') span.className = cls;
+            lineEl.appendChild(span);
+            if (reduced) { span.textContent = text; continue; }
+            lineEl.appendChild(caret);
+            for (const ch of text) {
+              span.textContent += ch;
+              if (ch !== ' ') await wait(9 + Math.random() * 18);
+            }
+          }
+        }
+        caret.remove();
+
+        setStatus('shipped');
+        if (!reduced) await wait(450);
+        bubble('ai', sn.reply);
+      }
+
+      (async () => {
+        if (reduced) { await typeSnippet(SNIPPETS[0]); return; }
+        let i = 0;
+        for (;;) {
+          await typeSnippet(SNIPPETS[i % SNIPPETS.length]);
+          await wait(5200);
+          i++;
+        }
+      })();
+    })();
+  </script>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       3D SCENE — floating voxel island that builds itself (Three.js)
+       Falls back to the CSS aurora background if WebGL/CDN is unavailable.
+       ══════════════════════════════════════════════════════════════════ -->
+  <script type="module">
+    (async () => {
+      const canvas = document.getElementById('bg3d');
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let THREE;
+      try {
+        THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
+      } catch {
+        document.body.classList.add('no3d');
+        return;
+      }
+
+      let renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+      } catch {
+        document.body.classList.add('no3d');
+        return;
+      }
+
+      const small = matchMedia('(max-width: 940px)').matches;
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, small ? 1.25 : 1.75));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x070a12, 0.028);
+
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+      camera.position.set(0, 0.6, 15);
+
+      /* ── Lights ── */
+      scene.add(new THREE.AmbientLight(0x8899cc, 0.55));
+      const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+      sun.position.set(6, 10, 8);
+      scene.add(sun);
+      const blueGlow = new THREE.PointLight(0x4b9dff, 60, 34, 2);
+      blueGlow.position.set(-7, 3, 2);
+      scene.add(blueGlow);
+      const warmGlow = new THREE.PointLight(0xffd60a, 45, 26, 2);
+      warmGlow.position.set(6, -2, 3);
+      scene.add(warmGlow);
+
+      /* ── Voxel island (behind the auth card) ── */
+      const island = new THREE.Group();
+      scene.add(island);
+
+      const box = new THREE.BoxGeometry(0.92, 0.92, 0.92);
+      const mats = {
+        slate:  new THREE.MeshStandardMaterial({ color: 0x1d2740, roughness: 0.4, metalness: 0.15 }),
+        slate2: new THREE.MeshStandardMaterial({ color: 0x27334f, roughness: 0.45, metalness: 0.1 }),
+        blue:   new THREE.MeshStandardMaterial({ color: 0x4b9dff, roughness: 0.3, metalness: 0.2, emissive: 0x1a4a8f, emissiveIntensity: 0.35 }),
+        gold:   new THREE.MeshStandardMaterial({ color: 0xffd60a, roughness: 0.3, metalness: 0.1, emissive: 0xffb300, emissiveIntensity: 0.9 }),
+      };
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x7db9ff, transparent: true, opacity: 0.14 });
+      const edgeGeo = new THREE.EdgesGeometry(box);
+
+      const cells = [];
+      // base plate — diamond footprint
+      for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
+        if (Math.abs(x) + Math.abs(z) <= 3) cells.push([x, 0, z]);
+      }
+      // towers
+      const towers = [[-1,1,-1,2],[1,1,0,3],[0,1,1,2],[2,1,0,1],[-2,1,0,1],[0,1,-2,1],[1,1,2,1],[-1,1,2,2]];
+      for (const [tx, ty, tz, h] of towers) for (let y = 0; y < h; y++) cells.push([tx, ty + y, tz]);
+      // hanging stalactites under the island
+      cells.push([0,-1,0],[0,-2,0],[1,-1,-1],[-1,-1,1]);
+
+      const cubes = [];
+      const rng = (seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647)(42);
+      cells.forEach(([cx, cy, cz], i) => {
+        const r = rng();
+        const mat = r < 0.58 ? mats.slate : r < 0.78 ? mats.slate2 : r < 0.93 ? mats.blue : mats.gold;
+        const m = new THREE.Mesh(box, mat);
+        m.position.set(cx, cy, cz);
+        m.add(new THREE.LineSegments(edgeGeo, edgeMat));
+        const d = Math.hypot(cx, cy - 1, cz);
+        cubes.push({ mesh: m, delay: d * 0.16 + rng() * 0.12, phase: rng() * Math.PI * 2 });
+        island.add(m);
+      });
+
+      /* ── Drifting solo cubes across the whole scene ── */
+      const drifters = [];
+      for (let i = 0; i < 16; i++) {
+        const s = 0.25 + rng() * 0.5;
+        const g = new THREE.BoxGeometry(s, s, s);
+        const r = rng();
+        const m = new THREE.Mesh(g, r < 0.55 ? mats.slate2 : r < 0.85 ? mats.blue : mats.gold);
+        m.position.set((rng() - 0.5) * 26, (rng() - 0.5) * 13, -3 - rng() * 9);
+        drifters.push({ mesh: m, rs: (rng() - 0.5) * 0.6, bob: rng() * Math.PI * 2, speed: 0.2 + rng() * 0.5 });
+        scene.add(m);
+      }
+
+      /* ── Wireframe icosahedron, far left ── */
+      const ico = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(5.5, 1),
+        new THREE.MeshBasicMaterial({ color: 0x4b9dff, wireframe: true, transparent: true, opacity: 0.07 })
+      );
+      ico.position.set(-8.5, 1.5, -7);
+      scene.add(ico);
+
+      /* ── Particles (soft round sprites) ── */
+      function dotTexture(colorStops) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 64;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        for (const [o, col] of colorStops) g.addColorStop(o, col);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(c);
+      }
+      function makePoints(count, size, tex, spread) {
+        const pos = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          pos[i * 3]     = (rng() - 0.5) * spread[0];
+          pos[i * 3 + 1] = (rng() - 0.5) * spread[1];
+          pos[i * 3 + 2] = -2 - rng() * spread[2];
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const mat = new THREE.PointsMaterial({
+          size, map: tex, transparent: true, opacity: 0.85,
+          depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+        });
+        return new THREE.Points(geo, mat);
+      }
+      const starsBlue = makePoints(small ? 320 : 750, 0.09,
+        dotTexture([[0, 'rgba(190,215,255,1)'], [0.4, 'rgba(120,170,255,0.5)'], [1, 'rgba(120,170,255,0)']]),
+        [34, 20, 14]);
+      const starsGold = makePoints(small ? 50 : 110, 0.14,
+        dotTexture([[0, 'rgba(255,235,160,1)'], [0.4, 'rgba(255,214,10,0.4)'], [1, 'rgba(255,214,10,0)']]),
+        [34, 20, 12]);
+      scene.add(starsBlue, starsGold);
+
+      /* ── Layout / resize (self-healing: re-checked every frame, since
+             some hosts size the window after load without firing resize) ── */
+      let lastW = -1, lastH = -1;
+      function layout() {
+        const w = innerWidth, h = innerHeight;
+        if (!w || !h || (w === lastW && h === lastH)) return;
+        lastW = w; lastH = h;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        const wide = w / h > 1.15 && !matchMedia('(max-width: 940px)').matches;
+        island.position.set(wide ? 5.6 : 0, 0.4, -2.5);
+        island.scale.setScalar(wide ? 1 : 0.75);
+      }
+      layout();
+      addEventListener('resize', layout);
+
+      /* ── Mouse parallax ── */
+      let mx = 0, my = 0;
+      addEventListener('pointermove', e => {
+        mx = (e.clientX / innerWidth - 0.5) * 2;
+        my = (e.clientY / innerHeight - 0.5) * 2;
+      }, { passive: true });
+
+      /* ── Build-loop easing ── */
+      const backOut = t => { const s = 1.7; t -= 1; return t * t * ((s + 1) * t + s) + 1; };
+      const clamp01 = t => Math.min(1, Math.max(0, t));
+      const CYCLE = 12;         // seconds: assemble → hold → disassemble → rest
+      function cubeScale(t, delay) {
+        const local = t % CYCLE;
+        if (local < 4)  return backOut(clamp01((local - delay) / 0.7));           // assemble
+        if (local < 9.5) return 1;                                                // hold
+        if (local < 11) return 1 - clamp01((local - 9.5 - delay * 0.4) / 0.8);    // disassemble
+        return 0;                                                                 // rest
+      }
+
+      /* ── Animate ── */
+      const clock = new THREE.Clock();
+      let running = true, t = 0;
+      document.addEventListener('visibilitychange', () => {
+        running = !document.hidden;
+        if (running) { clock.getDelta(); frame(); }
+      });
+
+      function frame() {
+        if (!running) return;
+        layout();
+        const dt = Math.min(clock.getDelta(), 0.05);
+        t += dt;
+
+        island.rotation.y = t * 0.14;
+        island.position.y = 0.4 + Math.sin(t * 0.5) * 0.28;
+
+        for (const c of cubes) {
+          c.mesh.scale.setScalar(Math.max(0.0001, cubeScale(t + 1.2, c.delay)));
+        }
+
+        for (const d of drifters) {
+          d.mesh.rotation.x += d.rs * dt;
+          d.mesh.rotation.y += d.rs * 1.3 * dt;
+          d.mesh.position.y += Math.sin(t * d.speed + d.bob) * 0.0035;
+        }
+
+        ico.rotation.y = t * 0.05;
+        ico.rotation.x = t * 0.02;
+        starsBlue.rotation.y = t * 0.008;
+        starsGold.rotation.y = -t * 0.011;
+
+        camera.position.x += (mx * 0.9 - camera.position.x) * 0.04;
+        camera.position.y += (-my * 0.55 + 0.6 - camera.position.y) * 0.04;
+        camera.lookAt(1.2, 0.2, -2);
+
+        renderer.render(scene, camera);
+        if (!reduced) requestAnimationFrame(frame);
+      }
+
+      if (reduced) {
+        t = 6; // render one fully-assembled still frame
+        for (const c of cubes) c.mesh.scale.setScalar(1);
+        renderer.render(scene, camera);
+      } else {
+        frame();
+      }
+      canvas.classList.add('live');
+    })();
+  </script>
 </body>
 </html>
-
-
-
