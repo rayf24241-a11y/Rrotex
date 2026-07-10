@@ -28,6 +28,7 @@ const els = {
   accountName: $('accountName'),
   accountEmail: $('accountEmail'),
   newChat: $('newChatBtn'),
+  chatList: $('chatList'),
   connectStudio: $('connectStudioBtn'),
   connectStudioLabel: $('connectStudioLabel'),
   pluginModal: $('pluginModal'),
@@ -42,6 +43,8 @@ const els = {
 const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack|Lighting|SoundService|Teams|Players|TextChatService|Chat)(\/|\\)/i;
 const ACTION_TYPES = new Set(['delete_instance', 'set_property', 'select_instances', 'create_model', 'insert_toolbox_model', 'terrain_edit', 'lighting_set', 'create_ui_image', 'create_ui']);
 
+const CHATS_KEY = 'rotex_web_chats'; // must precede the readChatStore() call below (TDZ)
+const _chatStore = readChatStore();
 const state = {
   auth: null,
   provider: null,
@@ -55,7 +58,9 @@ const state = {
   lastResult: 0,
   busy: false,
   studioErrors: [],
-  messages: readMessages(),
+  chats: _chatStore.chats,
+  currentChatId: _chatStore.currentId,
+  messages: ((_chatStore.chats.find((c) => c.id === _chatStore.currentId) || _chatStore.chats[0]).messages || []).slice(),
   pluginPromptOpen: false,
   lastBridgeMeta: null,
   bridgeInstances: new Set(),
@@ -88,17 +93,137 @@ function cleanCode(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 18);
 }
 
-function readMessages() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem('rotex_web_messages') || '[]');
-    return Array.isArray(parsed) ? parsed.slice(-28) : [];
-  } catch {
-    return [];
-  }
+// ── Multi-chat store ───────────────────────────────────────────────────────
+// Each chat = { id, title, messages:[{role,content}], updatedAt }. Persisted
+// as { currentId, chats:[...] } under CHATS_KEY. Legacy single-chat data
+// (rotex_web_messages) is migrated in on first load. CHATS_KEY is declared
+// above the state block so readChatStore() can use it without a TDZ error.
+
+function newChatId() {
+  return 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+function chatTitleFrom(messages) {
+  const firstUser = (messages || []).find((m) => m && m.role === 'user');
+  const t = firstUser ? String(firstUser.content || '').replace(/\s+/g, ' ').trim() : '';
+  return t ? t.slice(0, 42) : 'New chat';
+}
+
+function readChatStore() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CHATS_KEY) || 'null');
+    if (raw && Array.isArray(raw.chats) && raw.chats.length) {
+      const chats = raw.chats
+        .filter((c) => c && c.id)
+        .map((c) => ({
+          id: c.id,
+          title: c.title || chatTitleFrom(c.messages),
+          messages: Array.isArray(c.messages) ? c.messages.slice(-28) : [],
+          updatedAt: Number(c.updatedAt) || 0,
+        }));
+      if (chats.length) {
+        const currentId = chats.some((c) => c.id === raw.currentId) ? raw.currentId : chats[0].id;
+        return { currentId, chats };
+      }
+    }
+  } catch {}
+  // First load (or corrupt store): migrate a legacy single chat if present.
+  let legacy = [];
+  try { legacy = JSON.parse(localStorage.getItem('rotex_web_messages') || '[]'); } catch {}
+  legacy = Array.isArray(legacy) ? legacy.slice(-28) : [];
+  const id = newChatId();
+  return { currentId: id, chats: [{ id, title: chatTitleFrom(legacy), messages: legacy, updatedAt: Date.now() }] };
+}
+
+function currentChat() {
+  return state.chats.find((c) => c.id === state.currentChatId) || state.chats[0] || null;
+}
+
+function persistChatStore() {
+  const chats = state.chats
+    .slice()
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 40) // keep the 40 most recent chats
+    .map((c) => ({ id: c.id, title: c.title, messages: (c.messages || []).slice(-28), updatedAt: c.updatedAt || 0 }));
+  try { localStorage.setItem(CHATS_KEY, JSON.stringify({ currentId: state.currentChatId, chats })); } catch {}
+}
+
+// Called after every message change: fold the working messages back into the
+// current chat, then persist + refresh the sidebar list.
 function saveMessages() {
-  localStorage.setItem('rotex_web_messages', JSON.stringify(state.messages.slice(-28)));
+  const chat = currentChat();
+  if (chat) {
+    chat.messages = state.messages.slice(-28);
+    chat.title = chatTitleFrom(chat.messages);
+    chat.updatedAt = Date.now();
+  }
+  persistChatStore();
+  renderChatList();
+}
+
+function newChat() {
+  if (state.busy) return;
+  const chat = { id: newChatId(), title: 'New chat', messages: [], updatedAt: Date.now() };
+  state.chats.push(chat);
+  state.currentChatId = chat.id;
+  state.messages = [];
+  state.pluginPromptOpen = false;
+  persistChatStore();
+  renderHistory();
+  renderChatList();
+  els.input && els.input.focus();
+}
+
+function switchChat(id) {
+  if (id === state.currentChatId || state.busy) return;
+  saveMessages(); // fold the working messages back before leaving
+  const chat = state.chats.find((c) => c.id === id);
+  if (!chat) return;
+  state.currentChatId = id;
+  state.messages = (chat.messages || []).slice();
+  persistChatStore();
+  renderHistory();
+  renderChatList();
+}
+
+function deleteChat(id) {
+  state.chats = state.chats.filter((c) => c.id !== id);
+  if (state.currentChatId === id || !state.chats.length) {
+    if (!state.chats.length) {
+      state.chats.push({ id: newChatId(), title: 'New chat', messages: [], updatedAt: Date.now() });
+    }
+    const next = state.chats.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    state.currentChatId = next.id;
+    state.messages = (next.messages || []).slice();
+    renderHistory();
+  }
+  persistChatStore();
+  renderChatList();
+}
+
+function renderChatList() {
+  const el = els.chatList;
+  if (!el) return;
+  const chats = state.chats.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  el.innerHTML = '';
+  for (const c of chats) {
+    const item = document.createElement('div');
+    item.className = 'chat-item' + (c.id === state.currentChatId ? ' active' : '');
+    const label = document.createElement('button');
+    label.type = 'button';
+    label.className = 'chat-item-label';
+    label.textContent = c.title || 'New chat';
+    label.title = c.title || 'New chat';
+    label.addEventListener('click', () => switchChat(c.id));
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'chat-item-del';
+    del.setAttribute('aria-label', 'Delete chat');
+    del.textContent = '×';
+    del.addEventListener('click', (e) => { e.stopPropagation(); deleteChat(c.id); });
+    item.append(label, del);
+    el.appendChild(item);
+  }
 }
 
 // ── Safe markdown rendering ────────────────────────────────────────────────
@@ -893,11 +1018,7 @@ function initEvents() {
   els.signIn.addEventListener('click', signIn);
   els.signOut.addEventListener('click', signOut);
   els.model.addEventListener('change', () => localStorage.setItem('rotex_web_model', els.model.value));
-  els.newChat.addEventListener('click', () => {
-    state.messages = [];
-    saveMessages();
-    renderHistory();
-  });
+  els.newChat.addEventListener('click', newChat);
 }
 
 // Prompt handed off from the homepage hero ("type it on rrotex.com, land here
@@ -933,6 +1054,7 @@ async function init() {
   els.bridgeCode.textContent = state.bridgeCode;
   setMode(state.mode);
   renderHistory();
+  renderChatList();
   renderAccount();
   initEvents();
   consumeLandingPrompt();

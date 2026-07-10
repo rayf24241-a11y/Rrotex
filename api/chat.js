@@ -25,8 +25,8 @@ const {
 // changed. Free daily is the same real compute it always was (5 TT =
 // 150k internal); the monthly/Pro caps were deliberately tightened.
 const TT_UNIT = 30_000;
-const FREE_MONTHLY = 25 * TT_UNIT;  // "25 TexTokens/month"
-const PRO_DAILY    = 35 * TT_UNIT;  // "35 TexTokens/day"
+const FREE_MONTHLY = 5 * TT_UNIT;   // "5 TexTokens/month"
+const PRO_DAILY    = 8 * TT_UNIT;   // "8 TexTokens/day"
 // Pro monthly ceiling. This is the PROFIT GUARD: the internal cap directly
 // bounds a Pro user's worst-case provider cost. providerCostUsd = internal/1e6,
 // so 350 TT = 10.5M internal = at most $10.50 of provider-charge cost against
@@ -35,7 +35,7 @@ const PRO_DAILY    = 35 * TT_UNIT;  // "35 TexTokens/day"
 // ~3-5x markup over raw provider prices). The old 350-per-WEEK cap never bound
 // (35/day = 245/week < 350), so a daily maxer could reach 1,050 TT/month =
 // $31.50 cost and lose money; making 350 a MONTHLY cap fixes that.
-const PRO_MONTHLY  = 350 * TT_UNIT;
+const PRO_MONTHLY  = 60 * TT_UNIT;
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'rotex-e0be7';
 function _usageDocUrl(uid) {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/usage`;
@@ -100,7 +100,7 @@ const MODELING_COST_MULTIPLIER = 1.5;
 
 // Best-effort abuse protection. In-memory, so it resets on cold starts —
 // it stops casual abuse of the open endpoint, not a determined attacker.
-const FREE_DAILY_TEXTOKENS = 150_000;
+const FREE_DAILY_TEXTOKENS = 30_000; // 1 TexToken/day
 let _warnedNoWallet = false; // one-time warn when KV wallet isn't configured
 const freeTokenCounters  = new Map();
 const proCounters = new Map();
@@ -153,7 +153,9 @@ function isMultiAccount(ip, uid, email) {
   return uidSet.size > 1; // two or more accounts on the same IP today
 }
 const GROQ_BUSY_TEXT = 'That model is busy right now. Try TexBrain Thinking-beta or Claude Haiku while it cools down.';
-const OPENROUTER_OUT_TEXT = 'The selected AI route failed after trying backup models. Try again now, or switch models for this message.';
+// Shown when OpenRouter (the AI provider ROTEX pays) is out of credits. Framed
+// as a clean, temporary outage rather than a confusing "route failed" error.
+const OPENROUTER_OUT_TEXT = 'ROTEX is temporarily down while we top up the AI. Please try again later — your TexTokens were not used.';
 const PROVIDER_FAILED_TEXT = 'The AI provider failed this request after trying fallback models. Your OpenRouter balance is not the problem. Try again now, or switch models for this message.';
 
 function _today() { return new Date().toISOString().slice(0, 10); }
@@ -165,7 +167,7 @@ function noTokensText(proPass, isPro, hasPurchased) {
   if (hasPurchased) {
     return "You've used all your TexTokens for today. Buy more at rrotex.com/tokens.";
   }
-  return "You've used your 5 free TexTokens for today. Come back tomorrow, or buy more at rrotex.com/tokens.";
+  return "You've used your free TexToken for today. Come back tomorrow, or buy more at rrotex.com/tokens.";
 }
 
 function getFreeTokensUsed(key) {
@@ -1060,7 +1062,7 @@ module.exports = async function handler(request, response) {
   }
 
   // Plan caps beyond the free daily budget. Only enforced with a real reading.
-  // Free: 25 TexTokens/month. Pro: 35/day + 350/month — the monthly ceiling is
+  // Free: 5 TexTokens/month. Pro: 8/day + 60/month — the monthly ceiling is
   // the profit guard (bounds worst-case provider cost at ~$10.50 vs $20). All
   // fully server-side (the old 1M/day Pro limit was only ever client-enforced).
   if (!isDev && serverUsage) {
@@ -1068,21 +1070,21 @@ module.exports = async function handler(request, response) {
       if (serverUsage.monthUsed >= PRO_MONTHLY) {
         response.status(402).json({
           error: 'no_textokens',
-          text: "You've used your 350 TexTokens for this month. They reset on the 1st (UTC), or add a pack at rrotex.com/tokens.",
+          text: "You've used your 60 TexTokens for this month. They reset on the 1st (UTC), or add a pack at rrotex.com/tokens.",
         });
         return;
       }
       if (serverUsage.dayUsed >= PRO_DAILY) {
         response.status(402).json({
           error: 'no_textokens',
-          text: "You've used your 35 daily TexTokens. They reset tomorrow (UTC), or add a pack at rrotex.com/tokens.",
+          text: "You've used your 8 daily TexTokens. They reset tomorrow (UTC), or add a pack at rrotex.com/tokens.",
         });
         return;
       }
     } else if (serverUsage.monthUsed >= FREE_MONTHLY) {
       response.status(402).json({
         error: 'no_textokens',
-        text: "You've used your 25 monthly free TexTokens. Upgrade to Pro for 35/day at rrotex.com/pro.",
+        text: "You've used your 5 monthly free TexTokens. Upgrade to Pro for 8/day at rrotex.com/pro.",
       });
       return;
     }
@@ -1295,7 +1297,7 @@ module.exports = async function handler(request, response) {
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
         `ROTEX model ranking: 1st Claude Haiku (best quality) → 2nd TexBrain Thinking-beta (balanced Roblox-focused model). If asked which is best: Claude Haiku. If asked which is cheaper: TexBrain Thinking-beta.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 5 TexTokens/day, 25/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 35 TexTokens/day, 350/month, agent mode, 5 projects. Extra packs: $1 = 2 TexTokens. ROTEX is focused on coding today; 3D asset generation and advanced GUI building are planned for the future.',
+        'ROTEX is a web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 1 TexToken/day, 5/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 8 TexTokens/day, 60/month, agent mode, 5 projects. Extra packs: $1 = 2 TexTokens. ROTEX is focused on coding today; 3D asset generation and advanced GUI building are planned for the future.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',

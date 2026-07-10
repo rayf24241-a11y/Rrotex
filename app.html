@@ -119,6 +119,34 @@
       .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
       .nav-item.active { color: var(--text); background: rgba(92,168,255,0.10); border-color: rgba(92,168,255,0.24); }
 
+      /* ── Chat list ── */
+      .rail-chats { min-height: 0; display: flex; flex-direction: column; flex: 1; }
+      .chat-list { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; min-height: 0; padding-right: 2px; }
+      .chat-list::-webkit-scrollbar { width: 8px; }
+      .chat-item {
+        display: flex; align-items: center; gap: 4px;
+        border-radius: 10px; border: 1px solid transparent;
+        transition: background .14s ease, border-color .14s ease;
+      }
+      .chat-item:hover { background: rgba(255,255,255,0.04); }
+      .chat-item.active { background: rgba(92,168,255,0.10); border-color: rgba(92,168,255,0.24); }
+      .chat-item-label {
+        flex: 1; min-width: 0; text-align: left; cursor: pointer;
+        padding: 9px 4px 9px 12px; background: transparent; border: none;
+        color: var(--muted); font-size: 12.5px; font-weight: 600;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .chat-item:hover .chat-item-label, .chat-item.active .chat-item-label { color: var(--text); }
+      .chat-item-del {
+        flex: 0 0 auto; width: 24px; height: 24px; margin-right: 5px;
+        border: none; background: transparent; cursor: pointer; border-radius: 7px;
+        color: var(--quiet); font-size: 17px; line-height: 1;
+        opacity: 0; transition: opacity .12s, background .12s, color .12s;
+      }
+      .chat-item:hover .chat-item-del, .chat-item.active .chat-item-del { opacity: 1; }
+      .chat-item-del:hover { background: rgba(255,84,112,0.16); color: var(--red); }
+      .chat-list:empty::after { content: 'No chats yet — hit New Chat.'; color: var(--quiet); font-size: 12px; padding: 8px 6px; }
+
       .account { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--line-soft); background: rgba(255,255,255,0.03); }
       .avatar { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #10131a; background: linear-gradient(135deg, var(--yellow), #ffb020); overflow: hidden; }
       .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -384,16 +412,9 @@
           </div>
         </div>
 
-        <div style="min-height:0; display:flex; flex-direction:column;">
-          <div class="rail-label">Quick prompts</div>
-          <div class="shortcuts">
-            <button class="nav-item active" data-prompt="" type="button">General</button>
-            <button class="nav-item" data-prompt="Make a polished mobile-safe shop UI that appears in game with one LocalScript owner." type="button">Shop UI</button>
-            <button class="nav-item" data-prompt="Add a leaderstats + coins system with a safe DataStore save/load using pcall and autosave." type="button">Coins + Save</button>
-            <button class="nav-item" data-prompt="Build a round system with a timer, teams, and a winner announcement." type="button">Round System</button>
-            <button class="nav-item" data-prompt="Debug my broken feature. Find the real owner script, fix the root cause, and delete duplicates." type="button">Debug</button>
-            <button class="nav-item" data-prompt="Build a small map area using terrain, lighting, and Toolbox models for static props only." type="button">Map Area</button>
-          </div>
+        <div class="rail-chats">
+          <div class="rail-label">Chats</div>
+          <div class="chat-list" id="chatList"></div>
         </div>
 
         <div class="account">

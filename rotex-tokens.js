@@ -7,10 +7,10 @@
   // converts for display, so every balance readout site-wide re-denominated
   // in one place.
   var TT_UNIT = 30000;
-  var FREE_DAILY_BASE = 5 * TT_UNIT;    // "5 TexTokens/day"
-  var PRO_DAILY_BASE  = 35 * TT_UNIT;   // "35 TexTokens/day"
-  var FREE_MONTHLY    = 25 * TT_UNIT;   // "25 TexTokens/month"
-  var PRO_MONTHLY     = 350 * TT_UNIT;  // "350 TexTokens/month" (profit-guard ceiling)
+  var FREE_DAILY_BASE = 1 * TT_UNIT;    // "1 TexToken/day"
+  var PRO_DAILY_BASE  = 8 * TT_UNIT;    // "8 TexTokens/day"
+  var FREE_MONTHLY    = 5 * TT_UNIT;    // "5 TexTokens/month"
+  var PRO_MONTHLY     = 60 * TT_UNIT;   // "60 TexTokens/month" (profit-guard ceiling)
 
   // Matches the server's _dayKey()/_today() exactly (api/chat.js): UTC
   // calendar date, not the browser's local timezone. This local fallback

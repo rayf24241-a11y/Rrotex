@@ -40,7 +40,9 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
 
 async function checkCreditSafety({ selected, provider, model, userId, estimate, texTokensLeft, isPro = false }) {
   const balance = providerBalanceUsd();
-  const providerBusyText = 'The selected AI route is temporarily unavailable. Try again now, or switch models for this message.';
+  // Shown when the ROTEX provider balance (OpenRouter/Anthropic credit) is
+  // empty. To the user this reads as a clean outage, not a confusing error.
+  const providerBusyText = 'ROTEX is temporarily down while we top up the AI. Please try again later — your TexTokens were not used.';
   const outText = isPro
     ? "You've hit your Pro TexToken limit for now. It resets soon, or buy more at rrotex.com/tokens."
     : 'You are out of TexTokens. Upgrade to Pro or add more TexTokens to continue.';
