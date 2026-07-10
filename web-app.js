@@ -63,10 +63,23 @@ const state = {
 
 function getOrCreateBridgeCode() {
   const existing = cleanCode(localStorage.getItem('rotex_web_bridge_code'));
-  if (existing.length >= 4) return existing;
+  if (existing.length >= 4) return existing; // keep any existing code (incl. legacy 4-char)
+  // 32-char unambiguous alphabet (no I/O/0/1). 6 chars = 32^6 ~= 1.07 billion
+  // combinations, generated with a cryptographic RNG (not Math.random) so a
+  // pairing code can't be predicted or feasibly enumerated. 32 divides 2^32
+  // evenly, so `% 32` has no modulo bias.
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const n = 6;
+  let bytes;
+  try {
+    bytes = new Uint32Array(n);
+    (self.crypto || window.crypto).getRandomValues(bytes);
+  } catch { bytes = null; }
   let code = 'RX';
-  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < n; i++) {
+    const r = bytes ? bytes[i] : Math.floor(Math.random() * 0x100000000);
+    code += chars[r % chars.length];
+  }
   localStorage.setItem('rotex_web_bridge_code', code);
   return code;
 }

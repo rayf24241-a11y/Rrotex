@@ -480,8 +480,11 @@ async function handleRobloxReturn(user) {
   } catch {}
   if (db && user) {
     try { await setDoc(doc(db, 'users', user.uid, 'connections', 'roblox'), link, { merge: true }); } catch {}
+    // Reverse index so the plugin bridge can find this account by Roblox id
+    // (the plugin reports the Studio user id → server maps it → auto-pairs).
+    try { await setDoc(doc(db, 'robloxLinks', String(link.id)), { uid: user.uid, username: link.username, linkedAt: serverTimestamp() }, { merge: true }); } catch {}
   }
-  setRobloxMessage('Roblox account linked! The Studio plugin can now connect with no code.');
+  setRobloxMessage('Roblox account linked! Once the plugin update is live, Studio connects with no code.');
 }
 
 async function renderRobloxLink(user) {
@@ -508,9 +511,19 @@ async function renderRobloxLink(user) {
 }
 
 async function unlinkRoblox() {
+  // Grab the linked id first so we can also clear the reverse index.
+  let priorId = '';
+  try { priorId = String((JSON.parse(localStorage.getItem('rotex_roblox_link') || 'null') || {}).id || ''); } catch {}
   try { localStorage.removeItem('rotex_roblox_link'); } catch {}
   if (db && currentUser) {
+    try {
+      if (!priorId) {
+        const snap = await getDoc(doc(db, 'users', currentUser.uid, 'connections', 'roblox'));
+        if (snap.exists()) priorId = String(snap.data().id || '');
+      }
+    } catch {}
     try { await setDoc(doc(db, 'users', currentUser.uid, 'connections', 'roblox'), { id: '', username: '', display: '', picture: '', unlinkedAt: serverTimestamp() }, { merge: true }); } catch {}
+    if (priorId) { try { await setDoc(doc(db, 'robloxLinks', priorId), { uid: '', unlinkedAt: serverTimestamp() }, { merge: true }); } catch {} }
   }
   setRobloxMessage('Roblox account unlinked.');
   await renderRobloxLink(currentUser);

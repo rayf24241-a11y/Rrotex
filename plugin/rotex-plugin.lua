@@ -3,7 +3,7 @@
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
 local HTTP_PORT = PORTS[1]
-local PLUGIN_VERSION = "3.5"
+local PLUGIN_VERSION = "3.6"
 local WEB_BRIDGE_URL = "https://www.rrotex.com/api/plugin-bridge"
 
 local HttpService          = game:GetService("HttpService")
@@ -12,6 +12,14 @@ local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local Lighting             = game:GetService("Lighting")
 local Terrain              = workspace.Terrain
 local InsertService        = game:GetService("InsertService")
+local StudioService        = game:GetService("StudioService")
+
+-- The Roblox user id of whoever is logged into Studio. Sent to the web bridge
+-- so a linked ROTEX account can auto-pair with no bridge code. 0 if unknown.
+local function studioUserId()
+	local ok, id = pcall(function() return StudioService:GetUserId() end)
+	return (ok and tonumber(id)) or 0
+end
 
 -- ── Toolbar ───────────────────────────────────────────────────────────────────
 local toolbar = plugin:CreateToolbar("ROTEX AI")
@@ -936,6 +944,15 @@ local function isHttpDisabled(err)
 		or e:find("httpenabled", 1, true) ~= nil
 end
 
+-- Best-effort: turn HTTP on ourselves so the user doesn't have to dig through
+-- Game Settings. Roblox may block a plugin from writing HttpEnabled (a security
+-- restriction that varies by Studio version); if so this pcall just fails and
+-- callers fall back to the clear manual instruction. Costs nothing to try.
+local function tryEnableHttp()
+	local ok = pcall(function() HttpService.HttpEnabled = true end)
+	return ok and HttpService.HttpEnabled == true
+end
+
 local function tryConnect()
 	local lastErr = nil
 	for _, port in ipairs(PORTS) do
@@ -948,6 +965,7 @@ local function tryConnect()
 		local okName, name = pcall(function() return game.Name end)
 		local data, err = webRequest("plugin_hello", {
 			gameName = (okName and name and name ~= "" and name) or "Untitled Experience",
+			robloxUserId = studioUserId(), -- lets a linked account auto-pair with no code
 		}, 4)
 		if data and data.ok then return "web", 0, data end
 		if err then lastErr = err end
@@ -1003,9 +1021,23 @@ task.spawn(function()
 			if mode then
 				onConnected(mode, connPort, connData)
 			elseif isHttpDisabled(connErr) then
-				setStatus("Enable HTTP Requests (see log)", C.red)
-				connectBtn.Text = "Connect to ROTEX"
-				appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
+				-- Try to flip HTTP on for the user, then reconnect automatically.
+				if tryEnableHttp() then
+					appendLog("[ROTEX] Turned HTTP requests ON for you. Reconnecting...")
+					setStatus("Enabling HTTP, reconnecting...", C.yellow)
+					local m2, p2, d2 = tryConnect()
+					if m2 then
+						onConnected(m2, p2, d2)
+					else
+						setStatus("Almost there — click Connect", C.yellow)
+						connectBtn.Text = "Connect to ROTEX"
+						appendLog("[ROTEX] HTTP is on now. Click Connect to finish.")
+					end
+				else
+					setStatus("Enable HTTP Requests (see log)", C.red)
+					connectBtn.Text = "Connect to ROTEX"
+					appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
+				end
 			else
 				setStatus(hasWebCode and "ROTEX Web not connected" or "ROTEX Desktop not found", C.quiet)
 				connectBtn.Text = "Connect to ROTEX"
@@ -1048,9 +1080,23 @@ connectBtn.MouseButton1Click:Connect(function()
 		if mode then
 			onConnected(mode, connPort, connData)
 		elseif isHttpDisabled(connErr) then
-			connectBtn.Text = "Connect to ROTEX"
-			setStatus("Enable HTTP Requests (see log)", C.red)
-			appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
+			-- Try to flip HTTP on for the user, then reconnect automatically.
+			if tryEnableHttp() then
+				appendLog("[ROTEX] Turned HTTP requests ON for you. Reconnecting...")
+				setStatus("Enabling HTTP, reconnecting...", C.yellow)
+				local m2, p2, d2 = tryConnect()
+				if m2 then
+					onConnected(m2, p2, d2)
+				else
+					connectBtn.Text = "Connect to ROTEX"
+					setStatus("Almost there — click Connect", C.yellow)
+					appendLog("[ROTEX] HTTP is on now. Click Connect to finish.")
+				end
+			else
+				connectBtn.Text = "Connect to ROTEX"
+				setStatus("Enable HTTP Requests (see log)", C.red)
+				appendLog("[ROTEX] HTTP requests are OFF. Fix: Home -> Game Settings -> Security -> turn ON Allow HTTP Requests, then click Connect.")
+			end
 		else
 			connectBtn.Text = "Connect to ROTEX"
 			local hasWebCode = #normalizeWebCode(webCodeInput.Text) >= 4
