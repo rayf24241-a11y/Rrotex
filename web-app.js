@@ -38,7 +38,8 @@ const state = {
   provider: null,
   user: null,
   idToken: '',
-  mode: localStorage.getItem('rotex_web_mode') || 'ask',
+  // Ask mode is gone — anyone whose saved preference was 'ask' lands on Agent.
+  mode: ['agent', 'supreme'].includes(localStorage.getItem('rotex_web_mode')) ? localStorage.getItem('rotex_web_mode') : 'agent',
   bridgeCode: getOrCreateBridgeCode(),
   context: null,
   pluginConnected: false,
@@ -160,7 +161,7 @@ function downloadTextFile(name, content) {
 }
 
 // Adds a "Download" button to a message when the answer contains file blocks,
-// so Ask mode (no plugin) users can still grab the scripts.
+// so users can grab the scripts even outside Studio.
 function addDownloadAction(bubble, files) {
   if (!bubble || !Array.isArray(files) || !files.length) return;
   const actions = document.createElement('div');
@@ -203,7 +204,7 @@ function addEmptyWorkbench() {
   shell.innerHTML = `
     <div class="forge-badge">ROTEX · Roblox Dev Studio</div>
     <h1>What are we building?</h1>
-    <p>Ask mode writes complete, downloadable scripts right away. Agent and Supreme connect the plugin to edit your game live. Pick a starter or just type what you want.</p>
+    <p>Agent edits your game live through the Studio plugin. Supreme goes deeper — whole systems in one pass. Pick a starter or just type what you want.</p>
     <div class="forge-grid">
       <button class="forge-card" type="button" data-seed="Make a polished Roblox shop UI that appears in game, is mobile-safe, and has one LocalScript owner."><strong>UI Generator</strong><span>ScreenGui, buttons, mobile scale, visible layout, behavior owner.</span></button>
       <button class="forge-card" type="button" data-seed="Debug the latest broken feature. Search every likely owner script, fix the real cause, and remove duplicates."><strong>Bug Repair</strong><span>Find wrong paths, duplicate scripts, invisible GUI, nil errors, stale owners.</span></button>
@@ -288,18 +289,17 @@ function pushHistory(role, content) {
 }
 
 function setMode(mode) {
+  if (!['agent', 'supreme'].includes(mode)) mode = 'agent';
   state.mode = mode;
   localStorage.setItem('rotex_web_mode', mode);
   document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
-  els.input.placeholder = mode === 'ask' ? 'Ask ROTEX...' : 'Tell ROTEX what to make, edit, debug, or remove...';
+  els.input.placeholder = 'Tell ROTEX what to make, edit, debug, or remove...';
   setRunState(
-    mode === 'ask' ? 'Ready' : state.pluginConnected ? 'Ready' : 'Connect Studio',
-    mode === 'ask'
-      ? 'Ask mode can talk without Studio. Switch to Agent or Supreme for edits.'
-      : state.pluginConnected
-        ? 'Agent will apply real changes through the plugin.'
-        : 'Agent needs the Studio plugin before it can edit.',
-    mode === 'supreme' ? 'Deep workflow' : mode === 'agent' ? 'Edit workflow' : 'Chat workflow',
+    state.pluginConnected ? 'Ready' : 'Connect Studio',
+    state.pluginConnected
+      ? 'Agent will apply real changes through the plugin.'
+      : 'Agent needs the Studio plugin before it can edit.',
+    mode === 'supreme' ? 'Deep workflow' : 'Edit workflow',
   );
 }
 
@@ -441,8 +441,8 @@ function renderBridge(meta = {}) {
   }
   if (!state.busy) {
     setRunState(
-      connected ? 'Ready' : state.mode === 'ask' ? 'Ready' : 'Connect Studio',
-      connected ? 'Studio context is live. Agent and Supreme can edit now.' : state.mode === 'ask' ? 'Ask mode can talk while Studio is disconnected.' : 'Paste the bridge code into the plugin, then press Check Plugin.',
+      connected ? 'Ready' : 'Connect Studio',
+      connected ? 'Studio context is live. Agent and Supreme can edit now.' : 'Paste the bridge code into the plugin, then press Check Plugin.',
       `${meta.pendingActions ?? meta.queued ?? 0} edit(s) queued`,
     );
   }
@@ -572,10 +572,10 @@ function buildProjectContext() {
     ? ctx.capabilities.join(', ')
     : 'apply_files, create_model geometry, insert_toolbox_model for map/world assets only, terrain_edit, lighting_set, create_ui, create_ui_image, set_property, delete_instance, select_instances';
   let out = [
-    `ROTEX UI MODE: ${state.mode === 'supreme' ? 'SUPER AGENT' : state.mode === 'agent' ? 'AGENT' : 'ASK'}.`,
+    `ROTEX UI MODE: ${state.mode === 'supreme' ? 'SUPER AGENT' : 'AGENT'}.`,
     `PLUGIN CAPABILITIES: ${caps}.`,
     'The web app hides executable file/studio-action/roblox-model blocks and queues them to the Roblox Studio plugin.',
-    'Agent/Super Agent edit the actual Studio game through executable blocks. Ask mode cannot auto-apply to Studio, but it MUST still fully build what the user asks: give complete, copy-paste-ready code (in ```file:Service/Name.lua blocks so it is clean and downloadable) with exact Studio placement and test steps. Never refuse, never just ask what they want, never tell them to switch modes -- make a smart assumption and build it.',
+    'Agent/Super Agent edit the actual Studio game through executable blocks. Never refuse, never just ask what they want, never tell them to switch modes -- make a smart assumption and build it.',
   ].join('\n');
   if (scripts.length) {
     out += `\n\nPROJECT SCRIPTS (live from Roblox Studio - ${scripts.length} scripts). Search these before editing:`;
@@ -651,8 +651,8 @@ async function sendMessage(rawText, options = {}) {
     return;
   }
 
-  const requiresPlugin = state.mode !== 'ask';
-  if (requiresPlugin && !state.pluginConnected && options.allowPluginPrompt !== false) {
+  // Every mode edits the game now, so the Studio plugin is always required.
+  if (!state.pluginConnected && options.allowPluginPrompt !== false) {
     if (!options.skipUserRender) addMessage('user', text);
     if (!state.pluginPromptOpen) addPluginConnectPrompt(text);
     else addMessage('assistant', 'Plugin still needs to connect first. Paste the bridge code into Studio, click Connect, then press Check Plugin.', 'status');
@@ -666,14 +666,14 @@ async function sendMessage(rawText, options = {}) {
   els.input.value = '';
   if (!options.skipUserRender) addMessage('user', text);
   pushHistory('user', text);
-  setRunState(state.mode === 'ask' ? 'Thinking' : taskStatusFor(text), state.mode === 'ask' ? 'Reading the request.' : 'Planning, generating, and checking executable Studio edits.', state.mode === 'supreme' ? 'Supreme pass' : state.mode === 'agent' ? 'Agent pass' : 'Ask pass');
-  const assistantBubble = addMessage('assistant', state.mode === 'ask' ? 'Thinking...' : taskStatusFor(text), state.mode === 'ask' ? '' : 'status');
+  setRunState(taskStatusFor(text), 'Planning, generating, and checking executable Studio edits.', state.mode === 'supreme' ? 'Supreme pass' : 'Agent pass');
+  const assistantBubble = addMessage('assistant', taskStatusFor(text), 'status');
 
   let full = '';
   let gotAny = false;
   try {
     const history = state.messages.slice(-18).map((m) => ({ role: m.role, content: m.content }));
-    const modeForServer = state.mode === 'supreme' ? 'editor' : state.mode === 'agent' ? 'editor' : 'editor';
+    const modeForServer = 'editor';
     const authToken = state.user ? await state.user.getIdToken(true).catch(() => state.idToken || '') : '';
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -723,18 +723,9 @@ async function sendMessage(rawText, options = {}) {
         if (payload.d) {
           gotAny = true;
           full += payload.d;
-          if (state.mode === 'ask') {
-            // Ask mode is a plain chat answer -- show everything, including
-            // code, so a valid answer never renders blank (the old strip +
-            // looksLikeSourceCode fallback silently hid code-heavy replies,
-            // which is why Claude Haiku often appeared to "not respond").
-            assistantBubble.className = 'msg assistant';
-            assistantBubble.innerHTML = renderMarkdown(full);
-          } else {
-            const hasExecutable = /```\s*(?:file:|studio-action|roblox-model)/i.test(full);
-            assistantBubble.className = `msg assistant ${hasExecutable ? 'status' : ''}`.trim();
-            assistantBubble.innerHTML = renderMarkdown(visibleAssistantText(full, hasExecutable ? taskStatusFor(text) : 'Thinking...'));
-          }
+          const hasExecutable = /```\s*(?:file:|studio-action|roblox-model)/i.test(full);
+          assistantBubble.className = `msg assistant ${hasExecutable ? 'status' : ''}`.trim();
+          assistantBubble.innerHTML = renderMarkdown(visibleAssistantText(full, hasExecutable ? taskStatusFor(text) : 'Thinking...'));
           els.messages.scrollTop = els.messages.scrollHeight;
         }
         if (payload.usage?.textokens_charged && window.rotexTokens?.spend) {
@@ -745,24 +736,14 @@ async function sendMessage(rawText, options = {}) {
     }
 
     if (!gotAny && !full.trim()) throw new Error('The AI started but did not send a response fast enough. Try again, or switch models for this message.');
-    if (state.mode === 'ask') {
-      // Ask mode never queues Studio edits -- it is a chat answer. Show the
-      // full text and offer a download for any file blocks the answer includes.
-      assistantBubble.className = 'msg assistant';
-      assistantBubble.innerHTML = renderMarkdown(full || 'No response — try again, or switch models.');
-      addDownloadAction(assistantBubble, extractStudioFiles(full));
-      pushHistory('assistant', full);
-      setRunState('Ready', 'Ask mode answered. Switch to Agent to edit the game.', 'Chat workflow');
-    } else {
-      const queued = await queueExecutableBlocks(full, text);
-      const visible = visibleAssistantText(full, queued ? taskStatusFor(text) : '');
-      const shown = visible || (queued ? taskStatusFor(text) : 'Done.');
-      assistantBubble.className = `msg assistant ${queued ? 'status' : ''}`.trim();
-      assistantBubble.innerHTML = renderMarkdown(shown);
-      addDownloadAction(assistantBubble, extractStudioFiles(full));
-      pushHistory('assistant', shown);
-      setRunState(queued ? 'Queued edit' : 'Ready', queued ? 'Studio plugin is applying the generated change.' : 'Response complete.', queued ? 'Waiting for Studio result' : 'No action queued');
-    }
+    const queued = await queueExecutableBlocks(full, text);
+    const visible = visibleAssistantText(full, queued ? taskStatusFor(text) : '');
+    const shown = visible || (queued ? taskStatusFor(text) : 'Done.');
+    assistantBubble.className = `msg assistant ${queued ? 'status' : ''}`.trim();
+    assistantBubble.innerHTML = renderMarkdown(shown);
+    addDownloadAction(assistantBubble, extractStudioFiles(full));
+    pushHistory('assistant', shown);
+    setRunState(queued ? 'Queued edit' : 'Ready', queued ? 'Studio plugin is applying the generated change.' : 'Response complete.', queued ? 'Waiting for Studio result' : 'No action queued');
   } catch (error) {
     assistantBubble.className = 'msg assistant error';
     assistantBubble.textContent = error.message || 'No response.';

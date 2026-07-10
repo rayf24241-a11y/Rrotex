@@ -370,13 +370,10 @@
           <!-- Mode dropdown -->
           <div style="position:relative;">
             <button id="rxModeBtn" type="button" style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:rgba(255,255,255,0.04);border:1px solid var(--rx-border);border-radius:7px;cursor:pointer;color:var(--rx-text);font:600 12px/1 inherit;white-space:nowrap;">
-              <span id="rxModeLabel">Ask</span>
+              <span id="rxModeLabel">Agent</span>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div id="rxModeMenu" hidden style="position:absolute;bottom:calc(100% + 6px);left:0;background:var(--rx-surface);border:1px solid var(--rx-border);border-radius:10px;padding:5px;min-width:160px;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
-              <div class="rx-mode-opt" data-mode="ask" style="padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;">
-                <strong>Ask</strong><span style="font-size:11px;color:var(--rx-muted);">Plain chat, no agent actions</span>
-              </div>
               <div class="rx-mode-opt" data-mode="plan" style="padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:2px;">
                 <strong>Plan</strong><span style="font-size:11px;color:var(--rx-muted);">Think step-by-step before acting</span>
               </div>
@@ -890,16 +887,18 @@
   document.getElementById('rxSelectedRole').innerHTML = initModel.subtitle ? `${initModel.role}<br><span style="font-size:10px;opacity:0.55">${initModel.subtitle}</span>` : initModel.role;
 
   /* -- " " Mode dropdown " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " " ---- */
-  let currentMode = 'ask';
+  let currentMode = 'agent';
   const modeBtn  = document.getElementById('rxModeBtn');
   const modeMenu = document.getElementById('rxModeMenu');
   const modeLabel = document.getElementById('rxModeLabel');
 
-  const MODE_LABELS = { ask: 'Ask', plan: 'Plan', agent: 'Agent', supreme: 'Supreme Agent' };
-  const MODE_COLORS = { ask: '', plan: 'rgba(75,157,255,0.15)', agent: 'rgba(75,157,255,0.22)', supreme: 'rgba(168,85,247,0.22)' };
-  const MODE_BORDERS = { ask: '', plan: 'rgba(75,157,255,0.4)', agent: 'rgba(75,157,255,0.55)', supreme: 'rgba(168,85,247,0.55)' };
+  const MODE_LABELS = { plan: 'Plan', agent: 'Agent', supreme: 'Supreme Agent' };
+  const MODE_COLORS = { plan: 'rgba(75,157,255,0.15)', agent: 'rgba(75,157,255,0.22)', supreme: 'rgba(168,85,247,0.22)' };
+  const MODE_BORDERS = { plan: 'rgba(75,157,255,0.4)', agent: 'rgba(75,157,255,0.55)', supreme: 'rgba(168,85,247,0.55)' };
 
   function setMode(mode) {
+    // Ask mode removed — stored 'ask' (or anything unknown) becomes Agent.
+    if (!MODE_LABELS[mode]) mode = 'agent';
     currentMode = mode;
     localStorage.setItem('rotex_chat_mode', mode);
     modeLabel.textContent = MODE_LABELS[mode];
@@ -909,11 +908,11 @@
     document.querySelectorAll('.rx-mode-opt').forEach(el => {
       el.style.background = el.dataset.mode === mode ? 'rgba(255,255,255,0.07)' : '';
     });
-    const cost = currentMode === 'supreme' ? '4x task cost' : currentMode === 'agent' ? '2x task cost' : currentMode === 'plan' ? '1x planning' : 'plain chat';
+    const cost = currentMode === 'supreme' ? '4x task cost' : currentMode === 'agent' ? '2x task cost' : '1x planning';
     const preview = document.getElementById('rxCostPreview');
     if (preview) preview.textContent = cost;
   }
-  setMode(localStorage.getItem('rotex_chat_mode') || 'ask');
+  setMode(localStorage.getItem('rotex_chat_mode') || 'agent');
 
   modeBtn.addEventListener('click', e => { e.stopPropagation(); modeMenu.hidden = !modeMenu.hidden; });
   document.querySelectorAll('.rx-mode-opt').forEach(el => {
@@ -1875,9 +1874,6 @@
     }
 
     function _modeInstruction(studioOk) {
-      if (currentMode === 'ask') {
-        return 'ROTEX UI MODE: ASK. Ask mode is explanation/chat only. Do not output code blocks, file blocks, commands, or Studio actions. If the user asks you to make/edit/fix/build something, explain briefly that Agent or Super Agent mode is needed to edit the game.';
-      }
       if (currentMode === 'plan') {
         return 'ROTEX UI MODE: PLAN. Plan mode teams with Agent by preparing the approach only. Do not output code blocks, file blocks, commands, or Studio actions. Return a concise numbered plan and say Agent/Super Agent can execute it.';
       }
