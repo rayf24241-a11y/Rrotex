@@ -187,18 +187,93 @@
 
     /* Footer */
     .footer { font-size: 11px; color: var(--quiet); -webkit-app-region: no-drag; }
+
+    /* ── ForgeGUI-style split layout ─────────────────────────────── */
+    .split { position: relative; z-index: 1; height: 100vh; display: grid; grid-template-columns: 1.12fr 0.88fr; }
+    .auth { display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .split .wrap { height: auto; padding: 0; gap: 22px; }
+
+    .showcase {
+      position: relative; overflow-y: auto; padding: 44px clamp(26px, 4vw, 60px);
+      display: flex; border-right: 1px solid var(--border);
+      -webkit-app-region: drag;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(255,214,10,0.10), transparent 42%),
+        radial-gradient(circle at 92% 96%, rgba(75,157,255,0.10), transparent 46%);
+    }
+    .showcase-inner { max-width: 560px; width: 100%; margin: auto; }
+    .sc-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #ffd60a; margin-bottom: 18px; }
+    .sc-eyebrow::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #2ee87a; box-shadow: 0 0 12px #2ee87a; animation: sc-pulse 2s infinite; }
+    @keyframes sc-pulse { 50% { opacity: .35; } }
+    .sc-title { font-size: clamp(28px, 3.6vw, 44px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 12px; }
+    .sc-title span { color: #ffd60a; }
+    .sc-sub { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 24px; max-width: 470px; }
+
+    .editor { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #0a0d14; box-shadow: 0 30px 70px -30px rgba(0,0,0,0.85); animation: sc-rise .55s ease both; }
+    .editor-top { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: #11151f; border-bottom: 1px solid var(--border); }
+    .editor-top .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .editor-top .r { background: #ff5f57; } .editor-top .y { background: #febc2e; } .editor-top .g { background: #28c840; }
+    .editor-file { margin-left: 8px; font: 600 11.5px/1 ui-monospace, Menlo, monospace; color: var(--quiet); }
+    .editor-code { margin: 0; padding: 15px 18px; font: 12.5px/1.75 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; white-space: pre; }
+    .editor-code .line { display: block; }
+    .editor-code .k { color: #c98bff; } .editor-code .s { color: #7ee787; } .editor-code .f { color: #79c0ff; } .editor-code .c { color: #5c6b82; font-style: italic; } .editor-code .n { color: #ffbb66; }
+    .caret { display: inline-block; width: 7px; height: 15px; background: #ffd60a; vertical-align: -2px; margin-left: 1px; animation: sc-blink 1s steps(1) infinite; }
+    @keyframes sc-blink { 50% { opacity: 0; } }
+    @keyframes sc-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+    .sc-chat { margin-top: 16px; display: flex; flex-direction: column; gap: 9px; }
+    .sc-msg { max-width: 84%; padding: 10px 14px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; animation: sc-rise .55s ease both; }
+    .sc-msg.user { align-self: flex-end; background: linear-gradient(180deg, #ffe98a, #ffd60a); color: #10131a; font-weight: 600; border-bottom-right-radius: 5px; }
+    .sc-msg.ai { align-self: flex-start; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-bottom-left-radius: 5px; animation-delay: .45s; }
+
+    .sc-stats { margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .sc-stat { border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px; background: rgba(255,255,255,0.02); }
+    .sc-stat b { display: block; font-size: 14px; }
+    .sc-stat span { font-size: 11.5px; color: var(--quiet); }
+
+    @media (max-width: 900px) {
+      .split { grid-template-columns: 1fr; }
+      .showcase { display: none; }
+      html, body { overflow: auto; }
+    }
   </style>
 </head>
 <body>
   <div class="bg-glow"></div>
   <div class="bg-grid"></div>
 
+  <div class="split">
+    <aside class="showcase">
+      <div class="showcase-inner">
+        <div class="sc-eyebrow">ROTEX Roblox Dev AI</div>
+        <h1 class="sc-title">Build Roblox games by just <span>chatting</span>.</h1>
+        <p class="sc-sub">ROTEX writes complete, working Luau — scripts, UI, DataStores, whole systems — and edits your game live inside Roblox Studio.</p>
+
+        <div class="editor">
+          <div class="editor-top"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="editor-file">ServerScriptService · ShopHandler.lua</span></div>
+          <pre class="editor-code"><span class="line"><span class="c">-- Written by ROTEX from "make a shop that saves coins"</span></span><span class="line"><span class="k">local</span> DataStore = <span class="f">game:GetService</span>(<span class="s">"DataStoreService"</span>)</span><span class="line"><span class="k">local</span> Coins = DataStore:<span class="f">GetDataStore</span>(<span class="s">"Coins"</span>)</span><span class="line"> </span><span class="line">BuyRemote.OnServerEvent:<span class="f">Connect</span>(<span class="k">function</span>(player, itemId)</span><span class="line">    <span class="k">local</span> price = ITEMS[itemId].price</span><span class="line">    <span class="k">if</span> <span class="f">getCoins</span>(player) >= price <span class="k">then</span></span><span class="line">        <span class="f">grantItem</span>(player, itemId)<span class="caret"></span></span><span class="line">    <span class="k">end</span></span><span class="line"><span class="k">end</span>)</span></pre>
+        </div>
+
+        <div class="sc-chat">
+          <div class="sc-msg user">make a shop that saves coins</div>
+          <div class="sc-msg ai">Done — a ScreenGui shop, a BuyRemote, and a safe DataStore with autosave. Full code is ready above. ⚡</div>
+        </div>
+
+        <div class="sc-stats">
+          <div class="sc-stat"><b>Full scripts</b><span>not snippets</span></div>
+          <div class="sc-stat"><b>Server-safe</b><span>exploit-proof</span></div>
+          <div class="sc-stat"><b>Instant</b><span>paste &amp; run</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="auth">
   <div class="wrap">
     <div class="logo">
       <div class="logo-mark"><img src="./icon.png" alt="ROTEX"></div>
       <div>
         <div class="logo-name">ROTEX</div>
-        <div class="logo-tag">AI Assistant</div>
+        <div class="logo-tag">Roblox Dev AI</div>
       </div>
     </div>
 
@@ -254,6 +329,8 @@
     </div>
 
     <div class="footer">ROTEX v1.17.27</div>
+  </div>
+    </div>
   </div>
 
   <script src="./desktop-auth.js"></script>
