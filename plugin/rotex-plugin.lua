@@ -12,14 +12,6 @@ local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local Lighting             = game:GetService("Lighting")
 local Terrain              = workspace.Terrain
 local InsertService        = game:GetService("InsertService")
-local StudioService        = game:GetService("StudioService")
-
--- The Roblox user id of whoever is logged into Studio. Sent to the web bridge
--- so a linked ROTEX account can auto-pair with no bridge code. 0 if unknown.
-local function studioUserId()
-	local ok, id = pcall(function() return StudioService:GetUserId() end)
-	return (ok and tonumber(id)) or 0
-end
 
 -- ── Toolbar ───────────────────────────────────────────────────────────────────
 local toolbar = plugin:CreateToolbar("ROTEX AI")
@@ -965,7 +957,6 @@ local function tryConnect()
 		local okName, name = pcall(function() return game.Name end)
 		local data, err = webRequest("plugin_hello", {
 			gameName = (okName and name and name ~= "" and name) or "Untitled Experience",
-			robloxUserId = studioUserId(), -- lets a linked account auto-pair with no code
 		}, 4)
 		if data and data.ok then return "web", 0, data end
 		if err then lastErr = err end
