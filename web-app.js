@@ -222,14 +222,14 @@ function addEmptyWorkbench() {
 
 function pluginConnectText() {
   return [
-    'Agent mode edits your real Roblox game, so it needs the ROTEX Studio plugin connected first.',
+    'Agent mode edits your real Roblox game, so it needs the ROTEX Studio plugin.',
     '',
-    'Get the plugin:',
-    '1. Install the ROTEX desktop app from rrotex.com — it adds the ROTEX plugin to Roblox Studio for you automatically.',
-    '2. Restart Roblox Studio, then open the ROTEX panel from the Plugins tab. (Full setup guide: rrotex.com/docs)',
+    'Get the plugin (one-time):',
+    '1. Install ROTEX from the Roblox Creator Store: https://create.roblox.com/store/asset/136503150523656/ROTEX',
+    '2. In Roblox Studio, open the Plugins tab and click ROTEX to open its panel. Click Allow when Studio asks about HTTP.',
     '',
     'Connect it:',
-    `3. In the ROTEX plugin, paste this bridge code:  ${state.bridgeCode}`,
+    `3. Paste this bridge code into the ROTEX plugin:  ${state.bridgeCode}`,
     '4. Click Connect in the plugin, then press "Check Plugin" below.',
   ].join('\n');
 }
@@ -325,13 +325,10 @@ async function initAuth() {
   }
 }
 
-async function signIn() {
-  if (!state.auth || !state.provider) {
-    location.href = '/login';
-    return;
-  }
-  const { signInWithPopup } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js');
-  await signInWithPopup(state.auth, state.provider).catch(() => {});
+function signIn() {
+  // Full-page login (a whole dedicated page), then return to the app signed in.
+  // Firebase persists the session across pages, so /app picks it up on return.
+  window.location.href = '/login?return=' + encodeURIComponent('/app');
 }
 
 async function signOut() {

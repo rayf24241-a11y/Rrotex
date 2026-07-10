@@ -447,6 +447,14 @@
         return;
       }
 
+      // Honor a same-origin return target (e.g. /app) so the chat app can send
+      // users to a full login page and get them back afterward. Whitelisted
+      // paths only -- never an arbitrary/off-site redirect.
+      const returnTo = new URLSearchParams(window.location.search).get('return') || '';
+      if (/^\/(app|editor|chat|account|tokens|projects|docs)(?:[/#?]|$)/.test(returnTo)) {
+        window.location.href = returnTo;
+        return;
+      }
       navigate('projects');
     }
 
