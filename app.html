@@ -145,6 +145,21 @@
       .msg.status { align-self: flex-start; background: rgba(92,168,255,0.08); border: 1px solid rgba(92,168,255,0.22); color: #cfe1ff; font-size: 13px; }
       .msg.error { align-self: flex-start; background: rgba(255,84,112,0.10); border: 1px solid rgba(255,84,112,0.3); color: #ffc2cd; }
       .msg-actions { display: flex; gap: 8px; margin-top: 10px; }
+      /* Rendered markdown inside assistant messages */
+      .msg p { margin: 0 0 8px; }
+      .msg p:last-child { margin-bottom: 0; }
+      .msg strong { font-weight: 800; color: #fff; }
+      .msg.user strong { color: #10131a; }
+      .msg em { font-style: italic; }
+      .msg h3, .msg h4, .msg h5, .msg h6 { margin: 12px 0 6px; font-weight: 800; letter-spacing: -0.01em; }
+      .msg h3 { font-size: 17px; } .msg h4 { font-size: 15px; } .msg h5, .msg h6 { font-size: 14px; }
+      .msg ul, .msg ol { margin: 4px 0 10px; padding-left: 22px; }
+      .msg li { margin: 3px 0; }
+      .msg a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+      .msg code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; background: rgba(255,255,255,0.09); padding: 1px 6px; border-radius: 5px; }
+      .msg.user code { background: rgba(0,0,0,0.14); }
+      .msg pre.code { margin: 8px 0; padding: 12px 14px; border-radius: 10px; background: rgba(3,5,9,0.7); border: 1px solid var(--line); overflow-x: auto; }
+      .msg pre.code code { background: none; padding: 0; font-size: 12.5px; line-height: 1.55; color: #e6edf7; white-space: pre; }
 
       .forge-empty { margin: auto; text-align: center; max-width: 640px; padding: 20px; animation: rise .4s ease; }
       .forge-empty h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 900; letter-spacing: -0.03em; margin: 0 0 12px; background: linear-gradient(120deg, #fff, #ffe98a 60%, var(--yellow)); -webkit-background-clip: text; background-clip: text; color: transparent; }
