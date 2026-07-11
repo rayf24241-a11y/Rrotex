@@ -185,10 +185,21 @@ const ROBLOX_SYSTEM_PROMPTS = {
 function classifyRobloxRequest(userText, projectMode = 'Roblox') {
   const text = String(userText || '').toLowerCase();
   const has = (re) => re.test(text);
+  // Greetings / small talk are NEVER dev requests. Without this, "hi" fell
+  // through every keyword check into 'scripting' with needs_code:true, and the
+  // agent pipeline dutifully generated + queued code for a hello.
+  if (/^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text)) {
+    return {
+      platform: 'Roblox', category: 'non_dev_question', difficulty: 'beginner',
+      needs_code: false, needs_setup_steps: false, needs_memory_update: false,
+      best_model: 'gemini_flash', second_pass_model: 'claude_haiku', should_ask_question: false,
+      assumptions: [],
+    };
+  }
+  let category = 'non_dev_question';
   const platform = has(/\bunity|c#|gameobject|prefab|photon|fusion|netcode|xr|vr\b/) ? 'Unity'
     : has(/\broblox|luau|studio|remoteevent|datastore|gamepass|leaderstats|startergui|workspace\b/) || String(projectMode).toLowerCase() === 'roblox' ? 'Roblox'
       : 'General';
-  let category = 'non_dev_question';
   if (platform === 'Unity') category = has(/\bvr|xr|gorilla|photon|fusion|netcode\b/) ? 'unity_vr' : 'general_game_dev';
   else if (platform === 'Roblox') {
     if (has(/\b(prompt|tell claude|tell codex|cursor)\b/)) category = 'prompt_generation';

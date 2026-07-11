@@ -1060,8 +1060,12 @@ async function sendMessage(rawText, options = {}) {
 
     if (!gotAny && !full.trim()) throw new Error('The AI started but did not send a response fast enough. Try again, or switch models for this message.');
     const queued = await queueExecutableBlocks(full, text);
-    const visible = visibleAssistantText(full, queued ? taskStatusFor(text) : '');
-    const shown = visible || (queued ? taskStatusFor(text) : 'Done.');
+    // Terminal bubble text: never leave the in-progress status ("Working on
+    // task...") as the FINAL message -- it reads as stuck. If the reply was all
+    // executable blocks, say plainly that the edit went to Studio.
+    const doneMsg = 'Sent to Roblox Studio — applying to your game now. Watch the Studio Results panel for confirmation.';
+    const visible = visibleAssistantText(full, queued ? doneMsg : '');
+    const shown = visible || (queued ? doneMsg : 'Done.');
     assistantBubble.className = `msg assistant ${queued ? 'status' : ''}`.trim();
     assistantBubble.innerHTML = renderMarkdown(shown);
     addDownloadAction(assistantBubble, extractStudioFiles(full));
