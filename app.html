@@ -275,8 +275,9 @@
       .bridge-card { border: 1px solid var(--line); border-radius: 13px; padding: 14px; background: rgba(255,255,255,0.03); }
       .bridge-code-row { display: flex; align-items: center; gap: 8px; }
       .bridge-code { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 20px; font-weight: 800; letter-spacing: .12em; color: var(--yellow); }
-      .icon-btn { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); cursor: pointer; font-weight: 800; transition: background .14s ease; }
+      .icon-btn { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); cursor: pointer; font-weight: 800; transition: background .14s ease; color: var(--text); }
       .icon-btn:hover { background: rgba(255,255,255,0.1); }
+      .bridge-code-hint { font-size: 11px; color: var(--quiet); margin-top: 6px; }
       .status-row { display: flex; align-items: center; gap: 9px; margin-top: 12px; font-size: 13px; font-weight: 600; }
       #pluginDot { width: 10px; height: 10px; border-radius: 50%; background: var(--quiet); flex-shrink: 0; transition: background .2s ease, box-shadow .2s ease; }
       #pluginDot.ok { background: var(--green); box-shadow: 0 0 12px var(--green); }
@@ -495,7 +496,9 @@
           <div class="bridge-code-row">
             <div class="bridge-code" id="bridgeCode">RX----</div>
             <button class="icon-btn" id="copyCodeBtn" type="button" title="Copy bridge code">#</button>
+            <button class="icon-btn" id="refreshCodeBtn" type="button" title="Refresh code (get a new one)">⟳</button>
           </div>
+          <div class="bridge-code-hint">Codes auto-refresh every 6 hours.</div>
           <div class="status-row">
             <span id="pluginDot" class="wait"></span>
             <span id="pluginStatus">Waiting for Studio plugin</span>
@@ -554,8 +557,8 @@
       </div>
     </div>
 
-    <script src="./rotex-tokens.js?v=20260711c"></script>
-    <script src="./web-app.js?v=20260711c"></script>
+    <script src="./rotex-tokens.js?v=20260711d"></script>
+    <script src="./web-app.js?v=20260711d"></script>
     <script>
       // Custom model picker. web-app.js owns the real <select id="modelSelect">
       // (loads options from /api/models, reads .value, listens for 'change'),

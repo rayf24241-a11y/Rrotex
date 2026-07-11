@@ -8,6 +8,7 @@ const els = {
   model: $('modelSelect'),
   bridgeCode: $('bridgeCode'),
   copyCode: $('copyCodeBtn'),
+  refreshCode: $('refreshCodeBtn'),
   checkPlugin: $('checkPluginBtn'),
   pluginDot: $('pluginDot'),
   pluginStatus: $('pluginStatus'),
@@ -48,6 +49,9 @@ const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|Starte
 const ACTION_TYPES = new Set(['delete_instance', 'set_property', 'select_instances', 'create_model', 'insert_toolbox_model', 'terrain_edit', 'lighting_set', 'create_ui_image', 'create_ui']);
 
 const CHATS_KEY = 'rotex_web_chats'; // must precede the readChatStore() call below (TDZ)
+// Must also precede the state block: state.bridgeCode calls
+// getOrCreateBridgeCode() -> bridgeCodeExpired(), which reads this const (TDZ).
+const BRIDGE_CODE_TTL_MS = 6 * 60 * 60 * 1000;
 const _chatStore = readChatStore();
 const state = {
   auth: null,
@@ -70,9 +74,12 @@ const state = {
   bridgeInstances: new Set(),
 };
 
-function getOrCreateBridgeCode() {
-  const existing = cleanCode(localStorage.getItem('rotex_web_bridge_code'));
-  if (existing.length >= 4) return existing; // keep any existing code (incl. legacy 4-char)
+// Bridge codes rotate: each code lives 6 hours (BRIDGE_CODE_TTL_MS, declared
+// above the state block for TDZ), then a fresh one replaces it (or the user
+// hits "Refresh code" for a new one on demand). The old code is deleted
+// locally, so its pairing dies with it and the plugin must be given the new
+// code.
+function generateBridgeCode() {
   // 32-char unambiguous alphabet (no I/O/0/1). 6 chars = 32^6 ~= 1.07 billion
   // combinations, generated with a cryptographic RNG (not Math.random) so a
   // pairing code can't be predicted or feasibly enumerated. 32 divides 2^32
@@ -89,12 +96,44 @@ function getOrCreateBridgeCode() {
     const r = bytes ? bytes[i] : Math.floor(Math.random() * 0x100000000);
     code += chars[r % chars.length];
   }
-  localStorage.setItem('rotex_web_bridge_code', code);
   return code;
+}
+
+function storeBridgeCode(code) {
+  try {
+    localStorage.setItem('rotex_web_bridge_code', code);
+    localStorage.setItem('rotex_web_bridge_code_ts', String(Date.now()));
+  } catch {}
+  return code;
+}
+
+function bridgeCodeExpired() {
+  const ts = Number(localStorage.getItem('rotex_web_bridge_code_ts') || 0);
+  return !ts || (Date.now() - ts) >= BRIDGE_CODE_TTL_MS;
+}
+
+function getOrCreateBridgeCode() {
+  const existing = cleanCode(localStorage.getItem('rotex_web_bridge_code'));
+  if (existing.length >= 4 && !bridgeCodeExpired()) return existing;
+  return storeBridgeCode(generateBridgeCode()); // expired (or legacy/no timestamp) -> new code
 }
 
 function cleanCode(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 18);
+}
+
+// Delete the current code and switch to a brand-new one (manual "Refresh code"
+// or the 6-hour auto-rotation). The old pairing dies immediately: the plugin
+// keeps polling the dead code and gets nothing, so Studio shows disconnected
+// until the user pastes the new code into the plugin.
+function rotateBridgeCode() {
+  const code = storeBridgeCode(generateBridgeCode());
+  state.bridgeCode = code;
+  state.pluginConnected = false;
+  if (els.bridgeCode) els.bridgeCode.textContent = code;
+  if (els.pluginModalCode) els.pluginModalCode.textContent = code;
+  renderBridge({});
+  return code;
 }
 
 // ── Multi-chat store ───────────────────────────────────────────────────────
@@ -1079,6 +1118,13 @@ function initEvents() {
     els.copyCode.textContent = 'OK';
     setTimeout(() => { els.copyCode.textContent = '#'; }, 900);
   });
+  if (els.refreshCode) {
+    els.refreshCode.addEventListener('click', () => {
+      rotateBridgeCode();
+      els.refreshCode.textContent = '✓';
+      setTimeout(() => { els.refreshCode.textContent = '⟳'; }, 900);
+    });
+  }
   els.checkPlugin.addEventListener('click', async () => {
     els.checkPlugin.disabled = true;
     els.checkPlugin.textContent = 'Checking...';
@@ -1167,6 +1213,9 @@ async function init() {
   // Re-pull the server's usage every minute so the balance heals itself even
   // if a sign-in-time sync failed or the server reset usage since page load.
   setInterval(() => syncServerUsage(), 60000);
+  // Rotate the bridge code when it passes its 6-hour lifetime, even for a tab
+  // that has been sitting open the whole time.
+  setInterval(() => { if (bridgeCodeExpired()) rotateBridgeCode(); }, 60000);
 }
 
 init();
