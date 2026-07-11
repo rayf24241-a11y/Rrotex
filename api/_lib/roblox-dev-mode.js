@@ -143,6 +143,17 @@ const STUDIO_APPLYABILITY_CONTRACT = [
   '- Never say "done", "fixed", "updated", or "created" unless an executable block in the same answer would actually perform that change.',
 ].join('\n');
 
+const VFX_GUIDE = [
+  'ROBLOX VFX (VISUAL EFFECTS) — build these in Lua (Instance.new) or a studio-action; there is no VFX Toolbox, you script them:',
+  '- The VFX objects are ParticleEmitter, Beam, Trail, Fire, Smoke, Sparkles, Explosion, and animated PointLight/SpotLight. Each is parented to a BasePart or an Attachment inside a part.',
+  '- ParticleEmitter (put it in a Part or Attachment). Core props: Texture (an rbxassetid image — use a soft circle/glow id or leave default), Rate (constant stream) OR :Emit(n) for a one-shot burst, Lifetime = NumberRange.new(min,max), Speed = NumberRange.new, SpreadAngle = Vector2.new, Rotation, RotSpeed, Acceleration = Vector3 (gravity or rising smoke), Color = ColorSequence, Size = NumberSequence, Transparency = NumberSequence (ALWAYS end at 1 so particles fade out), LightEmission 0..1 (glow), LightInfluence 0 = full-bright.',
+  '- Beam links two Attachments (Attachment0/Attachment1). Set Width0/Width1, Color = ColorSequence, Transparency = NumberSequence, CurveSize0/1 for bend, FaceCamera = true, and Texture + TextureSpeed + TextureLength for flowing lasers/lightning/magic tethers.',
+  '- Trail needs Attachment0 + Attachment1 on a MOVING part (offset apart). Set Lifetime, Color, Transparency, WidthScale, FaceCamera, LightEmission. Use it for swords, projectiles, dashes.',
+  '- ColorSequence.new(Color3...) or {ColorSequenceKeypoint.new(t,color),...}; NumberSequence.new(v) or {NumberSequenceKeypoint.new(t,value),...} with t from 0 to 1. Fade Transparency to 1 at t=1.',
+  '- Glow/pulse: set LightEmission near 1 and add a PointLight; animate its Brightness/Range with TweenService. Explosions/hits: :Emit() a burst, then Debris:AddItem(part, lifetime) so it cleans itself up — never leave one-shot emitters running forever (performance).',
+  '- Networking: purely cosmetic local VFX can run in a LocalScript; VFX everyone must see should be created on the server, or triggered by a RemoteEvent that runs a client-side VFX function on each player.',
+].join('\n');
+
 const ROBLOX_SYSTEM_PROMPTS = {
   claudeHaiku: [
     'You are ROTEX Roblox Dev Mode powered by Claude Haiku.',
@@ -155,6 +166,7 @@ const ROBLOX_SYSTEM_PROMPTS = {
     FORGE_GUI_ASSET_STANDARD,
     STUDIO_APPLYABILITY_CONTRACT,
     UI_VISIBILITY_GUARANTEE,
+    VFX_GUIDE,
   ].join('\n'),
   geminiFlash: [
     'You are ROTEX Roblox Dev Mode powered by Gemini Flash.',
@@ -166,6 +178,7 @@ const ROBLOX_SYSTEM_PROMPTS = {
     FORGE_GUI_ASSET_STANDARD,
     STUDIO_APPLYABILITY_CONTRACT,
     UI_VISIBILITY_GUARANTEE,
+    VFX_GUIDE,
   ].join('\n'),
 };
 
