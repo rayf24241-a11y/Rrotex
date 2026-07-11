@@ -1001,6 +1001,9 @@ async function sendMessage(rawText, options = {}) {
         }
         if (payload.usage?.textokens_charged && window.rotexTokens?.spend) {
           window.rotexTokens.spend(payload.usage.textokens_charged);
+          // Pull the server's real usage right after a charge so the balance
+          // shown tracks the server, not the local estimate.
+          syncServerUsage();
         }
         if (payload.done) break;
       }
@@ -1161,6 +1164,9 @@ async function init() {
   pollBridge();
   setInterval(pollBridge, 2500);
   setInterval(() => window.rotexTokens?.refreshBalanceDisplay?.(), 10000);
+  // Re-pull the server's usage every minute so the balance heals itself even
+  // if a sign-in-time sync failed or the server reset usage since page load.
+  setInterval(() => syncServerUsage(), 60000);
 }
 
 init();

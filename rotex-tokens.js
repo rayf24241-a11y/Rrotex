@@ -12,6 +12,20 @@
   var FREE_MONTHLY    = 200 * TT_UNIT;  // "200 TexTokens/month"
   var PRO_MONTHLY     = 300 * TT_UNIT;  // "300 TexTokens/month" (profit-guard ceiling)
 
+  // Keep in sync with USAGE_EPOCH in api/chat.js. When the server-side usage
+  // is reset for everyone (epoch bump), browsers still hold the OLD local
+  // spent-today counter -- which made balances show 0 right after a reset.
+  // Clearing the local counter once per epoch makes the display reflect the
+  // reset immediately, even before the server sync lands.
+  var SPEND_EPOCH = 'r3';
+  try {
+    if (localStorage.getItem('rotex_spend_epoch') !== SPEND_EPOCH) {
+      localStorage.removeItem('rotex_textokens_spent_today');
+      localStorage.removeItem('rotex_textokens_spent_date');
+      localStorage.setItem('rotex_spend_epoch', SPEND_EPOCH);
+    }
+  } catch (_) {}
+
   // Matches the server's _dayKey()/_today() exactly (api/chat.js): UTC
   // calendar date, not the browser's local timezone. This local fallback
   // path (used only when window.__rotexServerUsage isn't populated yet)
