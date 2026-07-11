@@ -3,7 +3,7 @@
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
 local HTTP_PORT = PORTS[1]
-local PLUGIN_VERSION = "3.6"
+local PLUGIN_VERSION = "3.7"
 local WEB_BRIDGE_URL = "https://www.rrotex.com/api/plugin-bridge"
 
 local HttpService          = game:GetService("HttpService")
@@ -515,6 +515,54 @@ local function resolveByPath(fullPath)
 	return cur
 end
 
+-- Fuzzy resolver for delete/select: when an exact path does not resolve (the
+-- model guessed a slightly-wrong path, or the target is a Workspace Part/Model
+-- the model only knows by name), fall back to searching the scanned services.
+-- Only returns a single instance when the match is confident, so a plain name
+-- never deletes the wrong object. Runs ONLY after the exact resolver fails, so
+-- normal deletes pay none of this cost.
+local function normLower(p)
+	p = (p or ""):gsub("[/\\]", "."):lower()
+	return (p:gsub("%.client%.lua$",""):gsub("%.server%.lua$","")
+		:gsub("%.module%.lua$",""):gsub("%.lua$",""))
+end
+
+local function resolveLoose(pathStr)
+	local exact = resolveByPath(pathStr)
+	if exact then return exact end
+	local want = normLower(pathStr)
+	if want == "" then return nil end
+	local wantLeaf = want:match("[^%.]+$") or want
+	local suffixMatches, leafMatches = {}, {}
+	local scanned = 0
+	local function visit(inst, depth)
+		if depth > 8 or scanned > 4000 then return end
+		local ok, children = pcall(function() return inst:GetChildren() end)
+		if not ok then return end
+		for _, child in ipairs(children) do
+			if scanned > 4000 then return end
+			scanned = scanned + 1
+			local full = normLower(child:GetFullName())
+			if full == want or (#full > #want and full:sub(-(#want + 1)) == ("." .. want)) then
+				table.insert(suffixMatches, child)          -- full-path (suffix) match
+			elseif (child.Name or ""):lower() == wantLeaf then
+				table.insert(leafMatches, child)             -- leaf-name match
+			end
+			visit(child, depth + 1)
+		end
+	end
+	for _, svcName in ipairs(SCAN_SERVICES) do
+		local ok, svc = pcall(function() return game:GetService(svcName) end)
+		if ok and svc then visit(svc, 0) end
+	end
+	-- A path/suffix match is specific enough to act on even if several match
+	-- (those are genuine duplicates the user wants gone). A bare leaf name is
+	-- only safe to act on when it is unique across the whole place.
+	if #suffixMatches >= 1 then return suffixMatches[1] end
+	if #leafMatches == 1 then return leafMatches[1] end
+	return nil
+end
+
 -- ── Script apply ──────────────────────────────────────────────────────────────
 local function splitPath(p) local t={} for s in string.gmatch(p or "","[^/\\]+") do table.insert(t,s) end return t end
 local function studioRoot(n) local ok,s=pcall(function() return game:GetService(n) end) return (ok and s) or workspace end
@@ -922,16 +970,20 @@ local function handleSetProperty(action)
 end
 
 local function handleDeleteInstance(action)
-	local inst = resolveByPath(action.path or "")
-	-- Deletion is idempotent: if the instance is already gone, the desired
-	-- end state (does not exist) is already true. Treat as success instead
-	-- of a hard failure, so one already-removed duplicate doesn't make the
-	-- whole batch (including real successes) report as failed.
-	if not inst then return true, "Deleted " .. tostring(action.path) .. " (already removed)" end
+	-- resolveLoose falls back to a name/suffix search when the exact path the
+	-- model emitted does not resolve -- the model often only knows an object by
+	-- name (Workspace Parts/Models are not in the scanned context), so an exact
+	-- match alone silently deleted nothing while reporting success.
+	local inst = resolveLoose(action.path or "")
+	-- Deletion is idempotent: if truly nothing matches, the desired end state
+	-- (does not exist) is already true. Treat as success so one already-removed
+	-- duplicate does not fail a batch that also contains real successes.
+	if not inst then return true, "Nothing to delete at " .. tostring(action.path) .. " (not found / already removed)" end
+	local realPath = inst:GetFullName()
 	ChangeHistoryService:SetWaypoint("ROTEX Delete")
 	inst:Destroy()
 	ChangeHistoryService:SetWaypoint("ROTEX Delete Done")
-	return true, "Deleted " .. tostring(action.path)
+	return true, "Deleted " .. realPath
 end
 
 local function handleSelectInstances(action)
