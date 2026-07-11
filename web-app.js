@@ -391,10 +391,13 @@ function addEmptyWorkbench() {
     shell.querySelector('#workbenchSignIn')?.addEventListener('click', () => signIn());
     return;
   }
+  // Signed in: greet the user by name so the main screen clearly reflects
+  // their logged-in state (never a "log in" prompt).
+  const firstName = (state.user?.displayName || state.user?.email || '').trim().split(/[\s@]/)[0] || '';
   shell.innerHTML = `
     <div class="forge-badge">ROTEX · Roblox Dev Studio</div>
-    <h1>What are we building?</h1>
-    <p>Agent edits your game live through the Studio plugin. Supreme goes deeper — whole systems in one pass. Pick a starter or just type what you want.</p>
+    <h1>${firstName ? `Welcome back, ${escapeHtml(firstName)}.` : 'What are we building?'}</h1>
+    <p>${firstName ? 'What are we building today? ' : ''}Agent edits your game live through the Studio plugin. Supreme goes deeper — whole systems in one pass. Pick a starter or just type what you want.</p>
     <div class="forge-grid">
       <button class="forge-card" type="button" data-seed="Make a polished Roblox shop UI that appears in game, is mobile-safe, and has one LocalScript owner."><strong>UI Generator</strong><span>ScreenGui, buttons, mobile scale, visible layout, behavior owner.</span></button>
       <button class="forge-card" type="button" data-seed="Debug the latest broken feature. Search every likely owner script, fix the real cause, and remove duplicates."><strong>Bug Repair</strong><span>Find wrong paths, duplicate scripts, invisible GUI, nil errors, stale owners.</span></button>
@@ -985,6 +988,7 @@ async function sendMessage(rawText, options = {}) {
     const history = state.messages.slice(-18).map((m) => ({ role: m.role, content: m.content }));
     const modeForServer = 'editor';
     const authToken = state.user ? await state.user.getIdToken(true).catch(() => state.idToken || '') : '';
+    if (authToken) state.idToken = authToken; // keep the cached token fresh for other calls
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1007,7 +1011,9 @@ async function sendMessage(rawText, options = {}) {
 
     if (!res.ok || !res.body) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.text || err.error || `Request failed (${res.status})`);
+      const e = new Error(err.text || err.error || `Request failed (${res.status})`);
+      e.code = err.error || '';
+      throw e;
     }
 
     const reader = res.body.getReader();
@@ -1029,7 +1035,11 @@ async function sendMessage(rawText, options = {}) {
           try { localStorage.setItem('rotex_project_spec', payload.spec.slice(0, 4000)); } catch {}
         }
         if (payload.ping || payload.model || payload.category) continue;
-        if (payload.error) throw new Error(payload.text || payload.error);
+        if (payload.error) {
+          const e = new Error(payload.text || payload.error);
+          e.code = payload.error;
+          throw e;
+        }
         if (payload.d) {
           gotAny = true;
           full += payload.d;
@@ -1058,9 +1068,27 @@ async function sendMessage(rawText, options = {}) {
     pushHistory('assistant', shown);
     setRunState(queued ? 'Queued edit' : 'Ready', queued ? 'Studio plugin is applying the generated change.' : 'Response complete.', queued ? 'Waiting for Studio result' : 'No action queued');
   } catch (error) {
-    assistantBubble.className = 'msg assistant error';
-    assistantBubble.textContent = error.message || 'No response.';
-    setRunState('Needs retry', assistantBubble.textContent, 'No action queued');
+    // A signed-in user should never be told to "log in": the server saying
+    // login_required here means the Firebase ID token went stale mid-session
+    // (they expire hourly). Force-refresh the token and retry once, silently.
+    if (error.code === 'login_required' && state.user && !options.retriedAuth) {
+      state.idToken = await state.user.getIdToken(true).catch(() => '');
+      assistantBubble.remove();
+      state.busy = false;
+      els.send.disabled = false;
+      return sendMessage(text, { ...options, skipUserRender: true, retriedAuth: true });
+    }
+    if (error.code === 'login_required' && state.user) {
+      // Retry with a fresh token still rejected -- the session is truly dead.
+      assistantBubble.className = 'msg assistant error';
+      assistantBubble.textContent = 'Your session expired. Taking you to sign back in...';
+      setRunState('Session expired', assistantBubble.textContent, 'No action queued');
+      setTimeout(signIn, 1200);
+    } else {
+      assistantBubble.className = 'msg assistant error';
+      assistantBubble.textContent = error.message || 'No response.';
+      setRunState('Needs retry', assistantBubble.textContent, 'No action queued');
+    }
   } finally {
     state.busy = false;
     els.send.disabled = false;
@@ -1216,6 +1244,11 @@ async function init() {
   // Rotate the bridge code when it passes its 6-hour lifetime, even for a tab
   // that has been sitting open the whole time.
   setInterval(() => { if (bridgeCodeExpired()) rotateBridgeCode(); }, 60000);
+  // Firebase ID tokens expire after 1 hour; refresh the cached one every 20
+  // minutes so a long-open tab never sends a stale token.
+  setInterval(async () => {
+    if (state.user) state.idToken = await state.user.getIdToken(true).catch(() => state.idToken || '');
+  }, 20 * 60 * 1000);
 }
 
 init();
