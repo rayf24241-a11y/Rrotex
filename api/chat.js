@@ -47,7 +47,7 @@ function _fsStr(field) { return field?.stringValue || ''; }
 // readUsage compares against, so every user reads back 0 used (fresh start)
 // without needing admin access to rewrite each doc. addUsage writes the new
 // epoch's keys going forward.
-const USAGE_EPOCH = 'r2';
+const USAGE_EPOCH = 'r3';
 function _dayKey()   { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 10); }
 function _monthKey() { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 7); }
 async function readUsage(uid, authToken) {
