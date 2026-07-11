@@ -488,6 +488,9 @@ async function initAuth() {
         // detour through /account. Fire-and-forget; the display re-renders when
         // it resolves.
         refreshProPass();
+        // Pull the server-authoritative daily/monthly usage so the balance shown
+        // is real (and reflects resets) instead of a stale per-browser counter.
+        syncServerUsage();
       }
     });
   } catch (error) {
@@ -579,6 +582,36 @@ async function refreshProPass() {
     // Offline or endpoint unavailable -- keep whatever pass is already cached.
   }
   renderPlan();
+}
+
+// Read the real server-side usage (day/month used) so the TexToken balance the
+// user sees matches the server -- fixes a stale local counter that could show 0
+// even right after a reset, and shows the owner account as unlimited.
+async function syncServerUsage() {
+  if (!state.user || !state.idToken) return;
+  try {
+    const res = await fetch('/api/billing-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: state.user.uid,
+        authToken: state.idToken,
+        localBalance: (window.rotexTokens && window.rotexTokens.getPurchased) ? window.rotexTokens.getPurchased() : 0,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!data || !data.ok) return;
+    window.__rotexServerUsage = data.usage || { dayUsed: 0, monthUsed: 0 };
+    window.__rotexUnlimited = Boolean(data.unlimited);
+    if (data.balance != null && window.rotexTokens && window.rotexTokens.savePurchased) {
+      window.rotexTokens.savePurchased(data.balance);
+    }
+    if (window.rotexTokens && window.rotexTokens.refreshBalanceDisplay) {
+      window.rotexTokens.refreshBalanceDisplay();
+    }
+  } catch (_) {
+    // Fail-open: leave the display on its local estimate if the sync fails.
+  }
 }
 
 async function bridgePost(op, body = {}) {

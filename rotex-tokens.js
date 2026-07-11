@@ -7,9 +7,9 @@
   // converts for display, so every balance readout site-wide re-denominated
   // in one place.
   var TT_UNIT = 30000;
-  var FREE_DAILY_BASE = 15 * TT_UNIT;   // "15 TexTokens/day"
+  var FREE_DAILY_BASE = 30 * TT_UNIT;   // "30 TexTokens/day"
   var PRO_DAILY_BASE  = 50 * TT_UNIT;   // "50 TexTokens/day"
-  var FREE_MONTHLY    = 100 * TT_UNIT;  // "100 TexTokens/month"
+  var FREE_MONTHLY    = 200 * TT_UNIT;  // "200 TexTokens/month"
   var PRO_MONTHLY     = 300 * TT_UNIT;  // "300 TexTokens/month" (profit-guard ceiling)
 
   // Matches the server's _dayKey()/_today() exactly (api/chat.js): UTC
@@ -141,6 +141,12 @@
   function refreshBalanceDisplay() {
     var el = document.getElementById('rxTokenBalance');
     if (!el) return;
+    // Owner/dev account is exempt from all caps -- show it, don't imply a limit.
+    if (window.__rotexUnlimited) {
+      el.textContent = '∞ TT';
+      el.title = 'Unlimited (owner account)';
+      return;
+    }
     var free = getFreeRemaining();
     var purchased = getPurchased();
     var total = free + purchased;
