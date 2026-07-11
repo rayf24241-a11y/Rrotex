@@ -999,7 +999,7 @@
         monthUsed: Math.max(0, Number(data.monthUsed) || 0),
         freeDaily: Number(data.freeDaily) || 30000,
         freeMonthly: Number(data.freeMonthly) || 150000,
-        proMonthly: Number(data.proMonthly) || 9000000,
+        proMonthly: Number(data.proMonthly) || 30000000,
       };
       if (Number.isFinite(Number(data.balance))) {
         if (window.rotexTokens?.savePurchased) window.rotexTokens.savePurchased(data.balance);
@@ -1083,7 +1083,7 @@
       window.__rotexServerUsage = {
         dayUsed: str(f.dayKey) === today ? num(f.dayUsed) : 0,
         monthUsed: str(f.monthKey) === month ? num(f.monthUsed) : 0,
-        freeDaily: 900000, freeMonthly: 6000000, proMonthly: 9000000,
+        freeDaily: 900000, freeMonthly: 6000000, proMonthly: 30000000,
       };
       window.rotexTokens?.refreshBalanceDisplay?.();
     } catch {}

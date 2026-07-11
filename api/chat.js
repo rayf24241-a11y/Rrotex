@@ -26,16 +26,16 @@ const {
 // 150k internal); the monthly/Pro caps were deliberately tightened.
 const TT_UNIT = 30_000;
 const FREE_MONTHLY = 200 * TT_UNIT;  // "200 TexTokens/month" (very generous free tier so people can actually build; WATCH cost at scale — 200 TT ~= $6 worst-case per active free user/month)
-const PRO_DAILY    = 50 * TT_UNIT;   // "50 TexTokens/day" (Pro pays $20, so usable; risk is bounded)
-// Pro monthly ceiling. This is the PROFIT GUARD: the internal cap directly
-// bounds a Pro user's worst-case provider cost. providerCostUsd = internal/1e6,
-// so 300 TT = 9M internal = at most $9.00 of provider-charge cost against
-// $20 revenue -> guaranteed >= $11 gross margin per Pro purchase (and real
-// provider cost is well under that, since the per-token charge rates carry a
-// ~3-5x markup over raw provider prices). The MONTHLY cap is what bounds the
-// risk: 50/day for 30 days would be 1,500 TT, but the 300/month ceiling caps
-// actual worst-case spend at 300 TT regardless of how many days are maxed.
-const PRO_MONTHLY  = 300 * TT_UNIT;
+const PRO_DAILY    = 100 * TT_UNIT;  // "100 TexTokens/day"
+// Pro monthly ceiling. This is the PROFIT GUARD: it bounds a Pro user's
+// worst-case real provider cost. At the 2026-07-11 halved rates, 1 TT buys
+// ~1,700 Flash output tokens (plain chat, the output-heaviest case) ≈ $0.015
+// of real provider spend, so 1,000 TT ≈ $15 ABSOLUTE worst case vs $20
+// revenue — and the dominant agent path is ~4x cheaper per TT (multiplier
+// inflates the charge, not the provider bill), so realistic worst is $4-8.
+// The MONTHLY cap is what bounds the risk: 100/day x 30 would be 3,000 TT,
+// but the 1,000/month ceiling caps actual spend regardless of maxed days.
+const PRO_MONTHLY  = 1000 * TT_UNIT;
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'rotex-e0be7';
 function _usageDocUrl(uid) {
   return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/usage`;
@@ -1070,7 +1070,7 @@ module.exports = async function handler(request, response) {
   }
 
   // Plan caps beyond the free daily budget. Only enforced with a real reading.
-  // Free: 200 TexTokens/month. Pro: 50/day + 300/month — the monthly ceiling is
+  // Free: 200 TexTokens/month. Pro: 100/day + 1000/month — the monthly ceiling is
   // the profit guard (bounds worst-case provider cost at ~$9 vs $20). All
   // fully server-side (the old 1M/day Pro limit was only ever client-enforced).
   // Out of TexTokens = HARD block. (A brief "talk-only" mode let broke users
@@ -1081,21 +1081,21 @@ module.exports = async function handler(request, response) {
       if (serverUsage.monthUsed >= PRO_MONTHLY) {
         response.status(402).json({
           error: 'no_textokens',
-          text: "You've used your 300 TexTokens for this month. They reset on the 1st (UTC), or add a pack at rrotex.com/tokens.",
+          text: "You've used your 1000 TexTokens for this month. They reset on the 1st (UTC), or add a pack at rrotex.com/tokens.",
         });
         return;
       }
       if (serverUsage.dayUsed >= PRO_DAILY) {
         response.status(402).json({
           error: 'no_textokens',
-          text: "You've used your 50 daily TexTokens. They reset tomorrow (UTC), or add a pack at rrotex.com/tokens.",
+          text: "You've used your 100 daily TexTokens. They reset tomorrow (UTC), or add a pack at rrotex.com/tokens.",
         });
         return;
       }
     } else if (serverUsage.monthUsed >= FREE_MONTHLY) {
       response.status(402).json({
         error: 'no_textokens',
-        text: "You've used your 200 monthly free TexTokens. Upgrade to Pro for 50/day at rrotex.com/pro.",
+        text: "You've used your 200 monthly free TexTokens. Upgrade to Pro for 100/day at rrotex.com/pro.",
       });
       return;
     }
@@ -1308,7 +1308,7 @@ module.exports = async function handler(request, response) {
         `You are currently running as: **${selected.name}** (${selected.providerName}). Be honest about what model you are — never claim to be a different model.`,
         `ROTEX model ranking: **Google Flash** is the smart, recommended pick for real builds and harder questions; **Claude Haiku** is the fast, lightweight pick for quick simple edits. If asked which is best or smartest: Google Flash. If asked which is fastest: Claude Haiku.`,
         `ROTEX model data (internal): ${modelGuide}`,
-        'ROTEX is a web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 30 TexTokens/day, 200/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 50 TexTokens/day, 300/month, agent mode, 5 projects. Extra packs: $1 = 2 TexTokens. ROTEX is focused on coding today; 3D asset generation and advanced GUI building are planned for the future.',
+        'ROTEX is a web AI app primarily for Roblox game developers. Website: rrotex.com. Free plan: 30 TexTokens/day, 200/month, one account per person. Pro: $20 one-time purchase for 30 days (not a subscription — buy again to keep it), 100 TexTokens/day, 1000/month, agent mode, 5 projects. Extra packs: $1 = 2 TexTokens. ROTEX is focused on coding today; 3D asset generation and advanced GUI building are planned for the future.',
         'When asked about pricing or plans, give a plain short answer. No table unless the user asks for one.',
         hasImages && selected.route !== 'anthropic-first' ? `An image-reading backend is reading the attachment for ${selected.name}; still answer as ${selected.name}.` : '',
         'You can write code in fenced Markdown code blocks with the language name so the app can show it cleanly.',

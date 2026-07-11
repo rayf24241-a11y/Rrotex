@@ -8,9 +8,9 @@
   // in one place.
   var TT_UNIT = 30000;
   var FREE_DAILY_BASE = 30 * TT_UNIT;   // "30 TexTokens/day"
-  var PRO_DAILY_BASE  = 50 * TT_UNIT;   // "50 TexTokens/day"
+  var PRO_DAILY_BASE  = 100 * TT_UNIT;  // "100 TexTokens/day"
   var FREE_MONTHLY    = 200 * TT_UNIT;  // "200 TexTokens/month"
-  var PRO_MONTHLY     = 300 * TT_UNIT;  // "300 TexTokens/month" (profit-guard ceiling)
+  var PRO_MONTHLY     = 1000 * TT_UNIT; // "1000 TexTokens/month" (profit-guard ceiling)
 
   // Keep in sync with USAGE_EPOCH in api/chat.js. When the server-side usage
   // is reset for everyone (epoch bump), browsers still hold the OLD local

@@ -36,8 +36,10 @@ const MODELS = {
     logo: 'H',
     tier: 'free',
     access: 'Free',
-    inputTexTokens: 3.2,
-    outputTexTokens: 16,
+    // Halved 2026-07-11 (owner: "make tokens 2x harder to go down") — all
+    // charging flows through these rates, so halving here halves every charge.
+    inputTexTokens: 1.6,
+    outputTexTokens: 8,
     multiplier: 1,
     freeDailyCap: 5,
     expensive: true,
@@ -69,8 +71,11 @@ const MODELS = {
     // meaning roughly the same real-dollar ceiling it meant before the
     // model swap, instead of silently permitting ~5x more spend per free
     // user per day at the old rate.
-    inputTexTokens: 12,
-    outputTexTokens: 35,
+    // Halved 2026-07-11 (owner: "make tokens 2x harder to go down") — was
+    // 12/35 (the gemini-3.5 real-price scaling below still holds relatively;
+    // absolute rates are just 2x cheaper across the board now).
+    inputTexTokens: 6,
+    outputTexTokens: 17.5,
     multiplier: 1,
     freeDailyCap: 15,
     route: 'openrouter',
