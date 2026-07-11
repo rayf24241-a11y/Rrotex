@@ -3154,25 +3154,52 @@ async function verifyDevTokenSignature(token) {
   } catch { return false; }
 }
 
-async function verifyFirebaseToken(authToken) {
-  if (!authToken) {
-    return { ok: false };
-  }
-
-  const projectId = FIREBASE_PROJECT_ID;
-
+// Google's public certs for Firebase ID tokens, cached in-memory. They rotate
+// rarely; 30 minutes keeps cert fetches to ~2/hour per warm instance instead
+// of one Google round-trip per chat message.
+let _googleCerts = null;
+let _googleCertsAt = 0;
+async function _getGoogleCerts() {
+  if (_googleCerts && Date.now() - _googleCertsAt < 30 * 60 * 1000) return _googleCerts;
   try {
-    const result = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(authToken)}`);
-    if (!result.ok) {
-      return { ok: false };
-    }
+    const res = await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com');
+    if (!res.ok) return _googleCerts; // transient failure: keep serving the stale cache
+    _googleCerts = await res.json();
+    _googleCertsAt = Date.now();
+  } catch {}
+  return _googleCerts;
+}
 
-    const token = await result.json();
-    return {
-      ok: token.aud === projectId && token.sub,
-      uid: token.sub || '',
-      email: token.email || '',
-    };
+// Verifies a Firebase ID token LOCALLY: RS256 signature against Google's
+// public certs + aud/iss/sub/exp checks (same machinery as the old dev-token
+// verifier above). The previous implementation called Google's tokeninfo
+// endpoint on EVERY message — that endpoint is rate-limited debug tooling, and
+// under real traffic it intermittently failed, so genuinely signed-in users
+// were told "please log in" at random.
+async function verifyFirebaseToken(authToken) {
+  if (!authToken) return { ok: false };
+  const projectId = FIREBASE_PROJECT_ID;
+  try {
+    const [h, p, s] = String(authToken).split('.');
+    if (!h || !p || !s) return { ok: false };
+    const header = JSON.parse(Buffer.from(h, 'base64url').toString('utf8'));
+    const payload = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+    if (payload.aud !== projectId) return { ok: false };
+    if (payload.iss !== `https://securetoken.google.com/${projectId}`) return { ok: false };
+    if (!payload.sub) return { ok: false };
+    if (!(Number(payload.exp) * 1000 > Date.now())) return { ok: false }; // expired
+    let certs = await _getGoogleCerts();
+    let cert = certs && certs[header.kid];
+    if (!cert) {
+      _googleCerts = null; // key rotation: force one refetch before giving up
+      certs = await _getGoogleCerts();
+      cert = certs && certs[header.kid];
+      if (!cert) return { ok: false };
+    }
+    const crypto = require('crypto');
+    const valid = crypto.verify('RSA-SHA256', Buffer.from(`${h}.${p}`), cert, Buffer.from(s, 'base64url'));
+    if (!valid) return { ok: false };
+    return { ok: true, uid: payload.sub, email: payload.email || '' };
   } catch {
     return { ok: false };
   }
