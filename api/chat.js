@@ -1946,6 +1946,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'AGENT ANALYSIS LOOP: (1) identify the exact user intent, (2) scan PROJECT CONTEXT for the owning script or existing pattern, (3) decide create/modify/delete/disable, (4) produce the smallest complete change, (5) verify it does not conflict with existing scripts.',
       'AGENT QUALITY FLOOR: act like a careful senior Roblox developer, not a snippet bot. For every edit request, produce at least one real executable block unless the request is purely conversational. If the request is a bug fix, include the owner file and any needed delete_instance actions. If the request is a feature, include every required server/client/remotes/UI piece. If the request is removal, delete or disable the exact owner.',
       'CONVERSATIONAL MESSAGES RULE (overrides the quality floor): if the user message is a greeting, small talk, a reaction, or a question that changes nothing in the game — "hi", "hello", "hey", "bruh", "lol", "wow", "thanks", "what can you do", "are you there" — reply with ONE or TWO friendly sentences and NOTHING else. Absolutely NO executable blocks, no file blocks, no studio-actions, no downloads, no setup steps. Never build, edit, or queue anything the user did not ask for.',
+      'FINAL SELF-CHECK (run silently before sending ANY answer with executable blocks; fix failures before sending, never mention the check): 1) Every delete_instance/set_property/select_instances path is copied EXACTLY from PROJECT CONTEXT (scripts/GUI/WORLD OBJECTS/SELECTION) — no invented paths. 2) Exactly ONE owner script per feature; stale duplicates get delete_instance actions. 3) Every ```file block is COMPLETE and runnable top to bottom — no "...", no "rest stays the same", no truncated end. 4) UI: ScreenGui parented to StarterGui/PlayerGui, Enabled=true, non-zero Size, on-screen Position, opener wired. 5) Server owns money/damage/inventory/purchases; client only sends requests. 6) Only Roblox APIs you are CERTAIN exist. 7) The visible text is 1-2 plain sentences with zero code. If any check fails, rewrite the answer before sending.',
       'AGENT DOES NOT GUESS BLINDLY: if PROJECT CONTEXT contains scripts, use names and contents from context. If the user says "still broken" or "did not change", assume a missed duplicate or owner mismatch and search broader by synonyms before editing again.',
       'Agent should solve normal one-step and two-step tasks: create a feature, modify an existing script, remove an unwanted script, or fix an obvious bug. Do not over-plan; do the smallest complete change that satisfies the request.',
       'Before the file/studio-action blocks, write one short intent line only when it helps. After the blocks, write at most one sentence on how to test.',
@@ -2173,6 +2174,16 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
       provider: 'anthropic',
       providerModel: resolveAnthropicModel(selected),
       apiKey: anthropicKey,
+      // Claude Haiku 4.5 extended thinking (the first Haiku that supports it):
+      // enabling it on Agent/Super Agent builds lifts coding quality to near
+      // Sonnet-4 level per Anthropic's benchmarks. Budgets are deliberately
+      // modest (they're CAPS, not targets) so worst-case thinking time stays
+      // well inside streamAnthropic's 70s window; thinking deltas are simply
+      // not forwarded by the SSE parser (it only relays delta.text), so the
+      // user just sees a smarter answer. Probe calls never enable thinking
+      // (callAnthropic builds its own body without a budget), keeping the
+      // cascade's time budget intact.
+      thinkingBudget: opts.superAgent ? 4000 : opts.agent ? 3000 : 0,
     });
   }
 
@@ -3004,7 +3015,7 @@ async function streamOpenAiCompatible(response, providerCall, messages, selected
 }
 
 async function streamAnthropic(response, providerCall, messages, attachments, selected, maxTokens, temperature, timeoutMs = 70000) {
-  const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, temperature ?? modelTemperature(selected), maxTokens);
+  const body = buildAnthropicBody(providerCall.providerModel, messages, attachments, temperature ?? modelTemperature(selected), maxTokens, providerCall.thinkingBudget || 0);
   body.stream = true;
 
   const providerResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -3265,7 +3276,7 @@ function openRouterHeaders() {
   };
 }
 
-function buildAnthropicBody(model, messages, attachments, temperature, maxTokens) {
+function buildAnthropicBody(model, messages, attachments, temperature, maxTokens, thinkingBudget = 0) {
   const system = messages
     .filter((message) => message.role === 'system')
     .map((message) => message.content)
@@ -3302,6 +3313,14 @@ function buildAnthropicBody(model, messages, attachments, temperature, maxTokens
   // These models reject sampling params (temperature/top_p/top_k) with a 400.
   if (!/fable-5|opus-4-8|opus-4-7|opus-4-6|sonnet-4-6/.test(model)) {
     body.temperature = temperature;
+  }
+  // Extended thinking (Haiku 4.5+): budget must be >= 1024 (API minimum) and
+  // strictly under max_tokens (thinking draws from the same ceiling; keep
+  // >= 4k of real output room). Anthropic REJECTS custom temperature when
+  // thinking is enabled, so it must not be set alongside.
+  if (thinkingBudget >= 1024 && maxTokens > thinkingBudget + 4000) {
+    body.thinking = { type: 'enabled', budget_tokens: Math.floor(thinkingBudget) };
+    delete body.temperature;
   }
   return body;
 }
