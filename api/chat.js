@@ -1065,20 +1065,33 @@ module.exports = async function handler(request, response) {
 
   // Plan caps beyond the free daily budget. Only enforced with a real reading.
   // Free: 200 TexTokens/month. Pro: 50/day + 300/month — the monthly ceiling is
-  // the profit guard (bounds worst-case provider cost at ~$10.50 vs $20). All
+  // the profit guard (bounds worst-case provider cost at ~$9 vs $20). All
   // fully server-side (the old 1M/day Pro limit was only ever client-enforced).
-  // Out of TexTokens -> "talk-only" instead of a hard block: the AI can still
-  // chat and plan in words, but is told NOT to build (see the talk-only prompt
-  // rule below), so the user is never left staring at an error. Building resumes
-  // once they have budget again.
-  let talkOnly = false;
+  // Out of TexTokens = HARD block. (A brief "talk-only" mode let broke users
+  // keep chatting uncharged; the owner killed it — every uncharged reply still
+  // costs real provider money, so being out means the AI stops entirely.)
   if (!isDev && serverUsage) {
     if (isPro) {
-      if (serverUsage.monthUsed >= PRO_MONTHLY || serverUsage.dayUsed >= PRO_DAILY) {
-        talkOnly = true;
+      if (serverUsage.monthUsed >= PRO_MONTHLY) {
+        response.status(402).json({
+          error: 'no_textokens',
+          text: "You've used your 300 TexTokens for this month. They reset on the 1st (UTC), or add a pack at rrotex.com/tokens.",
+        });
+        return;
+      }
+      if (serverUsage.dayUsed >= PRO_DAILY) {
+        response.status(402).json({
+          error: 'no_textokens',
+          text: "You've used your 50 daily TexTokens. They reset tomorrow (UTC), or add a pack at rrotex.com/tokens.",
+        });
+        return;
       }
     } else if (serverUsage.monthUsed >= FREE_MONTHLY) {
-      talkOnly = true;
+      response.status(402).json({
+        error: 'no_textokens',
+        text: "You've used your 200 monthly free TexTokens. Upgrade to Pro for 50/day at rrotex.com/pro.",
+      });
+      return;
     }
   }
 
@@ -1151,7 +1164,12 @@ module.exports = async function handler(request, response) {
       : FREE_DAILY_TEXTOKENS;
 
     if (usedToday >= effectiveDailyLimit) {
-      talkOnly = true; // daily budget spent -> talk-only, not a hard block
+      const hasPurchased = effectiveDailyLimit > FREE_DAILY_TEXTOKENS;
+      response.status(402).json({
+        error: 'no_textokens',
+        text: noTokensText(proPass, isPro, hasPurchased),
+      });
+      return;
     }
     // Store keys and effective limit on request for post-estimate deduction below
     request._freeKey = freeKey;
@@ -1159,7 +1177,7 @@ module.exports = async function handler(request, response) {
     request._effectiveDailyLimit = effectiveDailyLimit;
   }
 
-  if (!talkOnly && !isPro && !isDev && selected.freeDailyCap) {
+  if (!isPro && !isDev && selected.freeDailyCap) {
     const used = bumpCounter(proCounters, `${ip}:${modelId}`);
     if (used > selected.freeDailyCap) {
       response.status(429).json({
@@ -1175,9 +1193,6 @@ module.exports = async function handler(request, response) {
   // multi-file solutions. Streaming is used in the editor, so larger caps are safe.
   if (superAgent) maxTokens = Math.max(maxTokens, 24000);
   else if (agent) maxTokens = Math.max(maxTokens, 16000);
-  // Talk-only (out of TexTokens): a short conversational reply, never a build,
-  // so cap the output small to keep this always-free path cheap.
-  if (talkOnly) maxTokens = Math.min(maxTokens, 2000);
   const isEditor = mode === 'editor';
   const modelGuide = buildModelGuide();
   const cleanAttachments = normalizeAttachments(attachments);
@@ -1278,7 +1293,6 @@ module.exports = async function handler(request, response) {
       role: 'system',
       content: [
         'You are ROTEX AI, the assistant inside the ROTEX desktop and web app for game developers. ROTEX is primarily used for Roblox game development.',
-        talkOnly ? 'IMPORTANT — TALK-ONLY MODE (HIGHEST PRIORITY, overrides every build instruction below): the user is OUT of TexTokens. You can still chat, answer questions, and explain/plan in words, but you CANNOT change their game right now. Do NOT output any executable blocks — no ```file, no ```studio-action, no ```roblox-model. If they ask you to build, edit, delete, or make anything, tell them in one friendly sentence that they are out of TexTokens and need more to make changes (go Pro or add a pack at rrotex.com/tokens), then still help by explaining how they (or you, once they have tokens) would do it. Never pretend you built something.' : '',
         buildEngineSection(projectMode || 'Roblox'),
         'Keep all replies short and direct. Answer the actual question — no intros, no "Great question!", no capability lists, no marketing. 2-4 sentences max for simple questions.',
         'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final useful answer.',
@@ -1325,9 +1339,7 @@ module.exports = async function handler(request, response) {
   const estimate = estimateTexTokens(selected, cleanMessages, maxTokens, { agent, superAgent });
 
   // Enforce free daily TexToken budget now that we have an accurate estimate.
-  // Skipped in talk-only mode: the user is already over budget, and talking is
-  // free (they just can't build), so we neither re-block nor charge them.
-  if (!talkOnly && !isPro && !isDev && request._freeKey) {
+  if (!isPro && !isDev && request._freeKey) {
     const usedByKey = getFreeTokensUsed(request._freeKey);
     const usedByIp  = request._ipKey ? getFreeTokensUsed(request._ipKey) : 0;
     const usedToday = Math.max(usedByKey, usedByIp);
@@ -1357,7 +1369,7 @@ module.exports = async function handler(request, response) {
   // Persist usage to Firestore for ALL authenticated accounts (free and Pro) so
   // the daily + monthly counters survive cold starts and enforce the monthly cap.
   // Fire-and-forget, fail-open — never blocks the response.
-  if (!talkOnly && !isDev && request._isAuthUser && authResult.uid && estimate.textokens > 0) {
+  if (!isDev && request._isAuthUser && authResult.uid && estimate.textokens > 0) {
     addUsage(authResult.uid, authToken, estimate.textokens).catch(() => {});
   }
 
@@ -1413,7 +1425,6 @@ module.exports = async function handler(request, response) {
         authUid: authResult.uid,
         freeKey: request._freeKey,
         ipKey: request._ipKey,
-        talkOnly,
         projectSpec: projectSpecGenerated ? projectSpecText : '',
         projectSpecGenerated,
       });
@@ -2801,7 +2812,7 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
       // after streaming, as an additional charge on the DELTA only.
       if (!context.isDev && /```\s*roblox-model\b/i.test(fullText)) {
         const extraCharge = Math.ceil(context.estimate.textokens * (MODELING_COST_MULTIPLIER - 1));
-        if (extraCharge > 0 && !context.talkOnly) {
+        if (extraCharge > 0) {
           if (context.freeKey) addFreeTokensUsed(context.freeKey, extraCharge);
           if (context.ipKey && context.ipKey !== context.freeKey) addFreeTokensUsed(context.ipKey, extraCharge);
           if (context.authUid && context.authToken) addUsage(context.authUid, context.authToken, extraCharge).catch(() => {});
