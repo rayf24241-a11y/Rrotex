@@ -18,19 +18,24 @@ function estimateTokens(messages, maxTokens) {
 
 function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
   const tokens = estimateTokens(messages, maxTokens);
-  let textokens = (
-    tokens.inputTokens * (selected.inputTexTokens || 1)
-    + tokens.outputTokens * (selected.outputTexTokens || 1)
-  ) * (selected.multiplier || 1);
-  // Doubled (was 2x/4x) -- Agent/Super Agent now do real extra work per
-  // request (retry-until-code-block cascade, real reasoning tokens, a much
-  // larger project context budget), so they cost more to run than when
-  // these multipliers were first set. Must stay in sync with the matching
-  // *= 4 / *= 8 in logProviderUsage (api/chat.js) -- that's the actual
-  // charge logged after the response completes, and this estimate is what
-  // gates whether the request is allowed to run in the first place.
-  if (mode.agent) textokens *= 4;
-  if (mode.superAgent) textokens *= 8;
+  // PRE-charge with a REALISTIC output guess, not the generation ceiling.
+  // Agent mode raises maxTokens to 16k as headroom, but typical replies are
+  // far smaller -- estimating output from the ceiling charged every agent
+  // message ~34 TT before the model wrote a single word (with no refund),
+  // which drained a 50 TT day in two messages. The post-stream settle-up in
+  // api/chat.js charges the real difference when a reply genuinely runs long.
+  tokens.outputTokens = Math.min(tokens.outputTokens, 1350);
+  // Agent/Super Agent multipliers apply to OUTPUT ONLY. The cascade's real
+  // extra cost is output-shaped (retries regenerate output, reasoning tokens
+  // are output); input is sent to the provider roughly once and its rates
+  // already carry the margin. Charging input at 4x/8x made one context-heavy
+  // message cost more than a whole day's allowance.
+  // Must stay in sync with the same formula in logProviderUsage and the
+  // stream settle-up block (both in api/chat.js).
+  const m = selected.multiplier || 1;
+  const agentX = mode.superAgent ? 8 : mode.agent ? 4 : 1;
+  const textokens = (tokens.inputTokens * (selected.inputTexTokens || 1) * m)
+    + (tokens.outputTokens * (selected.outputTexTokens || 1) * m * agentX);
   return {
     ...tokens,
     textokens: Math.ceil(textokens),

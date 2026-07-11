@@ -884,10 +884,20 @@ function buildProjectContext() {
   ].join('\n');
   if (scripts.length) {
     out += `\n\nPROJECT SCRIPTS (live from Roblox Studio - ${scripts.length} scripts). Search these before editing:`;
-    for (const s of scripts.slice(0, 120)) {
-      const src = String(s.source || '').slice(0, 12000);
+    // Budget the scripts section: every char here is billed as model input on
+    // EVERY message, so an uncapped dump (120 scripts x 12k chars ~= 1.4MB)
+    // made single messages cost a fortune. ~45k chars (~11k tokens) keeps
+    // plenty of context while keeping per-message cost sane. Per-script cap
+    // 8k; stop adding whole scripts once the budget is spent (never truncate
+    // the WORLD OBJECTS / SELECTION sections that follow -- deletes need them).
+    let scriptChars = 0;
+    for (const s of scripts.slice(0, 60)) {
+      const src = String(s.source || '').slice(0, 8000);
       const path = normalizeFilePath(s.path || s.name || 'Script');
-      out += `\n\n--- ${path} [${s.class || 'Script'}] ---\n${src}`;
+      const chunk = `\n\n--- ${path} [${s.class || 'Script'}] ---\n${src}`;
+      if (scriptChars + chunk.length > 45000) { out += `\n\n(...more scripts omitted to keep context small - ask to focus on a specific script if needed)`; break; }
+      scriptChars += chunk.length;
+      out += chunk;
     }
   } else {
     out += '\n\nPROJECT SCRIPTS: none scanned yet. If this is an edit request and the plugin is disconnected, ask for connection instead of pretending.';

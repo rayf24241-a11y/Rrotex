@@ -17,7 +17,7 @@
   // spent-today counter -- which made balances show 0 right after a reset.
   // Clearing the local counter once per epoch makes the display reflect the
   // reset immediately, even before the server sync lands.
-  var SPEND_EPOCH = 'r3';
+  var SPEND_EPOCH = 'r4';
   try {
     if (localStorage.getItem('rotex_spend_epoch') !== SPEND_EPOCH) {
       localStorage.removeItem('rotex_textokens_spent_today');

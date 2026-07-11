@@ -47,7 +47,7 @@ function _fsStr(field) { return field?.stringValue || ''; }
 // readUsage compares against, so every user reads back 0 used (fresh start)
 // without needing admin access to rewrite each doc. addUsage writes the new
 // epoch's keys going forward.
-const USAGE_EPOCH = 'r3';
+const USAGE_EPOCH = 'r4';
 function _dayKey()   { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 10); }
 function _monthKey() { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 7); }
 async function readUsage(uid, authToken) {
@@ -78,15 +78,17 @@ async function readBalance(uid, authToken) {
     return _fsNum(doc.fields?.balance);
   } catch { return 0; }
 }
+// Accepts negative amounts (settle-up refunds when the pre-charge estimate
+// exceeded the real response cost); counters never go below 0.
 async function addUsage(uid, authToken, amount) {
-  if (!uid || !authToken || !FIREBASE_PROJECT_ID || !(amount > 0)) return;
+  if (!uid || !authToken || !FIREBASE_PROJECT_ID || !amount) return;
   try {
     const cur = (await readUsage(uid, authToken)) || { dayUsed: 0, monthUsed: 0 };
     const body = { fields: {
       dayKey:    { stringValue: _dayKey() },
-      dayUsed:   { integerValue: String(cur.dayUsed + amount) },
+      dayUsed:   { integerValue: String(Math.max(0, cur.dayUsed + amount)) },
       monthKey:  { stringValue: _monthKey() },
-      monthUsed: { integerValue: String(cur.monthUsed + amount) },
+      monthUsed: { integerValue: String(Math.max(0, cur.monthUsed + amount)) },
       updatedAt: { timestampValue: new Date().toISOString() },
     } };
     const mask = ['dayKey', 'dayUsed', 'monthKey', 'monthUsed', 'updatedAt'].map((k) => 'updateMask.fieldPaths=' + k).join('&');
@@ -185,10 +187,10 @@ function addFreeTokensUsed(key, amount) {
   const d = _today();
   const e = freeTokenCounters.get(key);
   if (!e || e.date !== d) {
-    freeTokenCounters.set(key, { date: d, used: amount });
+    freeTokenCounters.set(key, { date: d, used: Math.max(0, amount) });
     if (freeTokenCounters.size > 5000) freeTokenCounters.clear();
   } else {
-    e.used = (e.used || 0) + amount;
+    e.used = Math.max(0, (e.used || 0) + amount); // signed: settle-up may refund
   }
 }
 
@@ -2809,18 +2811,31 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         textokens_charged: context.estimate.textokens,
         status: 'completed_stream_estimate',
       });
-      // The base charge above was estimated and persisted BEFORE this response
-      // was generated (see estimateTexTokens's caller), since the estimate has
-      // to run before knowing what the model will produce. It can't know in
-      // advance whether the response includes a roblox-model block, so the
-      // modeling premium (MODELING_COST_MULTIPLIER) has to be applied here,
-      // after streaming, as an additional charge on the DELTA only.
-      if (!context.isDev && /```\s*roblox-model\b/i.test(fullText)) {
-        const extraCharge = Math.ceil(context.estimate.textokens * (MODELING_COST_MULTIPLIER - 1));
-        if (extraCharge > 0) {
-          if (context.freeKey) addFreeTokensUsed(context.freeKey, extraCharge);
-          if (context.ipKey && context.ipKey !== context.freeKey) addFreeTokensUsed(context.ipKey, extraCharge);
-          if (context.authUid && context.authToken) addUsage(context.authUid, context.authToken, extraCharge).catch(() => {});
+      // SETTLE-UP: the base charge was a deliberately lean estimate persisted
+      // BEFORE generation (estimateTexTokens caps the output guess at 1,350
+      // tokens so short replies aren't billed for the 16k ceiling). Now that
+      // the real response exists, compute the actual charge -- real output
+      // length, output-only agent multiplier, modeling premium -- and charge
+      // only the positive difference. Formula must stay in sync with
+      // estimateTexTokens (credit-safety.js) and logProviderUsage below.
+      if (!context.isDev) {
+        const realOutputTokens = Math.max(1, Math.ceil((fullText || '').length / 4));
+        const m = selected.multiplier || 1;
+        const agentX = context.superAgent ? 8 : context.agent ? 4 : 1;
+        let actual = (context.estimate.inputTokens * (selected.inputTexTokens || 1) * m)
+          + (realOutputTokens * (selected.outputTexTokens || 1) * m * agentX);
+        if (/```\s*roblox-model\b/i.test(fullText)) actual *= MODELING_COST_MULTIPLIER;
+        // Signed delta: positive = the reply ran longer than the lean estimate
+        // (charge the difference); negative = the reply was shorter (REFUND the
+        // difference, so a one-line answer never pays the output guess).
+        // The KV wallet draw is deliberately not refunded here (pack buyers'
+        // estimate is the same lean one; the wallet floor-at-0 spend makes a
+        // signed wallet API a bigger risk than the pennies it would return).
+        const settleDelta = Math.ceil(actual - context.estimate.textokens);
+        if (settleDelta !== 0) {
+          if (context.freeKey) addFreeTokensUsed(context.freeKey, settleDelta);
+          if (context.ipKey && context.ipKey !== context.freeKey) addFreeTokensUsed(context.ipKey, settleDelta);
+          if (context.authUid && context.authToken) addUsage(context.authUid, context.authToken, settleDelta).catch(() => {});
         }
       }
       sseWrite(response, donePayload());
@@ -3338,16 +3353,14 @@ function sanitizeAssistantText(text) {
 function logProviderUsage(result, selected, context, status) {
   const inputTokens = result.usage?.inputTokens || context.estimate.inputTokens;
   const outputTokens = result.usage?.outputTokens || context.estimate.outputTokens;
-  let charged = (
-    inputTokens * (selected.inputTexTokens || 1)
-    + outputTokens * (selected.outputTexTokens || 1)
-  ) * (selected.multiplier || 1);
-  // Doubled (was 2x/4x) -- must stay in sync with estimateTexTokens's
-  // matching *= 4 / *= 8 (api/_lib/credit-safety.js), which is what gates
-  // whether a request is allowed to run at all before this actual charge is
-  // ever computed.
-  if (context.agent) charged *= 4;
-  if (context.superAgent) charged *= 8;
+  // Agent/Super Agent multipliers apply to OUTPUT ONLY -- must stay in sync
+  // with estimateTexTokens (api/_lib/credit-safety.js) and the stream
+  // settle-up block above. Input at 4x/8x made one context-heavy message
+  // cost more than a full day's allowance.
+  const m = selected.multiplier || 1;
+  const agentX = context.superAgent ? 8 : context.agent ? 4 : 1;
+  let charged = (inputTokens * (selected.inputTexTokens || 1) * m)
+    + (outputTokens * (selected.outputTexTokens || 1) * m * agentX);
   // 3D modeling premium (see MODELING_COST_MULTIPLIER) -- same rule as TexBrain.
   if (/```\s*roblox-model\b/i.test(result.text || '')) charged *= MODELING_COST_MULTIPLIER;
   logUsage({
