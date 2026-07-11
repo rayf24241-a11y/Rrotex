@@ -545,12 +545,6 @@ function renderPlan() {
   // anyway, and an empty "Free" chip on the sign-in screen just adds noise.
   if (!state.user) { row.hidden = true; return; }
   row.hidden = false;
-  // Owner account is cap-exempt -- flag it as unlimited straight from the
-  // signed-in email so the balance shows "∞" instantly, with no dependence on
-  // the billing-sync round-trip (which can fail or be served stale from cache).
-  if ((state.user.email || '').toLowerCase() === 'rayf24241@gmail.com') {
-    window.__rotexUnlimited = true;
-  }
   const isPro = Boolean(window.rotexTokens && window.rotexTokens.isProUser && window.rotexTokens.isProUser());
   if (els.planBadge) {
     els.planBadge.textContent = isPro ? 'Pro' : 'Free';
@@ -608,7 +602,6 @@ async function syncServerUsage() {
     const data = await res.json().catch(() => ({}));
     if (!data || !data.ok) return;
     window.__rotexServerUsage = data.usage || { dayUsed: 0, monthUsed: 0 };
-    window.__rotexUnlimited = Boolean(data.unlimited);
     if (data.balance != null && window.rotexTokens && window.rotexTokens.savePurchased) {
       window.rotexTokens.savePurchased(data.balance);
     }

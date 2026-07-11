@@ -1035,8 +1035,8 @@
   }
 
   function hasActiveProPass() {
-    // Dev account always has Pro (mirrors the server's isDev exemption).
-    if ((currentUser?.email || '').trim().toLowerCase() === 'rayf24241@gmail.com') return true;
+    // (Owner-email shortcut removed 2026-07-11 -- owner is a normal user; a
+    // real signed Pro pass is required like everyone else.)
     const pass = localStorage.getItem('rotex_pro_pass') || '';
     try {
       const payload = JSON.parse(atob(pass.split('.', 2)[0].replace(/-/g, '+').replace(/_/g, '/')));

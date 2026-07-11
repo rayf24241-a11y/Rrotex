@@ -664,12 +664,10 @@ async function handleTexBrain(req, res) {
   // Free-plan daily request cap (distinct from the TexToken budget): this handler
   // is a separate code path from the main /api/chat handler's freeDailyCap check
   // above, so texbrain-thinking needs its own enforcement here. Pro subscribers
-  // and the dev account are exempt.
+  // are exempt (owner exemption removed 2026-07-11).
   const tbIsPro = Boolean(verifyProPass(proPass));
-  const tbEmail = _decodeJwtPayload(authToken)?.email || '';
-  const tbIsDev = tbEmail === 'rayf24241@gmail.com';
   const tbCap = MODELS['texbrain-thinking'].freeDailyCap;
-  if (!tbIsPro && !tbIsDev && tbCap) {
+  if (!tbIsPro && tbCap) {
     const tbUsed = bumpCounter(proCounters, `${ipFromRequest(req)}:texbrain-thinking`);
     if (tbUsed > tbCap) {
       res.status(429).json({ error: `You've used your ${tbCap} free TexBrain requests today. Come back tomorrow, or upgrade to Pro at rrotex.com/pro.` });
@@ -877,7 +875,7 @@ async function handleTexBrain(req, res) {
     // TexBrain's cost into that same server-side counter, the next refresh
     // pulls back the OLD dayUsed value and the balance appears to not move at
     // all -- exactly "my textokens arent going down".
-    if (!tbIsDev) {
+    {
       const tbIp = ipFromRequest(req);
       const tbFreeKey = tbAuth.uid ? `uid:${tbAuth.uid}` : `ip:${tbIp}`;
       addFreeTokensUsed(tbFreeKey, tbCost);
@@ -937,14 +935,10 @@ async function handleBillingSync(req, res) {
   }
   // Also hand back the server-authoritative daily/monthly usage so the web app
   // can show a real balance (and reflect resets) instead of a stale local
-  // counter. `unlimited` marks the owner/dev account, which is exempt from caps.
+  // counter. (The old `unlimited` owner flag was removed 2026-07-11 — the owner
+  // is a normal user now.)
   const usage = (await readUsage(uid, authToken)) || { dayUsed: 0, monthUsed: 0 };
-  let unlimited = false;
-  try {
-    const p = JSON.parse(Buffer.from(authToken.split('.')[1], 'base64').toString());
-    unlimited = p.email === 'rayf24241@gmail.com';
-  } catch {}
-  res.status(200).json({ ok: true, balance: best, cloudBalance, usage, unlimited });
+  res.status(200).json({ ok: true, balance: best, cloudBalance, usage });
 }
 
 module.exports = async function handler(request, response) {
@@ -998,10 +992,9 @@ module.exports = async function handler(request, response) {
   const modelId = resolveModelId(model);
   const selected = MODELS[modelId];
   let proPayload = verifyProPass(proPass);
-  const quickClaim = _decodeJwtPayload(authToken);
-  const quickIsDev = quickClaim?.email === 'rayf24241@gmail.com';
-  const relaxedRate = selected.route === 'tb-thinking' || quickIsDev || Boolean(proPayload);
-  const rate = checkRequestRate(ip, { relaxed: relaxedRate, dev: quickIsDev });
+  // Owner rate-limit exemption removed along with isDev (owner = normal user).
+  const relaxedRate = selected.route === 'tb-thinking' || Boolean(proPayload);
+  const rate = checkRequestRate(ip, { relaxed: relaxedRate });
   if (!rate.ok) {
     response.setHeader('Retry-After', String(rate.retry));
     response.status(429).json({
@@ -1034,17 +1027,11 @@ module.exports = async function handler(request, response) {
 
   const userId = proPayload?.uid || authResult.uid || ipFromRequest(request) || 'unknown';
   const userEmail = authResult.email || '';
-  // Dev recognition. The normal path uses the verified (unexpired) token email.
-  // Fallback: if the token is expired but its EMAIL claim is the dev's, verify the
-  // token's cryptographic signature (ignoring expiry) so the dev stays free even
-  // on a stale token, with no re-login. A forged token fails the signature check.
-  let isDev = userEmail === 'rayf24241@gmail.com';
-  if (!isDev && authToken) {
-    const claim = _decodeJwtPayload(authToken);
-    if (claim && claim.email === 'rayf24241@gmail.com') {
-      isDev = await verifyDevTokenSignature(authToken);
-    }
-  }
+  // Owner exemption REMOVED (2026-07-11, owner's request: "I don't want
+  // infinite"). The owner account is now a normal user: same caps, same usage
+  // tracking, same balance display as everyone else. Do not re-add an email-
+  // based bypass here.
+  const isDev = false;
 
   // Server-side Pro enforcement - locked models reject without a valid pass.
   if (selected.tier === 'pro' && !isPro && !isDev) {

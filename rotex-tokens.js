@@ -141,12 +141,6 @@
   function refreshBalanceDisplay() {
     var el = document.getElementById('rxTokenBalance');
     if (!el) return;
-    // Owner/dev account is exempt from all caps -- show it, don't imply a limit.
-    if (window.__rotexUnlimited) {
-      el.textContent = '∞ TT';
-      el.title = 'Unlimited (owner account)';
-      return;
-    }
     var free = getFreeRemaining();
     var purchased = getPurchased();
     var total = free + purchased;
