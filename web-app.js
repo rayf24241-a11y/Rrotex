@@ -1079,11 +1079,12 @@ async function sendMessage(rawText, options = {}) {
       return sendMessage(text, { ...options, skipUserRender: true, retriedAuth: true });
     }
     if (error.code === 'login_required' && state.user) {
-      // Retry with a fresh token still rejected -- the session is truly dead.
+      // Retry with a fresh token still rejected. Do NOT auto-redirect to the
+      // login page -- Firebase still holds a session there, so it instantly
+      // bounces back here and loops. A full sign-out is the only real reset.
       assistantBubble.className = 'msg assistant error';
-      assistantBubble.textContent = 'Your session expired. Taking you to sign back in...';
-      setRunState('Session expired', assistantBubble.textContent, 'No action queued');
-      setTimeout(signIn, 1200);
+      assistantBubble.textContent = 'Something is off with your session. Press "Out" (bottom-left) to sign out fully, then sign back in.';
+      setRunState('Session issue', 'Sign out and back in to reset.', 'No action queued');
     } else {
       assistantBubble.className = 'msg assistant error';
       assistantBubble.textContent = error.message || 'No response.';

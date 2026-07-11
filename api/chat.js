@@ -1025,7 +1025,11 @@ module.exports = async function handler(request, response) {
   // userHasActiveProSubscription) already recovers legitimate Pro users whose
   // signed pass is stale, without ever trusting an unsigned, caller-supplied UID.
 
-  const userId = proPayload?.uid || authResult.uid || ipFromRequest(request) || 'unknown';
+  // Identity preference: the VERIFIED Firebase login wins over the Pro pass
+  // uid. Old passes can carry a stale/wrong uid (the removed dev-exemption
+  // path could mint one from an expired token), and pass-uid-first made
+  // isAuthUser false for genuinely signed-in users -> endless login_required.
+  const userId = authResult.uid || proPayload?.uid || ipFromRequest(request) || 'unknown';
   const userEmail = authResult.email || '';
   // Owner exemption REMOVED (2026-07-11, owner's request: "I don't want
   // infinite"). The owner account is now a normal user: same caps, same usage

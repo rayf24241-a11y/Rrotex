@@ -37,8 +37,18 @@ module.exports = async function handler(request, response) {
   const payload = verifyProPass(proPass);
 
   // One-time 30-day pass, still within its window — nothing to check against
-  // Stripe (no subscription exists). Hand it back unchanged.
+  // Stripe (no subscription exists). Hand it back unchanged, EXCEPT when the
+  // caller's verified Firebase identity differs from the pass uid: old passes
+  // could be minted with a stale/wrong uid (the removed dev-exemption path),
+  // and a mismatched uid breaks server-side identity checks. Re-sign with the
+  // correct uid but keep the ORIGINAL expiry — never extend a one-time pass.
   if (payload && !payload.sub) {
+    const auth = await verifyFirebaseToken(authToken);
+    if (auth.ok && auth.uid && payload.uid !== auth.uid) {
+      const healed = signProPass({ uid: auth.uid, plan: 'pro', exp: Number(payload.exp) });
+      response.status(200).json({ refreshed: true, proPass: healed });
+      return;
+    }
     response.status(200).json({ refreshed: true, proPass });
     return;
   }
