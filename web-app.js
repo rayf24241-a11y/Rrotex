@@ -836,6 +836,13 @@ function buildProjectContext() {
       out += `\n- ${bits.join(' | ')}`;
     }
   }
+  const instances = Array.isArray(ctx.instances) ? ctx.instances : [];
+  if (instances.length) {
+    out += `\n\nWORLD OBJECTS (live from Workspace/Storage - ${instances.length}). These Models/Folders/Parts can be deleted, edited, or selected by copying their EXACT path into a studio-action (delete_instance / set_property / select_instances):`;
+    for (const o of instances.slice(0, 60)) {
+      out += `\n- ${o.class || 'Instance'} | ${o.path || o.name || 'Unknown'}`;
+    }
+  }
   if (selected.length) out += `\n\nCURRENTLY SELECTED IN STUDIO: ${selected.map((x) => x.path || x.name).join(', ')}`;
   const recentErrors = state.studioErrors.filter((e) => Date.now() - e.t < 60000);
   if (recentErrors.length) {

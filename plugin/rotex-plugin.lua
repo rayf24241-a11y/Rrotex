@@ -442,9 +442,59 @@ local function scanAllGui(maxItems)
 	return gui
 end
 
+-- Scan the world for objects the user can name and ask ROTEX to delete/edit:
+-- Models, Folders, and named Parts in Workspace/Storage. Without this the model
+-- is blind to everything that is not a script or GUI, so "delete the tower"
+-- had no path to target. A Model is reported as ONE object (we do not descend
+-- into it), keeping the list short and referenceable instead of dumping every
+-- part. Scripts and GUI are skipped here (already covered by their own scans).
+local WORLD_SERVICES = { "Workspace", "ServerStorage", "ReplicatedStorage" }
+local function scanWorldObjects(maxItems)
+	maxItems = maxItems or 60
+	local items = {}
+	local function skip(inst)
+		return inst:IsA("LuaSourceContainer") or inst:IsA("GuiObject")
+			or inst:IsA("ScreenGui") or inst:IsA("Terrain") or inst:IsA("Camera")
+	end
+	local function add(inst, depth)
+		if #items >= maxItems then return end
+		local ok, isTarget = pcall(function()
+			return inst:IsA("Model") or inst:IsA("Folder") or inst:IsA("BasePart")
+		end)
+		if ok and isTarget then
+			table.insert(items, { path = inst:GetFullName(), name = inst.Name, class = inst.ClassName })
+		end
+		-- Descend into Folders only. A Model/Part is a single targetable object,
+		-- not hundreds of separate children.
+		local okModel = pcall(function() return inst:IsA("Model") or inst:IsA("BasePart") end)
+		if okModel and (inst:IsA("Model") or inst:IsA("BasePart")) then return end
+		if depth >= 4 then return end
+		local okc, children = pcall(function() return inst:GetChildren() end)
+		if not okc then return end
+		for _, child in ipairs(children) do
+			if #items >= maxItems then return end
+			if not skip(child) then add(child, depth + 1) end
+		end
+	end
+	for _, svcName in ipairs(WORLD_SERVICES) do
+		local ok, svc = pcall(function() return game:GetService(svcName) end)
+		if ok and svc then
+			local okc, children = pcall(function() return svc:GetChildren() end)
+			if okc then
+				for _, child in ipairs(children) do
+					if #items >= maxItems then break end
+					if not skip(child) then add(child, 1) end
+				end
+			end
+		end
+	end
+	return items
+end
+
 local function buildGameContext(includeSelected)
 	local scripts = scanAllScripts(100)
 	local gui = scanAllGui(80)
+	local instances = scanWorldObjects(60)
 	local selected = {}
 	if includeSelected then
 		for _, obj in ipairs(Selection:Get()) do
@@ -482,6 +532,7 @@ local function buildGameContext(includeSelected)
 		},
 		scripts = scripts,
 		gui = gui,
+		instances = instances,
 		selected = selected,
 	}
 end
@@ -963,10 +1014,10 @@ local function handleCreateUiImage(action)
 end
 
 local function handleSetProperty(action)
-	local inst = resolveByPath(action.path or "")
+	local inst = resolveLoose(action.path or "")
 	if not inst then return false, "Not found: " .. tostring(action.path) end
 	local ok, err = pcall(function() inst[action.property] = action.value end)
-	return ok, ok and ("Set " .. action.path .. "." .. action.property) or tostring(err)
+	return ok, ok and ("Set " .. inst:GetFullName() .. "." .. action.property) or tostring(err)
 end
 
 local function handleDeleteInstance(action)
@@ -989,7 +1040,7 @@ end
 local function handleSelectInstances(action)
 	local targets = {}
 	for _, p in ipairs(action.paths or {}) do
-		local inst = resolveByPath(p)
+		local inst = resolveLoose(p)
 		if inst then table.insert(targets, inst) end
 	end
 	Selection:Set(targets)
