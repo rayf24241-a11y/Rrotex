@@ -59,7 +59,9 @@ const state = {
   user: null,
   idToken: '',
   // Ask mode is gone — anyone whose saved preference was 'ask' lands on Agent.
-  mode: ['agent', 'supreme'].includes(localStorage.getItem('rotex_web_mode')) ? localStorage.getItem('rotex_web_mode') : 'agent',
+  // Single mode now: Agent. (Supreme was replaced by the Low/Medium/Hard
+  // effort picker -- depth is a per-message dial, not a separate mode.)
+  mode: 'agent',
   bridgeCode: getOrCreateBridgeCode(),
   context: null,
   pluginConnected: false,
@@ -397,7 +399,7 @@ function addEmptyWorkbench() {
   shell.innerHTML = `
     <div class="forge-badge">ROTEX · Roblox Dev Studio</div>
     <h1>${firstName ? `Welcome back, ${escapeHtml(firstName)}.` : 'What are we building?'}</h1>
-    <p>${firstName ? 'What are we building today? ' : ''}Agent edits your game live through the Studio plugin. Supreme goes deeper — whole systems in one pass. Pick a starter or just type what you want.</p>
+    <p>${firstName ? 'What are we building today? ' : ''}ROTEX edits your game live through the Studio plugin. Crank the mode to Medium or Hard for bigger, more polished builds. Pick a starter or just type what you want.</p>
     <div class="forge-grid">
       <button class="forge-card" type="button" data-seed="Make a polished Roblox shop UI that appears in game, is mobile-safe, and has one LocalScript owner."><strong>UI Generator</strong><span>ScreenGui, buttons, mobile scale, visible layout, behavior owner.</span></button>
       <button class="forge-card" type="button" data-seed="Debug the latest broken feature. Search every likely owner script, fix the real cause, and remove duplicates."><strong>Bug Repair</strong><span>Find wrong paths, duplicate scripts, invisible GUI, nil errors, stale owners.</span></button>
@@ -484,18 +486,15 @@ function pushHistory(role, content) {
   saveMessages();
 }
 
-function setMode(mode) {
-  if (!['agent', 'supreme'].includes(mode)) mode = 'agent';
-  state.mode = mode;
-  localStorage.setItem('rotex_web_mode', mode);
-  document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
+function setMode() {
+  state.mode = 'agent';
   els.input.placeholder = 'Tell ROTEX what to make, edit, debug, or remove...';
   setRunState(
     state.pluginConnected ? 'Ready' : 'Connect Studio',
     state.pluginConnected
       ? 'Agent will apply real changes through the plugin.'
       : 'Agent needs the Studio plugin before it can edit.',
-    mode === 'supreme' ? 'Deep workflow' : 'Edit workflow',
+    'Edit workflow',
   );
 }
 
@@ -747,7 +746,7 @@ function renderBridge(meta = {}) {
   if (!state.busy) {
     setRunState(
       connected ? 'Ready' : 'Connect Studio',
-      connected ? 'Studio context is live. Agent and Supreme can edit now.' : 'Paste the bridge code into the plugin, then press Check Plugin.',
+      connected ? 'Studio context is live. ROTEX can edit your game now.' : 'Paste the bridge code into the plugin, then press Check Plugin.',
       `${meta.pendingActions ?? meta.queued ?? 0} edit(s) queued`,
     );
   }
@@ -877,7 +876,7 @@ function buildProjectContext() {
     ? ctx.capabilities.join(', ')
     : 'apply_files, create_model geometry, insert_toolbox_model (any model/prop/vehicle/weapon/character/furniture the user wants), terrain_edit, lighting_set, create_ui, create_ui_image, set_property, delete_instance, select_instances';
   let out = [
-    `ROTEX UI MODE: ${state.mode === 'supreme' ? 'SUPER AGENT' : 'AGENT'}.`,
+    'ROTEX UI MODE: AGENT.',
     `PLUGIN CAPABILITIES: ${caps}.`,
     'The web app hides executable file/studio-action/roblox-model blocks and queues them to the Roblox Studio plugin.',
     'Agent/Super Agent edit the actual Studio game through executable blocks. Never refuse, never just ask what they want, never tell them to switch modes -- make a smart assumption and build it.',
@@ -942,6 +941,73 @@ function taskStatusFor(text) {
   return 'Working on task...';
 }
 
+// ── Live streaming status ─────────────────────────────────────────────────
+// While a build streams in, the bubble shows a light-gray line describing what
+// the AI is doing right now (derived from the blocks it is writing), plus a ▾
+// toggle (or the Down-Arrow key) that expands the full raw stream.
+function initStreamBubble(bubble) {
+  bubble.classList.add('streaming');
+  bubble.innerHTML = '<div class="stream-status"><span class="stream-doing">Thinking...</span><button type="button" class="stream-expand" title="Show everything it is writing (Down Arrow)">▾</button></div><pre class="stream-raw" hidden></pre>';
+  bubble.querySelector('.stream-expand').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleStreamRaw(bubble);
+  });
+}
+
+function toggleStreamRaw(bubble) {
+  const raw = bubble.querySelector('.stream-raw');
+  const btn = bubble.querySelector('.stream-expand');
+  if (!raw) return;
+  raw.hidden = !raw.hidden;
+  if (btn) btn.textContent = raw.hidden ? '▾' : '▴';
+  if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
+}
+
+const STREAM_ACTION_LABELS = {
+  delete_instance: 'Deleting old stuff...',
+  set_property: 'Editing properties...',
+  select_instances: 'Selecting objects...',
+  create_model: 'Building 3D parts...',
+  insert_toolbox_model: 'Inserting a model...',
+  terrain_edit: 'Shaping terrain...',
+  lighting_set: 'Adjusting lighting...',
+  create_ui: 'Building the UI...',
+  create_ui_image: 'Adding UI images...',
+};
+
+function describeStreamDoing(full) {
+  const files = [...full.matchAll(/```\s*file:\s*([^\n`]+)/gi)];
+  const actions = [...full.matchAll(/"type"\s*:\s*"(delete_instance|set_property|select_instances|create_model|insert_toolbox_model|terrain_edit|lighting_set|create_ui_image|create_ui)"/g)];
+  const lastFile = files.length ? files[files.length - 1] : null;
+  const lastAction = actions.length ? actions[actions.length - 1] : null;
+  if (lastFile && (!lastAction || lastFile.index > lastAction.index)) {
+    const name = String(lastFile[1]).trim().split(/[\\/]/).pop();
+    return `Writing ${name}...`;
+  }
+  if (lastAction) return STREAM_ACTION_LABELS[lastAction[1]] || 'Applying Studio edits...';
+  if (/```\s*roblox-model/i.test(full)) return 'Building 3D parts...';
+  return full.trim() ? 'Planning...' : 'Thinking...';
+}
+
+function updateStreamBubble(bubble, full) {
+  const hasExecutable = /```\s*(?:file:|studio-action|roblox-model)/i.test(full);
+  if (!hasExecutable) {
+    // Plain conversational reply: stream the markdown live like a normal
+    // message -- no status scaffold needed.
+    bubble.className = 'msg assistant';
+    bubble.innerHTML = renderMarkdown(visibleAssistantText(full, 'Thinking...'));
+    return;
+  }
+  // Build task: keep (or restore, if the reply started as plain text) the
+  // status scaffold, update the doing-line, and mirror the raw stream.
+  if (!bubble.querySelector('.stream-status')) initStreamBubble(bubble);
+  bubble.className = 'msg assistant status streaming';
+  bubble.querySelector('.stream-doing').textContent = describeStreamDoing(full);
+  const raw = bubble.querySelector('.stream-raw');
+  raw.textContent = full;
+  if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
+}
+
 async function queueExecutableBlocks(fullText, userText) {
   const files = extractStudioFiles(fullText);
   const actions = extractStudioActions(fullText);
@@ -989,8 +1055,12 @@ async function sendMessage(rawText, options = {}) {
   els.input.value = '';
   if (!options.skipUserRender) addMessage('user', text);
   pushHistory('user', text);
-  setRunState(taskStatusFor(text), 'Planning, generating, and checking executable Studio edits.', state.mode === 'supreme' ? 'Supreme pass' : 'Agent pass');
-  const assistantBubble = addMessage('assistant', taskStatusFor(text), 'status');
+  setRunState(taskStatusFor(text), 'Planning, generating, and checking executable Studio edits.', 'Agent pass');
+  // Live status bubble: a light-gray "what it's doing" line (no more static
+  // "Working on task..."), with a ▾ toggle (or the Down-Arrow key) to watch
+  // the full raw output stream in.
+  const assistantBubble = addMessage('assistant', '', 'status');
+  initStreamBubble(assistantBubble);
 
   let full = '';
   let gotAny = false;
@@ -1013,8 +1083,8 @@ async function sendMessage(rawText, options = {}) {
         proPass: localStorage.getItem('rotex_pro_pass') || '',
         stream: true,
         mode: modeForServer,
-        agent: state.mode === 'agent' || state.mode === 'supreme',
-        superAgent: state.mode === 'supreme',
+        agent: true,
+        superAgent: false,
         category: 'auto',
         // Effort mode: the picker (app.html) persists to this key; the server
         // is authoritative about what each level costs.
@@ -1056,9 +1126,7 @@ async function sendMessage(rawText, options = {}) {
         if (payload.d) {
           gotAny = true;
           full += payload.d;
-          const hasExecutable = /```\s*(?:file:|studio-action|roblox-model)/i.test(full);
-          assistantBubble.className = `msg assistant ${hasExecutable ? 'status' : ''}`.trim();
-          assistantBubble.innerHTML = renderMarkdown(visibleAssistantText(full, hasExecutable ? taskStatusFor(text) : 'Thinking...'));
+          updateStreamBubble(assistantBubble, full);
           els.messages.scrollTop = els.messages.scrollHeight;
         }
         if (payload.usage?.textokens_charged && window.rotexTokens?.spend) {
@@ -1136,7 +1204,6 @@ async function loadModels() {
 }
 
 function initEvents() {
-  document.querySelectorAll('.tab').forEach((btn) => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
   document.querySelectorAll('[data-quick]').forEach((btn) => btn.addEventListener('click', () => {
     els.input.value = btn.dataset.quick || '';
     autosizeInput();
@@ -1171,6 +1238,16 @@ function initEvents() {
       setTimeout(() => { els.refreshCode.textContent = '⟳'; }, 900);
     });
   }
+  // Down Arrow while a build is streaming: expand/collapse the live raw view.
+  // Never hijacks the key while the user is writing in the input box.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown') return;
+    const streaming = document.querySelector('.msg.streaming');
+    if (!streaming) return;
+    if (document.activeElement === els.input && els.input.value) return;
+    e.preventDefault();
+    toggleStreamRaw(streaming);
+  });
   els.checkPlugin.addEventListener('click', async () => {
     els.checkPlugin.disabled = true;
     els.checkPlugin.textContent = 'Checking...';

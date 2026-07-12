@@ -209,6 +209,14 @@
       .msg.status { align-self: flex-start; background: rgba(92,168,255,0.08); border: 1px solid rgba(92,168,255,0.22); color: #cfe1ff; font-size: 13px; }
       .msg.error { align-self: flex-start; background: rgba(255,84,112,0.10); border: 1px solid rgba(255,84,112,0.3); color: #ffc2cd; }
       .msg-actions { display: flex; gap: 8px; margin-top: 10px; }
+      /* Live streaming status: light-gray "what it's doing" line + expandable raw view */
+      .stream-status { display: flex; align-items: center; gap: 8px; }
+      .stream-doing { color: var(--quiet); font-size: 12.5px; }
+      .stream-doing::after { content: ''; display: inline-block; width: 4px; height: 4px; margin-left: 6px; border-radius: 50%; background: var(--quiet); vertical-align: middle; animation: streamPulse 1s ease-in-out infinite; }
+      @keyframes streamPulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+      .stream-expand { border: none; background: transparent; color: var(--quiet); cursor: pointer; font-size: 12px; line-height: 1; padding: 3px 7px; border-radius: 6px; }
+      .stream-expand:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+      .stream-raw { margin-top: 8px; max-height: 240px; overflow: auto; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; line-height: 1.45; color: var(--quiet); background: rgba(255,255,255,0.04); border: 1px solid var(--line-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
       /* Rendered markdown inside assistant messages */
       .msg p { margin: 0 0 8px; }
       .msg p:last-child { margin-bottom: 0; }
@@ -420,14 +428,6 @@
         </a>
         <button class="newchat" id="newChatBtn" type="button">＋ New Chat</button>
 
-        <div>
-          <div class="rail-label">Mode</div>
-          <div class="tabs">
-            <button class="tab active" data-mode="agent" type="button"><span class="dot"></span><span>Agent<small>Edit the game via plugin</small></span></button>
-            <button class="tab" data-mode="supreme" type="button"><span class="dot"></span><span>Supreme<small>Deep multi-step build</small></span></button>
-          </div>
-        </div>
-
         <div class="rail-chats">
           <div class="rail-label">Chats</div>
           <div class="chat-list" id="chatList"></div>
@@ -564,8 +564,8 @@
       </div>
     </div>
 
-    <script src="./rotex-tokens.js?v=20260711j"></script>
-    <script src="./web-app.js?v=20260711j"></script>
+    <script src="./rotex-tokens.js?v=20260711k"></script>
+    <script src="./web-app.js?v=20260711k"></script>
     <script>
       // Custom model picker. web-app.js owns the real <select id="modelSelect">
       // (loads options from /api/models, reads .value, listens for 'change'),
