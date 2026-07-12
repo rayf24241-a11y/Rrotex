@@ -17,7 +17,7 @@
   // spent-today counter -- which made balances show 0 right after a reset.
   // Clearing the local counter once per epoch makes the display reflect the
   // reset immediately, even before the server sync lands.
-  var SPEND_EPOCH = 'r4';
+  var SPEND_EPOCH = 'r5';
   try {
     if (localStorage.getItem('rotex_spend_epoch') !== SPEND_EPOCH) {
       localStorage.removeItem('rotex_textokens_spent_today');
@@ -155,6 +155,17 @@
   function refreshBalanceDisplay() {
     var el = document.getElementById('rxTokenBalance');
     if (!el) return;
+    // Signed-in users see ONLY the server's number. Until the first server
+    // sync lands, show a syncing placeholder instead of the local estimate --
+    // the local counter drifts from reality (both directions were hit live:
+    // "stuck at 0 but can talk" and "shows tokens but blocked") and every
+    // such mismatch reads as a bug. Guests (no server doc) keep the local
+    // fallback.
+    if (window.__rotexSignedIn && !getServerUsage()) {
+      el.textContent = '… TT';
+      el.title = 'Syncing your balance with the server...';
+      return;
+    }
     var free = getFreeRemaining();
     var purchased = getPurchased();
     var total = free + purchased;

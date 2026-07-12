@@ -584,8 +584,11 @@ function renderPlan() {
   if (!row) return;
   // Only surface plan/balance once signed in -- guests are redirected to /login
   // anyway, and an empty "Free" chip on the sign-in screen just adds noise.
-  if (!state.user) { row.hidden = true; return; }
+  if (!state.user) { row.hidden = true; window.__rotexSignedIn = false; return; }
   row.hidden = false;
+  // Signed-in: the balance display must wait for (and only ever trust) the
+  // server sync -- see refreshBalanceDisplay in rotex-tokens.js.
+  window.__rotexSignedIn = true;
   const isPro = Boolean(window.rotexTokens && window.rotexTokens.isProUser && window.rotexTokens.isProUser());
   if (els.planBadge) {
     els.planBadge.textContent = isPro ? 'Pro' : 'Free';
@@ -626,9 +629,11 @@ async function refreshProPass() {
 }
 
 // Read the real server-side usage (day/month used) so the TexToken balance the
-// user sees matches the server -- fixes a stale local counter that could show 0
-// even right after a reset, and shows the owner account as unlimited.
-async function syncServerUsage() {
+// user sees matches the server. The display shows a syncing placeholder until
+// this lands (signed-in users NEVER see the drift-prone local estimate), so
+// this must be relentless: retry on failure, refresh the token on an auth
+// rejection, and keep trying until the first success.
+async function syncServerUsage(attempt = 0) {
   if (!state.user || !state.idToken) return;
   try {
     const res = await fetch('/api/billing-sync', {
@@ -641,7 +646,13 @@ async function syncServerUsage() {
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!data || !data.ok) return;
+    if (!data || !data.ok) {
+      // Stale token is the common failure -- refresh it before the retry.
+      if (data && data.error === 'auth_expired' && state.user) {
+        state.idToken = await state.user.getIdToken(true).catch(() => state.idToken || '');
+      }
+      throw new Error(data?.error || 'sync_failed');
+    }
     window.__rotexServerUsage = data.usage || { dayUsed: 0, monthUsed: 0 };
     if (data.balance != null && window.rotexTokens && window.rotexTokens.savePurchased) {
       window.rotexTokens.savePurchased(data.balance);
@@ -650,7 +661,13 @@ async function syncServerUsage() {
       window.rotexTokens.refreshBalanceDisplay();
     }
   } catch (_) {
-    // Fail-open: leave the display on its local estimate if the sync fails.
+    // Keep the syncing placeholder honest: retry with backoff until the first
+    // success (5s, 10s, 20s, then every 30s). The 60s interval in init() keeps
+    // it fresh afterwards.
+    if (!window.__rotexServerUsage) {
+      const delay = Math.min(30000, 5000 * Math.pow(2, Math.min(attempt, 2)));
+      setTimeout(() => syncServerUsage(attempt + 1), delay);
+    }
   }
 }
 
