@@ -184,6 +184,18 @@ const CONNECTED_UI_CONTRACT = [
   '- Finish checklist per UI: opener wired (button/keybind/prompt), closer wired, mobile-safe (UIScale + AnchorPoint layout), ResetOnSpawn chosen deliberately, and ZERO dead buttons.',
 ].join('\n');
 
+const ASSET_WIRING_GUIDE = [
+  'TOOLBOX ASSET WIRING GUIDE (connecting inserted assets to players/NPCs/gameplay — a mask standing on the ground when it should be ON someone is a FAILED build):',
+  '- DECOMPOSE requests like "make one player a giant with an SCP mask on": (1) who gets it (one random player? everyone? an NPC?), (2) the body change, (3) the asset attachment, (4) re-apply on respawn (CharacterAdded).',
+  '- WEARABLE/HELD/ATTACHED assets (masks, hats, wings, backpacks, held props): insert_toolbox_model with parent "ReplicatedStorage" (a TEMPLATE, not Workspace!), then in the SAME reply write a Script that clones and attaches it. Never leave a wearable standing in the world.',
+  '- ATTACH-TO-CHARACTER pattern (server Script): local m = ReplicatedStorage:WaitForChild("MaskTemplate"):Clone(); local handle = m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart", true); for each BasePart in m: Anchored=false, CanCollide=false, Massless=true, and WeldConstraint it to handle; position handle at the target: handle.CFrame = head.CFrame * CFrame.new(0, 0, -0.55) (mask sits in FRONT of the face; hats use CFrame.new(0, 0.6, 0) above); then WeldConstraint handle -> head; THEN m.Parent = character. Anchored parts welded to a character FREEZE the player — unanchoring first is mandatory.',
+  '- GIANT/RESIZE a character: character:ScaleTo(3) — the modern one-call API, works for R6 and R15. Re-apply inside player.CharacterAdded (respawn resets it). Scale BEFORE attaching accessories so offsets fit, or scale the offset too.',
+  '- HELD WEAPONS/ITEMS the player equips: build a Tool (Instance.new("Tool")), name the graspable part "Handle", weld the Toolbox model\'s parts to that Handle, put the Tool in Backpack/StarterPack. A raw model in Workspace is not equippable.',
+  '- PETS/FOLLOWERS: clone to Workspace, weld the model rigid, then AlignPosition + AlignOrientation (attachments on the pet root and a moving goal behind the player) — never teleport-loop with SetPrimaryPartCFrame every frame.',
+  '- PICKING "one player": Players:GetPlayers()[math.random(#players)] at round start, or the first to join via PlayerAdded — say which interpretation you chose in your one visible sentence.',
+  '- NPCs: same attach pattern, but the character is the NPC model in Workspace; no respawn hook needed.',
+].join('\n');
+
 const ROBLOX_SYSTEM_PROMPTS = {
   claudeHaiku: [
     'You are ROTEX Roblox Dev Mode powered by Claude Haiku.',
@@ -200,6 +212,7 @@ const ROBLOX_SYSTEM_PROMPTS = {
     MAP_GUIDE,
     LOADING_SCREEN_GUIDE,
     CONNECTED_UI_CONTRACT,
+    ASSET_WIRING_GUIDE,
   ].join('\n'),
   geminiFlash: [
     'You are ROTEX Roblox Dev Mode powered by Gemini Flash.',
@@ -215,6 +228,7 @@ const ROBLOX_SYSTEM_PROMPTS = {
     MAP_GUIDE,
     LOADING_SCREEN_GUIDE,
     CONNECTED_UI_CONTRACT,
+    ASSET_WIRING_GUIDE,
   ].join('\n'),
 };
 
