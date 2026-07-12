@@ -164,6 +164,26 @@ const MAP_GUIDE = [
   '- SCALE CHECK before finishing: could a player walk from spawn through every zone without squeezing through gaps or crossing empty dead space bigger than ~80 studs? If not, add connective props or tighten the layout.',
 ].join('\n');
 
+const LOADING_SCREEN_GUIDE = [
+  'ROBLOX LOADING SCREEN GUIDE (the real pattern — StarterGui loading screens appear too late and are wrong):',
+  '- A loading screen belongs in REPLICATEDFIRST as a LocalScript (```file:ReplicatedFirst/LoadingScreen.client.lua) — ReplicatedFirst runs before the rest of the game replicates, which is the entire point of a loading screen.',
+  '- Call ReplicatedFirst:RemoveDefaultLoadingScreen() first when replacing the Roblox default.',
+  '- Build the ScreenGui in the script and parent to player:WaitForChild("PlayerGui"): IgnoreGuiInset = true, DisplayOrder = 999, ResetOnSpawn = false, one full-screen Frame (Size UDim2.new(1,0,1,0)) with the theme color, game title, and an animated element (tweened progress bar or a spinner rotated in a loop).',
+  '- Real progress: use ContentProvider:PreloadAsync on a list of key assets and update the bar per item, or tween the bar smoothly to ~90% and finish on load. Keep a MINIMUM on-screen time (~2s) so it never flash-blinks.',
+  '- Dismiss properly: wait for game.Loaded (if not game:IsLoaded() then game.Loaded:Wait() end) AND the minimum time, then TweenService fade-out (transparency on frame + all descendants or a CanvasGroup), THEN :Destroy() the ScreenGui. A loading screen that lingers or hard-pops is broken.',
+  '- Optional polish that reads as professional: rotating tips text every ~3s, subtle logo pulse, percentage label matching the bar.',
+].join('\n');
+
+const CONNECTED_UI_CONTRACT = [
+  'CONNECTED UI CONTRACT (UI is not done until it is WIRED — a pretty panel with dead buttons is a failed build):',
+  '- EVERY interactive element you create must be functional in the SAME reply: every TextButton/ImageButton gets a .Activated handler; every toggle opens/closes something real; every bar or number label binds to a live data source.',
+  '- Live data sources: Humanoid.HealthChanged / humanoid attributes for vitals, leaderstats value .Changed for currency/score, :GetAttributeChangedSignal for custom state, RemoteEvent.OnClientEvent for server pushes. NEVER ship a bar that only shows a hardcoded value.',
+  '- Server-owned data (coins, purchases, inventory): create the RemoteEvent/RemoteFunction in the SAME reply, with BOTH ends wired — client FireServer on click, server OnServerEvent that VALIDATES (price, ownership, cooldown) then updates the value; client updates the UI from the change signal, not from its own optimistic math. No orphan remotes ever: every FireServer needs a matching OnServerEvent in this same reply.',
+  '- create_ui + owner script NAME CONTRACT: when a create_ui studio-action builds the tree and a LocalScript drives it, the script must reference EXACTLY the names used in the create_ui JSON (list them mentally before writing the script). Use WaitForChild with a timeout and warn() on nil — a silent infinite yield on a misspelled name is the #1 dead-UI cause.',
+  '- Button feel: hover/press feedback (quick TweenService size or color tween) and a disabled state while a server round-trip is pending (prevents double-buy).',
+  '- Finish checklist per UI: opener wired (button/keybind/prompt), closer wired, mobile-safe (UIScale + AnchorPoint layout), ResetOnSpawn chosen deliberately, and ZERO dead buttons.',
+].join('\n');
+
 const ROBLOX_SYSTEM_PROMPTS = {
   claudeHaiku: [
     'You are ROTEX Roblox Dev Mode powered by Claude Haiku.',
@@ -178,6 +198,8 @@ const ROBLOX_SYSTEM_PROMPTS = {
     UI_VISIBILITY_GUARANTEE,
     VFX_GUIDE,
     MAP_GUIDE,
+    LOADING_SCREEN_GUIDE,
+    CONNECTED_UI_CONTRACT,
   ].join('\n'),
   geminiFlash: [
     'You are ROTEX Roblox Dev Mode powered by Gemini Flash.',
@@ -191,6 +213,8 @@ const ROBLOX_SYSTEM_PROMPTS = {
     UI_VISIBILITY_GUARANTEE,
     VFX_GUIDE,
     MAP_GUIDE,
+    LOADING_SCREEN_GUIDE,
+    CONNECTED_UI_CONTRACT,
   ].join('\n'),
 };
 
