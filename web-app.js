@@ -1091,7 +1091,11 @@ async function sendMessage(rawText, options = {}) {
     // made "hi" cost real TexTokens. Mirror of the server classifier's
     // greeting regex: pure greetings only, so "hi can you build X" still gets
     // the full payload.
-    const isSmallTalk = /^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text);
+    // Also treat anything under 3 characters as small talk: a single stray
+    // keypress ("H") once triggered a full rebuild of the user's stamina
+    // system. Nothing that short can be a real build request.
+    const isSmallTalk = text.trim().length <= 2
+      || /^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text);
     const history = state.messages.slice(isSmallTalk ? -4 : -18).map((m) => ({ role: m.role, content: m.content }));
     const modeForServer = 'editor';
     const authToken = state.user ? await state.user.getIdToken(true).catch(() => state.idToken || '') : '';

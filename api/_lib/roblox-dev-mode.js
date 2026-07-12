@@ -187,8 +187,11 @@ function classifyRobloxRequest(userText, projectMode = 'Roblox') {
   const has = (re) => re.test(text);
   // Greetings / small talk are NEVER dev requests. Without this, "hi" fell
   // through every keyword check into 'scripting' with needs_code:true, and the
-  // agent pipeline dutifully generated + queued code for a hello.
-  if (/^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text)) {
+  // agent pipeline dutifully generated + queued code for a hello. Same for
+  // anything under 3 characters: a single stray keypress ("H") once triggered
+  // a full rebuild of the user's stamina system.
+  if (text.trim().length <= 2
+    || /^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text)) {
     return {
       platform: 'Roblox', category: 'non_dev_question', difficulty: 'beginner',
       needs_code: false, needs_setup_steps: false, needs_memory_update: false,
