@@ -2228,42 +2228,26 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
   }
 
   if (openRouterKey && selected.orModel) {
-    // HARD effort runs the actual PRO-class Gemini (verified live on
-    // OpenRouter 2026-07-11: google/gemini-3.1-pro-preview, $2/$12 per M vs
-    // Flash's $1.5/$9 — the user pays 2x effort for a genuinely stronger
-    // model, not just sterner instructions). Safe for the cascade's timing:
-    // OpenRouter attempts are never probed (see shouldProbeForExecutableBlock)
-    // — the primary streams live under the 70s window, and 3.5 Flash is
-    // inserted right behind it as the fallback.
-    const primaryOpenRouterModel = opts.effort === 'high' && selected.route === 'openrouter'
-      ? (process.env.GOOGLE_FLASH_HARD_MODEL || 'google/gemini-3.1-pro-preview')
-      : opts.superAgent && selected.route === 'openrouter'
-        ? (process.env.GOOGLE_FLASH_SUPER_MODEL || 'google/gemini-flash-latest')
-        : selected.orModel;
+    const primaryOpenRouterModel = opts.superAgent && selected.route === 'openrouter'
+      ? (process.env.GOOGLE_FLASH_SUPER_MODEL || 'google/gemini-flash-latest')
+      : selected.orModel;
     attempts.push({
       provider: 'openrouter',
       providerModel: primaryOpenRouterModel,
       apiKey: openRouterKey,
       baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-      // Keep Google Flash non-reasoning in production streaming. The old
-      // reasoning probe could sit for ~55s before sending useful output and
-      // pushed Vercel requests into responseStatusCode=0 timeouts. Reliability
-      // beats hidden thinking here; the Roblox Dev Mode prompt carries the
-      // workflow, and fallbacks handle provider failures.
-      reasoningCapable: false,
+      // Reasoning stays OFF by default (the old reasoning probe could sit
+      // ~55s and blow the Vercel window). EXCEPTION — HARD effort (owner's
+      // spec: same Gemini Flash, but force it to think): the user explicitly
+      // paid 2x for depth, OpenRouter attempts are never probed (they stream
+      // live inside the 70s window, so a slow think fails CLEAN into the
+      // non-reasoning fallback instead of stalling a probe), thinking tokens
+      // are exclude:true (never streamed to the client), and
+      // effectiveMaxTokens raises the ceiling so thinking can't crowd out
+      // the actual file blocks (the exact budget-interaction bug that bit
+      // this lever last time).
+      reasoningCapable: opts.effort === 'high',
     });
-    // Hard effort swapped the primary to the PRO model, so re-insert the
-    // normal 3.5 Flash right behind it — otherwise a Pro hiccup would skip
-    // straight down to the older 2.5-flash fallback.
-    if (opts.effort === 'high' && selected.route === 'openrouter' && selected.orModel && selected.orModel !== primaryOpenRouterModel) {
-      attempts.push({
-        provider: 'openrouter',
-        providerModel: selected.orModel,
-        apiKey: openRouterKey,
-        baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-        reasoningCapable: false,
-      });
-    }
     // Extra OpenRouter slug fallbacks (e.g. Claude Haiku's ...-latest router)
     // so a single bad/renamed slug can't take the model down.
     for (const m of selected.orFallbacks || []) {
