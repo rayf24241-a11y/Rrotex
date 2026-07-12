@@ -1849,7 +1849,12 @@ COMMON SCRIPTING PATTERNS:
 // normal 'inject' path and the leaner category 'replace' path below, so a
 // future tuning of these tiers can't update one and silently miss the
 // other.
-function projectContextCap(agent, superAgent, isPro) {
+function projectContextCap(agent, superAgent, isPro, effort = 'low') {
+  // HIGH effort = full-knowledge mode: the user paid 2x specifically so the
+  // model can see the WHOLE game (the web app + plugin also send far more on
+  // high). Gemini 3.5 Flash's real window is >1M tokens, so even 240k chars
+  // (~60k tokens) is comfortable.
+  if (effort === 'high') return isPro ? 240000 : 160000;
   return superAgent ? (isPro ? 160000 : 60000)
     : agent ? (isPro ? 110000 : 42000)
     : (isPro ? 64000 : 24000);
@@ -1880,7 +1885,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'Never output hidden reasoning, chain-of-thought, scratchpad text, or tags such as <think>, </think>, <analysis>, or </analysis>. Output only the final answer.',
       projectMemoryText ? `PROJECT MEMORY (durable facts you already learned about this project/user across earlier sessions):\n${projectMemoryText}` : '',
       projectSpecText ? `PROJECT SPEC (living design brief for this project -- keep it in mind, but the user's latest message always takes priority if it conflicts):\n${projectSpecText}` : '',
-      projectContext ? `PROJECT CONTEXT:\n${String(projectContext).slice(0, projectContextCap(agent, superAgent, isPro))}` : '',
+      projectContext ? `PROJECT CONTEXT:\n${String(projectContext).slice(0, projectContextCap(agent, superAgent, isPro, effort))}` : '',
     ];
     return leanParts.filter(Boolean).join('\n\n');
   }
@@ -1990,6 +1995,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'CONVERSATIONAL MESSAGES RULE (overrides the quality floor): if the user message is a greeting, small talk, a reaction, a single letter or other accidental keypress ("H", "a", "??"), or a question that changes nothing in the game — "hi", "hello", "hey", "bruh", "lol", "wow", "thanks", "what can you do", "are you there" — reply with ONE or TWO friendly sentences (for a stray keypress, just ask what they meant) and NOTHING else. Absolutely NO executable blocks, no file blocks, no studio-actions, no downloads, no setup steps. Never build, edit, or queue anything the user did not ask for.',
       effort === 'medium' ? 'EFFORT MODE: MEDIUM. The user paid extra for better quality. Plan more carefully before writing: consider edge cases (respawn, mobile, two players), pick clean structure, and double-check paths and wiring. Prefer doing the job properly over doing it fast.' : '',
       effort === 'high' ? 'GOLD-STANDARD STRUCTURE (reference for QUALITY BAR and WIRING only — build what the user actually asked for, never this literal example): a complete UI owner LocalScript looks like this, every part present and connected:\n```\n-- StarterPlayer/StarterPlayerScripts/ExampleBarUI.client.lua\nlocal Players = game:GetService("Players")\nlocal TweenService = game:GetService("TweenService")\nlocal UserInputService = game:GetService("UserInputService")\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild("PlayerGui")\nlocal old = playerGui:FindFirstChild("ExampleBarGui") if old then old:Destroy() end\nlocal gui = Instance.new("ScreenGui")\ngui.Name, gui.ResetOnSpawn, gui.Enabled = "ExampleBarGui", false, true\ngui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling\nlocal frame = Instance.new("Frame")\nframe.AnchorPoint = Vector2.new(0.5, 1)\nframe.Position, frame.Size = UDim2.new(0.5, 0, 1, -18), UDim2.new(0, 260, 0, 18)\nframe.BackgroundColor3 = Color3.fromRGB(20, 24, 34)\nframe.Parent = gui\nInstance.new("UICorner", frame).CornerRadius = UDim.new(0, 9)\nlocal bar = Instance.new("Frame")\nbar.Size = UDim2.new(1, 0, 1, 0)\nbar.BackgroundColor3 = Color3.fromRGB(60, 170, 255)\nbar.Parent = frame\nInstance.new("UICorner", bar).CornerRadius = UDim.new(0, 9)\nlocal function setFill(alpha) -- 0..1, tweened so it feels alive\n\tTweenService:Create(bar, TweenInfo.new(0.15), { Size = UDim2.new(math.clamp(alpha, 0, 1), 0, 1, 0) }):Play()\nend\ngui.Parent = playerGui\n```\nNote what makes it gold: WaitForChild before touching PlayerGui, old copy destroyed first, ResetOnSpawn set deliberately, AnchorPoint-based positioning that works on mobile, non-zero sizes, tweened state changes, ONE owner script. Every UI you produce must clear this bar; every system you produce needs the equivalent completeness (server authority, RemoteEvents actually created AND listened to, cleanup on death/respawn).' : '',
+      effort === 'high' ? 'FULL-KNOWLEDGE MODE (HIGH effort): you have been given the ENTIRE project — every script in full, all GUI, all world objects. Before writing anything, READ ALL OF IT carefully: find every script related to the request (owners, duplicates, remotes, config modules), cross-reference how they interact, and base your plan on what is actually there — never assume a script\'s contents or skip files because the context is long. Work carefully and deliberately: correctness over speed, verify every path and name against the context, and prefer minimal precise edits to existing systems over parallel rebuilds.' : '',
       effort === 'high' ? 'EFFORT MODE: HIGH — the user paid double for your absolute best work. Plan exhaustively before writing. Then deliver a polished, production-grade result: handle every edge case (respawn, death mid-action, mobile touch controls, two-player interference, rejoin persistence where relevant), add tasteful visual/UX polish (tweens, sounds hooks, VFX where it fits), keep server authority airtight, and structure the code cleanly. Mentally test the whole flow twice before sending. This should feel AMAZING, not merely functional.' : '',
       'FINAL SELF-CHECK (run silently before sending ANY answer with executable blocks; fix failures before sending, never mention the check): 1) Every delete_instance/set_property/select_instances path is copied EXACTLY from PROJECT CONTEXT (scripts/GUI/WORLD OBJECTS/SELECTION) — no invented paths. 2) Exactly ONE owner script per feature; stale duplicates get delete_instance actions. 3) Every ```file block is COMPLETE and runnable top to bottom — no "...", no "rest stays the same", no truncated end. 4) UI: ScreenGui parented to StarterGui/PlayerGui, Enabled=true, non-zero Size, on-screen Position, opener wired. 5) Server owns money/damage/inventory/purchases; client only sends requests. 6) Only Roblox APIs you are CERTAIN exist. 7) The visible text is 1-2 plain sentences with zero code. 8) CONNECTED UI: every button created has a handler, every bar/label binds to a live data source, every FireServer has a matching OnServerEvent in this same reply, and every name the script references exists in the create_ui tree. If any check fails, rewrite the answer before sending.',
       'AGENT DOES NOT GUESS BLINDLY: if PROJECT CONTEXT contains scripts, use names and contents from context. If the user says "still broken" or "did not change", assume a missed duplicate or owner mismatch and search broader by synonyms before editing again.',
@@ -2057,7 +2063,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
     // Agent/Super Agent specifically, since that's exactly when a full view
     // of the project matters most (finding the real owner script, existing
     // patterns to reuse, everything the search-pass rule asks for).
-    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, projectContextCap(agent, superAgent, isPro))}`);
+    parts.push(`PROJECT CONTEXT:\n${String(projectContext).slice(0, projectContextCap(agent, superAgent, isPro, effort))}`);
   }
   // Google Flash Smart Mode 'inject' categories (everything except Prompt
   // Maker/Explain-Compare, see the 'replace' branch above): add the

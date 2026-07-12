@@ -905,17 +905,22 @@ function buildProjectContext() {
   if (scripts.length) {
     out += `\n\nPROJECT SCRIPTS (live from Roblox Studio - ${scripts.length} scripts). Search these before editing:`;
     // Budget the scripts section: every char here is billed as model input on
-    // EVERY message, so an uncapped dump (120 scripts x 12k chars ~= 1.4MB)
-    // made single messages cost a fortune. ~45k chars (~11k tokens) keeps
-    // plenty of context while keeping per-message cost sane. Per-script cap
-    // 8k; stop adding whole scripts once the budget is spent (never truncate
-    // the WORLD OBJECTS / SELECTION sections that follow -- deletes need them).
+    // EVERY message. Low/Medium keep a lean ~45k-char budget (8k per script).
+    // HIGH effort is full-knowledge mode -- the user pays 2x exactly so the
+    // model can see the WHOLE game, so the budget opens up to ~150k chars and
+    // full per-script sources (the plugin sends up to 10k chars per script).
+    // Never truncate the WORLD OBJECTS / SELECTION sections that follow.
+    const effortNow = localStorage.getItem('rotex_web_effort');
+    const isHigh = effortNow === 'high';
+    const perScript = isHigh ? 12000 : 8000;
+    const totalBudget = isHigh ? 150000 : 45000;
+    const maxScripts = isHigh ? 200 : 60;
     let scriptChars = 0;
-    for (const s of scripts.slice(0, 60)) {
-      const src = String(s.source || '').slice(0, 8000);
+    for (const s of scripts.slice(0, maxScripts)) {
+      const src = String(s.source || '').slice(0, perScript);
       const path = normalizeFilePath(s.path || s.name || 'Script');
       const chunk = `\n\n--- ${path} [${s.class || 'Script'}] ---\n${src}`;
-      if (scriptChars + chunk.length > 45000) { out += `\n\n(...more scripts omitted to keep context small - ask to focus on a specific script if needed)`; break; }
+      if (scriptChars + chunk.length > totalBudget) { out += `\n\n(...more scripts omitted to keep context small - ask to focus on a specific script if needed)`; break; }
       scriptChars += chunk.length;
       out += chunk;
     }

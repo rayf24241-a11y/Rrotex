@@ -3,7 +3,7 @@
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
 local HTTP_PORT = PORTS[1]
-local PLUGIN_VERSION = "3.9"
+local PLUGIN_VERSION = "4.0"
 local WEB_BRIDGE_URL = "https://www.rrotex.com/api/plugin-bridge"
 
 local HttpService          = game:GetService("HttpService")
@@ -375,20 +375,36 @@ local SCAN_SERVICES = {
 }
 
 local function scanAllScripts(maxScripts)
-	maxScripts = maxScripts or 100
+	maxScripts = maxScripts or 200
 	local scripts = {}
+	-- Full-knowledge scanning (v4.0): scripts used to be cut at 3,000 chars --
+	-- most real scripts lost their second half before the AI ever saw them.
+	-- Now up to 10k chars each under a total source budget that keeps the
+	-- context payload safely below the bridge's 900KB cap; once the budget is
+	-- spent, remaining scripts still ship path/name/class (the map of the
+	-- project stays complete even when the deepest sources are trimmed).
+	local SOURCE_BUDGET = 500000
+	local sourceUsed = 0
 	local function scanInst(inst, depth)
-		if depth > 7 or #scripts >= maxScripts then return end
+		if depth > 9 or #scripts >= maxScripts then return end
 		local ok, children = pcall(function() return inst:GetChildren() end)
 		if not ok then return end
 		for _, child in ipairs(children) do
 			if #scripts >= maxScripts then return end
 			if child:IsA("LuaSourceContainer") then
+				local src = string.sub(child.Source or "", 1, 10000)
+				local room = SOURCE_BUDGET - sourceUsed
+				if room <= 0 then
+					src = ""
+				elseif #src > room then
+					src = string.sub(src, 1, room)
+				end
+				sourceUsed = sourceUsed + #src
 				table.insert(scripts, {
 					path   = child:GetFullName(),
 					name   = child.Name,
 					class  = child.ClassName,
-					source = string.sub(child.Source or "", 1, 3000),
+					source = src,
 				})
 			end
 			scanInst(child, depth + 1)
@@ -492,9 +508,9 @@ local function scanWorldObjects(maxItems)
 end
 
 local function buildGameContext(includeSelected)
-	local scripts = scanAllScripts(100)
-	local gui = scanAllGui(80)
-	local instances = scanWorldObjects(60)
+	local scripts = scanAllScripts(200)
+	local gui = scanAllGui(120)
+	local instances = scanWorldObjects(120)
 	local selected = {}
 	if includeSelected then
 		for _, obj in ipairs(Selection:Get()) do
