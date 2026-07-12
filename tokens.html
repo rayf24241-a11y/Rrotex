@@ -261,7 +261,7 @@
       <p class="eyebrow">TexTokens</p>
       <h1>Buy more tokens.</h1>
       <p class="subtitle">TexTokens power every AI message you send in ROTEX.</p>
-      <span class="rate-note"><strong>$1 = 2 TexTokens</strong> — any whole dollar amount, minimum $5</span>
+      <span class="rate-note"><strong>$1 = 20 TexTokens</strong> — any whole dollar amount, minimum $5</span>
 
       <div id="successBanner" class="success-banner">
         <strong id="successMsg">TexTokens added!</strong>
@@ -286,14 +286,14 @@
         <div id="signedInState" hidden>
           <div class="custom-section">
             <h2>Choose your amount</h2>
-            <p>Every $1 adds 2 TexTokens. Minimum $5, maximum $500.</p>
+            <p>Every $1 adds 20 TexTokens. Minimum $5, maximum $500.</p>
             <div class="amount-row">
               <div class="dollar-wrap">
                 <input id="dollarInput" type="number" min="5" max="500" step="1" value="10" />
               </div>
               <div class="token-preview">
                 <span id="tokenPreview">20</span> TexTokens
-                <span class="sub" id="tokenSub">$1 = 2 TexTokens</span>
+                <span class="sub" id="tokenSub">$1 = 20 TexTokens</span>
               </div>
             </div>
             <button class="buy-btn" id="buyBtn" type="button">Buy TexTokens — $10</button>
@@ -347,11 +347,11 @@
       import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
       import { getFirestore, doc, getDoc, setDoc, increment, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
-      // $1 = 2 displayed TexTokens. Internally 1 TexToken = 30,000 units
+      // $1 = 20 displayed TexTokens. Internally 1 TexToken = 30,000 units
       // (matches TT_UNIT in api/chat.js + create-checkout-session.js); the
       // wallet keeps internal units so old balances stay worth the same.
       const TT_UNIT = 30_000;
-      const TOKENS_PER_DOLLAR = 2 * TT_UNIT;
+      const TOKENS_PER_DOLLAR = 20 * TT_UNIT;
       const FIREBASE_API_KEY = 'AIzaSyBKg2g-hnMMLflCoDNkG810qRlIWktQ3oY';
 
       let auth, db, currentUser, desktopAuth;
@@ -504,7 +504,7 @@
         const d = getDollars();
         const tt = d ? (d * TOKENS_PER_DOLLAR) / TT_UNIT : 0;
         tokenPreview.textContent = d ? String(tt) : '—';
-        tokenSub.textContent     = d ? '$1 = 2 TexTokens' : '';
+        tokenSub.textContent     = d ? '$1 = 20 TexTokens' : '';
         buyBtn.textContent       = d ? `Buy ${tt} TexTokens — $${d}` : 'Choose an amount';
         buyBtn.disabled          = !d;
       }

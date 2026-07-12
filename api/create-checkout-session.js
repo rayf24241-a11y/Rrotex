@@ -4,7 +4,7 @@ const { verifyProPass } = require('./_lib/propass.js');
 // TexToken = 30,000 units (see TT_UNIT in api/chat.js), so $1 credits 60k
 // internal units to the wallet. Existing balances keep their internal value.
 const TT_UNIT = 30_000;
-const TOKENS_PER_DOLLAR = 2 * TT_UNIT; // $1 = 2 TexTokens
+const TOKENS_PER_DOLLAR = 20 * TT_UNIT; // $1 = 20 TexTokens (raised from 2 -- old rate was ~25x worse value than Pro and bought less than one build)
 const PRO_PRICE_CENTS = 2000; // $20 - one-time charge, grants 30 days of Pro
 
 module.exports = async function handler(request, response) {
