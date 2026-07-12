@@ -46,7 +46,7 @@ const els = {
 };
 
 const VALID_ROOT = /^(ServerScriptService|ReplicatedStorage|StarterPlayer|StarterPlayerScripts|StarterCharacterScripts|StarterGui|Workspace|ServerStorage|StarterPack|Lighting|SoundService|Teams|Players|TextChatService|Chat)(\/|\\)/i;
-const ACTION_TYPES = new Set(['delete_instance', 'set_property', 'select_instances', 'create_model', 'insert_toolbox_model', 'terrain_edit', 'lighting_set', 'create_ui_image', 'create_ui']);
+const ACTION_TYPES = new Set(['delete_instance', 'set_property', 'select_instances', 'create_model', 'insert_toolbox_model', 'terrain_edit', 'lighting_set', 'create_ui_image', 'create_ui', 'undo', 'redo']);
 
 const CHATS_KEY = 'rotex_web_chats'; // must precede the readChatStore() call below (TDZ)
 // Must also precede the state block: state.bridgeCode calls
@@ -895,7 +895,7 @@ function buildProjectContext() {
   const selected = Array.isArray(ctx.selected) ? ctx.selected : [];
   const caps = Array.isArray(ctx.capabilities) && ctx.capabilities.length
     ? ctx.capabilities.join(', ')
-    : 'apply_files, create_model geometry, insert_toolbox_model (any model/prop/vehicle/weapon/character/furniture the user wants), terrain_edit, lighting_set, create_ui, create_ui_image, set_property, delete_instance, select_instances';
+    : 'apply_files, create_model geometry, insert_toolbox_model (any model/prop/vehicle/weapon/character/furniture the user wants), terrain_edit, lighting_set, create_ui, create_ui_image, set_property, delete_instance, select_instances, undo/redo (real Ctrl+Z history)';
   let out = [
     'ROTEX UI MODE: AGENT.',
     `PLUGIN CAPABILITIES: ${caps}.`,
@@ -1005,11 +1005,13 @@ const STREAM_ACTION_LABELS = {
   lighting_set: 'Adjusting lighting...',
   create_ui: 'Building the UI...',
   create_ui_image: 'Adding UI images...',
+  undo: 'Undoing changes...',
+  redo: 'Redoing changes...',
 };
 
 function describeStreamDoing(full) {
   const files = [...full.matchAll(/```\s*file:\s*([^\n`]+)/gi)];
-  const actions = [...full.matchAll(/"type"\s*:\s*"(delete_instance|set_property|select_instances|create_model|insert_toolbox_model|terrain_edit|lighting_set|create_ui_image|create_ui)"/g)];
+  const actions = [...full.matchAll(/"type"\s*:\s*"(delete_instance|set_property|select_instances|create_model|insert_toolbox_model|terrain_edit|lighting_set|create_ui_image|create_ui|undo|redo)"/g)];
   const lastFile = files.length ? files[files.length - 1] : null;
   const lastAction = actions.length ? actions[actions.length - 1] : null;
   if (lastFile && (!lastAction || lastFile.index > lastAction.index)) {

@@ -3,7 +3,7 @@
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
 local HTTP_PORT = PORTS[1]
-local PLUGIN_VERSION = "3.7"
+local PLUGIN_VERSION = "3.8"
 local WEB_BRIDGE_URL = "https://www.rrotex.com/api/plugin-bridge"
 
 local HttpService          = game:GetService("HttpService")
@@ -529,6 +529,7 @@ local function buildGameContext(includeSelected)
 			"set_property parts/instances",
 			"delete_instance",
 			"select_instances",
+			"undo/redo (ChangeHistoryService)",
 		},
 		scripts = scripts,
 		gui = gui,
@@ -1037,6 +1038,21 @@ local function handleDeleteInstance(action)
 	return true, "Deleted " .. realPath
 end
 
+-- Real undo/redo: drives Studio's own edit history (ChangeHistoryService),
+-- exactly like Ctrl+Z -- so "undo what you just did" reverts the actual
+-- last waypoints instead of the AI trying to rebuild the opposite change.
+local function handleUndo(action)
+	local count = math.clamp(tonumber(action.count) or 1, 1, 10)
+	for _ = 1, count do ChangeHistoryService:Undo() end
+	return true, "Undid " .. count .. (count > 1 and " changes" or " change")
+end
+
+local function handleRedo(action)
+	local count = math.clamp(tonumber(action.count) or 1, 1, 10)
+	for _ = 1, count do ChangeHistoryService:Redo() end
+	return true, "Redid " .. count .. (count > 1 and " changes" or " change")
+end
+
 local function handleSelectInstances(action)
 	local targets = {}
 	for _, p in ipairs(action.paths or {}) do
@@ -1306,6 +1322,14 @@ task.spawn(function()
 
 		elseif action.type == "delete_instance" then
 			local ok2, msg = handleDeleteInstance(action)
+			success = ok2; addMsg(msg or ok2)
+
+		elseif action.type == "undo" then
+			local ok2, msg = handleUndo(action)
+			success = ok2; addMsg(msg or ok2)
+
+		elseif action.type == "redo" then
+			local ok2, msg = handleRedo(action)
 			success = ok2; addMsg(msg or ok2)
 
 		elseif action.type == "select_instances" then

@@ -38,8 +38,9 @@ const MODELS = {
     access: 'Free',
     // Halved 2026-07-11 (owner: "make tokens 2x harder to go down") — all
     // charging flows through these rates, so halving here halves every charge.
-    inputTexTokens: 1.6,
-    outputTexTokens: 8,
+    // Halved AGAIN 2026-07-12 (owner: tokens 2x slower, round 2).
+    inputTexTokens: 0.8,
+    outputTexTokens: 4,
     multiplier: 1,
     freeDailyCap: 5,
     expensive: true,
@@ -74,8 +75,9 @@ const MODELS = {
     // Halved 2026-07-11 (owner: "make tokens 2x harder to go down") — was
     // 12/35 (the gemini-3.5 real-price scaling below still holds relatively;
     // absolute rates are just 2x cheaper across the board now).
-    inputTexTokens: 6,
-    outputTexTokens: 17.5,
+    // Halved AGAIN 2026-07-12 (owner: tokens 2x slower, round 2).
+    inputTexTokens: 3,
+    outputTexTokens: 8.75,
     multiplier: 1,
     freeDailyCap: 15,
     route: 'openrouter',
