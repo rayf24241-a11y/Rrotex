@@ -9,6 +9,9 @@ const els = {
   bridgeCode: $('bridgeCode'),
   copyCode: $('copyCodeBtn'),
   refreshCode: $('refreshCodeBtn'),
+  attachBtn: $('attachBtn'),
+  attachInput: $('attachInput'),
+  attachStrip: $('attachStrip'),
   checkPlugin: $('checkPluginBtn'),
   pluginDot: $('pluginDot'),
   pluginStatus: $('pluginStatus'),
@@ -62,6 +65,8 @@ const state = {
   // Single mode now: Agent. (Supreme was replaced by the Low/Medium/Hard
   // effort picker -- depth is a per-message dial, not a separate mode.)
   mode: 'agent',
+  // Image attachments queued for the next message: { name, type, kind:'image', size, content(dataURL) }
+  attachments: [],
   bridgeCode: getOrCreateBridgeCode(),
   context: null,
   pluginConnected: false,
@@ -990,6 +995,75 @@ function toggleStreamRaw(bubble) {
   if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
 }
 
+// ── Image attachments ("New update") ───────────────────────────────────────
+// Photos straight off a phone can be 5-10MB; the request body must stay small,
+// so images are downscaled to max 1280px JPEG before queuing. Small PNGs keep
+// their format (transparency/screenshot crispness).
+const MAX_ATTACH_IMAGES = 3;
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ''));
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+async function downscaleImage(file) {
+  const raw = await fileToDataUrl(file);
+  if (file.type === 'image/png' && file.size < 300000) return raw; // small PNG: keep crisp
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => resolve(raw); // undecodable? send as-is (server caps at 4MB)
+    img.src = raw;
+  });
+}
+
+async function addAttachments(fileList) {
+  const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
+  for (const file of files) {
+    if (state.attachments.length >= MAX_ATTACH_IMAGES) break;
+    try {
+      const content = await downscaleImage(file);
+      if (content.startsWith('data:image/')) {
+        state.attachments.push({ name: file.name || 'image', type: file.type, kind: 'image', size: file.size, content });
+      }
+    } catch {}
+  }
+  renderAttachStrip();
+}
+
+function renderAttachStrip() {
+  const strip = els.attachStrip;
+  if (!strip) return;
+  strip.innerHTML = '';
+  strip.hidden = !state.attachments.length;
+  state.attachments.forEach((att, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'attach-chip';
+    const img = document.createElement('img');
+    img.src = att.content;
+    img.alt = att.name;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '×';
+    del.title = 'Remove image';
+    del.addEventListener('click', () => { state.attachments.splice(i, 1); renderAttachStrip(); });
+    chip.appendChild(img);
+    chip.appendChild(del);
+    strip.appendChild(chip);
+  });
+}
+
 // Mirrors the server's isRobloxMapBuildRequest trigger (api/chat.js) so the
 // status line can honestly show the Toolbox search while it happens.
 function looksLikeToolboxBuild(text) {
@@ -1065,8 +1139,12 @@ async function queueExecutableBlocks(fullText, userText) {
 
 async function sendMessage(rawText, options = {}) {
   if (state.busy) return;
-  const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/^\n+|\n+$/g, '');
-  if (!text.trim()) return;
+  let text = String(rawText || '').replace(/\r\n/g, '\n').replace(/^\n+|\n+$/g, '');
+  // Queued images ride with this message (or the auth-retry resend keeps its
+  // own copy). Image-only sends are allowed -- "here's a picture, build it".
+  const outgoingAttachments = options.resendAttachments || state.attachments.slice();
+  if (!text.trim() && !outgoingAttachments.length) return;
+  if (!text.trim()) text = 'Use the attached image(s) as the reference for what to build or fix.';
 
   // Login required to chat -- guests can't send.
   if (!state.user) {
@@ -1092,7 +1170,24 @@ async function sendMessage(rawText, options = {}) {
   state.busy = true;
   els.send.disabled = true;
   els.input.value = '';
-  if (!options.skipUserRender) addMessage('user', text);
+  if (!options.skipUserRender) {
+    const userBubble = addMessage('user', text);
+    if (outgoingAttachments.length && userBubble) {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg-imgs';
+      for (const att of outgoingAttachments) {
+        const img = document.createElement('img');
+        img.src = att.content;
+        img.alt = att.name;
+        wrap.appendChild(img);
+      }
+      userBubble.appendChild(wrap);
+    }
+  }
+  // The queue is consumed by this message; clear it so the strip empties and
+  // the next message starts fresh (the auth-retry keeps its own copy).
+  state.attachments = [];
+  renderAttachStrip();
   pushHistory('user', text);
   setRunState(taskStatusFor(text), 'Planning, generating, and checking executable Studio edits.', 'Agent pass');
   // Live status bubble: a light-gray "what it's doing" line (no more static
@@ -1116,8 +1211,8 @@ async function sendMessage(rawText, options = {}) {
     // Also treat anything under 3 characters as small talk: a single stray
     // keypress ("H") once triggered a full rebuild of the user's stamina
     // system. Nothing that short can be a real build request.
-    const isSmallTalk = text.trim().length <= 2
-      || /^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text);
+    const isSmallTalk = outgoingAttachments.length ? false : (text.trim().length <= 2
+      || /^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text));
     const history = state.messages.slice(isSmallTalk ? -4 : -18).map((m) => ({ role: m.role, content: m.content }));
     const modeForServer = 'editor';
     const authToken = state.user ? await state.user.getIdToken(true).catch(() => state.idToken || '') : '';
@@ -1141,6 +1236,7 @@ async function sendMessage(rawText, options = {}) {
         agent: true,
         superAgent: false,
         category: 'auto',
+        ...(outgoingAttachments.length ? { attachments: outgoingAttachments } : {}),
         // Effort mode: the picker (app.html) persists to this key; the server
         // is authoritative about what each level costs. Small talk is always
         // sent at low effort -- nobody should pay 2x for "hi" in Hard mode.
@@ -1217,7 +1313,7 @@ async function sendMessage(rawText, options = {}) {
       assistantBubble.remove();
       state.busy = false;
       els.send.disabled = false;
-      return sendMessage(text, { ...options, skipUserRender: true, retriedAuth: true });
+      return sendMessage(text, { ...options, skipUserRender: true, retriedAuth: true, resendAttachments: outgoingAttachments });
     }
     if (error.code === 'login_required' && state.user) {
       // Retry with a fresh token still rejected. Do NOT auto-redirect to the
@@ -1282,6 +1378,14 @@ function initEvents() {
       els.form.requestSubmit();
     }
   });
+  if (els.attachBtn && els.attachInput) {
+    els.attachBtn.addEventListener('click', () => els.attachInput.click());
+    els.attachInput.addEventListener('change', async () => {
+      await addAttachments(els.attachInput.files);
+      els.attachInput.value = ''; // allow re-picking the same file
+      els.input.focus();
+    });
+  }
   els.copyCode.addEventListener('click', async () => {
     await navigator.clipboard?.writeText(state.bridgeCode).catch(() => {});
     els.copyCode.textContent = 'OK';
