@@ -922,42 +922,46 @@ async function handleBillingSync(req, res) {
   const projectId = process.env.FIREBASE_PROJECT_ID;
   if (!projectId) { res.status(200).json({ ok: false, error: 'firebase_not_configured' }); return; }
 
-  // Verify token (lightweight decode)
-  let tokenUid = '';
-  try {
-    const payload = JSON.parse(Buffer.from(authToken.split('.')[1], 'base64').toString());
-    tokenUid = payload.sub || '';
-  } catch {}
-  if (!tokenUid || tokenUid !== uid) { res.status(401).json({ ok: false, error: 'auth_expired', message: 'Sign in again to sync billing.' }); return; }
+  // Real signature verification (local RS256), not just a decode: this
+  // endpoint hands back per-user balance/usage, so the uid must be proven.
+  const auth = await verifyFirebaseToken(authToken);
+  if (!auth.ok || auth.uid !== uid) { res.status(401).json({ ok: false, error: 'auth_expired', message: 'Sign in again to sync billing.' }); return; }
 
-  const docUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/textokens`;
+  // Purchased balance: KV wallet first (server-only, authoritative). The old
+  // flow read Firestore with the USER'S token and hard-failed the WHOLE
+  // response when that read errored -- which left the web app's balance stuck
+  // on the "syncing" placeholder forever. Firestore is now only a seed source
+  // for wallets that have never been touched, and its failure is non-fatal.
   let cloudBalance = 0;
-  const getRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${authToken}` } });
-  if (getRes.ok) {
-    const doc = await getRes.json();
-    const f = doc.fields?.balance;
-    cloudBalance = Math.max(0, Math.floor(Number(f?.integerValue ?? f?.doubleValue ?? 0) || 0));
-  } else if (getRes.status !== 404) {
-    const err = await getRes.json().catch(() => ({}));
-    res.status(getRes.status).json({ ok: false, error: 'firestore_read_failed', message: err.error?.message || 'Could not read billing balance.' });
-    return;
+  let fromWallet = false;
+  if (tokenWallet.walletEnabled()) {
+    const kvBal = await tokenWallet.getBalance(uid);
+    if (kvBal !== null) { cloudBalance = kvBal; fromWallet = true; }
   }
+  if (!fromWallet) {
+    try {
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/users/${encodeURIComponent(uid)}/billing/textokens`;
+      const getRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${authToken}` } });
+      if (getRes.ok) {
+        const doc = await getRes.json();
+        const f = doc.fields?.balance;
+        cloudBalance = Math.max(0, Math.floor(Number(f?.integerValue ?? f?.doubleValue ?? 0) || 0));
+      }
+    } catch {}
+    // Migrate whatever we found (possibly 0) into the wallet exactly once so
+    // future syncs come straight from KV.
+    if (tokenWallet.walletEnabled()) await tokenWallet.seed(uid, cloudBalance);
+  }
+  // NOTE: the old "trust the higher client-sent localBalance and write it up"
+  // merge is gone -- it was a tamper vector (client could inflate its display
+  // balance). The wallet is the single source of truth now; localBalance from
+  // the request body is deliberately ignored.
+  void localBalance;
 
-  const local = Math.max(0, Math.floor(Number(localBalance) || 0));
-  const best = Math.max(cloudBalance, local);
-  if (best > cloudBalance) {
-    await fetch(`${docUrl}?updateMask.fieldPaths=balance&updateMask.fieldPaths=updatedAt`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { balance: { integerValue: String(best) }, updatedAt: { timestampValue: new Date().toISOString() } } }),
-    }).catch(() => {});
-  }
-  // Also hand back the server-authoritative daily/monthly usage so the web app
-  // can show a real balance (and reflect resets) instead of a stale local
-  // counter. (The old `unlimited` owner flag was removed 2026-07-11 — the owner
-  // is a normal user now.)
+  // Server-authoritative daily/monthly usage (Redis-first via readUsage), so
+  // the display and the enforcement gates show the same number.
   const usage = (await readUsage(uid, authToken)) || { dayUsed: 0, monthUsed: 0 };
-  res.status(200).json({ ok: true, balance: best, cloudBalance, usage });
+  res.status(200).json({ ok: true, balance: cloudBalance, cloudBalance, usage });
 }
 
 module.exports = async function handler(request, response) {
