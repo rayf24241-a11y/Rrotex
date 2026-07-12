@@ -636,7 +636,11 @@ async function refreshProPass() {
 async function syncServerUsage(attempt = 0) {
   if (!state.user || !state.idToken) return;
   try {
-    const res = await fetch('/api/billing-sync', {
+    // NOTE: must be /api/chat/billing-sync (the chat function handles it via
+    // the /api/chat/:path* rewrite -- same as editor.html). The bare
+    // /api/billing-sync has NO route and 404s: that single wrong URL kept the
+    // web app's balance display permanently out of sync with the server.
+    const res = await fetch('/api/chat/billing-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
