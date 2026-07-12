@@ -2228,9 +2228,18 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
   }
 
   if (openRouterKey && selected.orModel) {
-    const primaryOpenRouterModel = opts.superAgent && selected.route === 'openrouter'
-      ? (process.env.GOOGLE_FLASH_SUPER_MODEL || 'google/gemini-flash-latest')
-      : selected.orModel;
+    // HARD effort runs the actual PRO-class Gemini (verified live on
+    // OpenRouter 2026-07-11: google/gemini-3.1-pro-preview, $2/$12 per M vs
+    // Flash's $1.5/$9 — the user pays 2x effort for a genuinely stronger
+    // model, not just sterner instructions). Safe for the cascade's timing:
+    // OpenRouter attempts are never probed (see shouldProbeForExecutableBlock)
+    // — the primary streams live under the 70s window, and 3.5 Flash is
+    // inserted right behind it as the fallback.
+    const primaryOpenRouterModel = opts.effort === 'high' && selected.route === 'openrouter'
+      ? (process.env.GOOGLE_FLASH_HARD_MODEL || 'google/gemini-3.1-pro-preview')
+      : opts.superAgent && selected.route === 'openrouter'
+        ? (process.env.GOOGLE_FLASH_SUPER_MODEL || 'google/gemini-flash-latest')
+        : selected.orModel;
     attempts.push({
       provider: 'openrouter',
       providerModel: primaryOpenRouterModel,
@@ -2243,6 +2252,18 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
       // workflow, and fallbacks handle provider failures.
       reasoningCapable: false,
     });
+    // Hard effort swapped the primary to the PRO model, so re-insert the
+    // normal 3.5 Flash right behind it — otherwise a Pro hiccup would skip
+    // straight down to the older 2.5-flash fallback.
+    if (opts.effort === 'high' && selected.route === 'openrouter' && selected.orModel && selected.orModel !== primaryOpenRouterModel) {
+      attempts.push({
+        provider: 'openrouter',
+        providerModel: selected.orModel,
+        apiKey: openRouterKey,
+        baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+        reasoningCapable: false,
+      });
+    }
     // Extra OpenRouter slug fallbacks (e.g. Claude Haiku's ...-latest router)
     // so a single bad/renamed slug can't take the model down.
     for (const m of selected.orFallbacks || []) {
