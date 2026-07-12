@@ -477,10 +477,10 @@ function renderHistory() {
 
 function pushHistory(role, content) {
   state.messages.push({ role, content: String(content || '') });
-  if (state.messages.length > 24) {
-    state.messages = state.messages.slice(-18);
-    addMessage('assistant', 'Compacting text...', 'status');
-  }
+  // Trim silently -- this is an instant array slice. The old "Compacting
+  // text..." status bubble was never removed by anything, so it sat in the
+  // chat forever looking like a stuck operation.
+  if (state.messages.length > 24) state.messages = state.messages.slice(-18);
   saveMessages();
 }
 
@@ -1016,6 +1016,9 @@ async function sendMessage(rawText, options = {}) {
         agent: state.mode === 'agent' || state.mode === 'supreme',
         superAgent: state.mode === 'supreme',
         category: 'auto',
+        // Effort mode: the picker (app.html) persists to this key; the server
+        // is authoritative about what each level costs.
+        effort: (['low', 'medium', 'high'].includes(localStorage.getItem('rotex_web_effort')) ? localStorage.getItem('rotex_web_effort') : 'low'),
       }),
     });
 

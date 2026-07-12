@@ -989,7 +989,14 @@ module.exports = async function handler(request, response) {
     texTokensLeft = null,
     superAgent = false,
     category: categoryOverride = 'auto',
+    effort: effortRaw = 'low',
   } = request.body || {};
+  // Effort mode (user-picked next to the model picker): low = current fast
+  // behavior; medium thinks ~1.5x harder for 1.5x credits; high thinks ~2.5x
+  // harder for 2x credits. Server-authoritative: the multiplier is applied in
+  // estimateTexTokens + the settle-up + logProviderUsage, so a tampered client
+  // can't buy high effort at low price.
+  const effort = ['low', 'medium', 'high'].includes(String(effortRaw)) ? String(effortRaw) : 'low';
 
   const modelId = resolveModelId(model);
   const selected = MODELS[modelId];
@@ -1199,6 +1206,8 @@ module.exports = async function handler(request, response) {
   // multi-file solutions. Streaming is used in the editor, so larger caps are safe.
   if (superAgent) maxTokens = Math.max(maxTokens, 24000);
   else if (agent) maxTokens = Math.max(maxTokens, 16000);
+  // High effort buys more output headroom for the extra polish it demands.
+  if (effort === 'high' && (agent || superAgent)) maxTokens = Math.max(maxTokens, superAgent ? 28000 : 20000);
   const isEditor = mode === 'editor';
   const modelGuide = buildModelGuide();
   const cleanAttachments = normalizeAttachments(attachments);
@@ -1292,6 +1301,7 @@ module.exports = async function handler(request, response) {
         lastUser?.content || '',
         projectSpecText,
         plannerPlanText,
+        effort,
       ),
     });
   } else {
@@ -1330,7 +1340,7 @@ module.exports = async function handler(request, response) {
     });
   }
 
-  const providerCall = resolveProviderCall(selected, cleanMessages, { agent, superAgent });
+  const providerCall = resolveProviderCall(selected, cleanMessages, { agent, superAgent, effort });
   if (!providerCall) {
     const noProviderText = selected.route === 'tb-thinking'
       ? 'TexBrain is starting up. Try again in a few seconds.'
@@ -1342,7 +1352,7 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  const estimate = estimateTexTokens(selected, cleanMessages, maxTokens, { agent, superAgent });
+  const estimate = estimateTexTokens(selected, cleanMessages, maxTokens, { agent, superAgent, effort });
 
   // Enforce free daily TexToken budget now that we have an accurate estimate.
   if (!isPro && !isDev && request._freeKey) {
@@ -1424,6 +1434,7 @@ module.exports = async function handler(request, response) {
         estimate,
         agent,
         superAgent,
+        effort,
         category: resolvedCategory,
         devPass,
         isDev,
@@ -1440,6 +1451,7 @@ module.exports = async function handler(request, response) {
         estimate,
         agent,
         superAgent,
+        effort,
         category: resolvedCategory,
       });
       response.status(200).json({ model: selected.name, category: resolvedCategory?.id || null, text: result.text, usage: result.usage, devPass });
@@ -1814,7 +1826,7 @@ function projectContextCap(agent, superAgent, isPro) {
     : (isPro ? 64000 : 24000);
 }
 
-function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false, projectMemory = '', category = null, userText = '', projectSpec = '', plannerPlan = '') {
+function buildEditorSystemPrompt(selected, agent, projectContext, isPro, projectMode, superAgent = false, projectMemory = '', category = null, userText = '', projectSpec = '', plannerPlan = '', effort = 'low') {
   const projectContextText = String(projectContext || '');
   const projectMemoryText = String(projectMemory || '').trim().slice(0, 4000);
   const projectSpecText = String(projectSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
@@ -1946,6 +1958,8 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'AGENT ANALYSIS LOOP: (1) identify the exact user intent, (2) scan PROJECT CONTEXT for the owning script or existing pattern, (3) decide create/modify/delete/disable, (4) produce the smallest complete change, (5) verify it does not conflict with existing scripts.',
       'AGENT QUALITY FLOOR: act like a careful senior Roblox developer, not a snippet bot. For every edit request, produce at least one real executable block unless the request is purely conversational. If the request is a bug fix, include the owner file and any needed delete_instance actions. If the request is a feature, include every required server/client/remotes/UI piece. If the request is removal, delete or disable the exact owner.',
       'CONVERSATIONAL MESSAGES RULE (overrides the quality floor): if the user message is a greeting, small talk, a reaction, or a question that changes nothing in the game — "hi", "hello", "hey", "bruh", "lol", "wow", "thanks", "what can you do", "are you there" — reply with ONE or TWO friendly sentences and NOTHING else. Absolutely NO executable blocks, no file blocks, no studio-actions, no downloads, no setup steps. Never build, edit, or queue anything the user did not ask for.',
+      effort === 'medium' ? 'EFFORT MODE: MEDIUM. The user paid extra for better quality. Plan more carefully before writing: consider edge cases (respawn, mobile, two players), pick clean structure, and double-check paths and wiring. Prefer doing the job properly over doing it fast.' : '',
+      effort === 'high' ? 'EFFORT MODE: HIGH — the user paid double for your absolute best work. Plan exhaustively before writing. Then deliver a polished, production-grade result: handle every edge case (respawn, death mid-action, mobile touch controls, two-player interference, rejoin persistence where relevant), add tasteful visual/UX polish (tweens, sounds hooks, VFX where it fits), keep server authority airtight, and structure the code cleanly. Mentally test the whole flow twice before sending. This should feel AMAZING, not merely functional.' : '',
       'FINAL SELF-CHECK (run silently before sending ANY answer with executable blocks; fix failures before sending, never mention the check): 1) Every delete_instance/set_property/select_instances path is copied EXACTLY from PROJECT CONTEXT (scripts/GUI/WORLD OBJECTS/SELECTION) — no invented paths. 2) Exactly ONE owner script per feature; stale duplicates get delete_instance actions. 3) Every ```file block is COMPLETE and runnable top to bottom — no "...", no "rest stays the same", no truncated end. 4) UI: ScreenGui parented to StarterGui/PlayerGui, Enabled=true, non-zero Size, on-screen Position, opener wired. 5) Server owns money/damage/inventory/purchases; client only sends requests. 6) Only Roblox APIs you are CERTAIN exist. 7) The visible text is 1-2 plain sentences with zero code. If any check fails, rewrite the answer before sending.',
       'AGENT DOES NOT GUESS BLINDLY: if PROJECT CONTEXT contains scripts, use names and contents from context. If the user says "still broken" or "did not change", assume a missed duplicate or owner mismatch and search broader by synonyms before editing again.',
       'Agent should solve normal one-step and two-step tasks: create a feature, modify an existing script, remove an unwanted script, or fix an obvious bug. Do not over-plan; do the smallest complete change that satisfies the request.',
@@ -2183,7 +2197,12 @@ function resolveProviderCall(selected, cleanMessages, opts = {}) {
       // user just sees a smarter answer. Probe calls never enable thinking
       // (callAnthropic builds its own body without a budget), keeping the
       // cascade's time budget intact.
-      thinkingBudget: opts.superAgent ? 4000 : opts.agent ? 3000 : 0,
+      // Effort mode scales how long Haiku thinks: medium ~1.5x, high ~2.5x
+      // the low-effort budget (still under the 16k/24k max_tokens headroom).
+      thinkingBudget: Math.round(
+        (opts.superAgent ? 4000 : opts.agent ? 3000 : 0)
+        * (opts.effort === 'high' ? 2.5 : opts.effort === 'medium' ? 1.5 : 1),
+      ),
     });
   }
 
@@ -2833,8 +2852,9 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
         const realOutputTokens = Math.max(1, Math.ceil((fullText || '').length / 4));
         const m = selected.multiplier || 1;
         const agentX = context.superAgent ? 8 : context.agent ? 4 : 1;
-        let actual = (context.estimate.inputTokens * (selected.inputTexTokens || 1) * m)
-          + (realOutputTokens * (selected.outputTexTokens || 1) * m * agentX);
+        const effortX = context.effort === 'high' ? 2 : context.effort === 'medium' ? 1.5 : 1;
+        let actual = ((context.estimate.inputTokens * (selected.inputTexTokens || 1) * m)
+          + (realOutputTokens * (selected.outputTexTokens || 1) * m * agentX)) * effortX;
         if (/```\s*roblox-model\b/i.test(fullText)) actual *= MODELING_COST_MULTIPLIER;
         // Signed delta: positive = the reply ran longer than the lean estimate
         // (charge the difference); negative = the reply was shorter (REFUND the
@@ -3378,8 +3398,9 @@ function logProviderUsage(result, selected, context, status) {
   // cost more than a full day's allowance.
   const m = selected.multiplier || 1;
   const agentX = context.superAgent ? 8 : context.agent ? 4 : 1;
-  let charged = (inputTokens * (selected.inputTexTokens || 1) * m)
-    + (outputTokens * (selected.outputTexTokens || 1) * m * agentX);
+  const effortX = context.effort === 'high' ? 2 : context.effort === 'medium' ? 1.5 : 1;
+  let charged = ((inputTokens * (selected.inputTexTokens || 1) * m)
+    + (outputTokens * (selected.outputTexTokens || 1) * m * agentX)) * effortX;
   // 3D modeling premium (see MODELING_COST_MULTIPLIER) -- same rule as TexBrain.
   if (/```\s*roblox-model\b/i.test(result.text || '')) charged *= MODELING_COST_MULTIPLIER;
   logUsage({

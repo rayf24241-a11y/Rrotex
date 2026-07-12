@@ -481,6 +481,13 @@
                 <div class="model-picker-menu" id="modelPickerMenu" role="listbox" hidden></div>
                 <select id="modelSelect" class="mp-native" tabindex="-1" aria-hidden="true"><option value="google-flash">Google Flash</option></select>
               </div>
+              <div class="model-picker">
+                <button type="button" class="model-picker-btn" id="effortPickerBtn" aria-haspopup="listbox" aria-expanded="false" title="How hard the AI works on each request">
+                  <span class="mp-name" id="effortPickerLabel">Low</span>
+                  <span class="mp-caret">▾</span>
+                </button>
+                <div class="model-picker-menu" id="effortPickerMenu" role="listbox" hidden></div>
+              </div>
               <span class="hint">Enter to send · Shift+Enter for newline</span>
               <div class="composer-spacer"></div>
               <button class="send" id="sendBtn" type="submit">Send ➤</button>
@@ -557,8 +564,8 @@
       </div>
     </div>
 
-    <script src="./rotex-tokens.js?v=20260711i"></script>
-    <script src="./web-app.js?v=20260711i"></script>
+    <script src="./rotex-tokens.js?v=20260711j"></script>
+    <script src="./web-app.js?v=20260711j"></script>
     <script>
       // Custom model picker. web-app.js owns the real <select id="modelSelect">
       // (loads options from /api/models, reads .value, listens for 'change'),
@@ -614,6 +621,52 @@
         sel.addEventListener('change', syncLabel);
         new MutationObserver(function () { build(); syncLabel(); }).observe(sel, { childList: true });
         build();
+        syncLabel();
+      })();
+
+      // Effort mode picker. Self-contained: persists to localStorage
+      // ('rotex_web_effort'); web-app.js reads that key when sending, so no
+      // cross-file wiring is needed.
+      (function () {
+        var btn = document.getElementById('effortPickerBtn');
+        var menu = document.getElementById('effortPickerMenu');
+        var label = document.getElementById('effortPickerLabel');
+        if (!btn || !menu || !label) return;
+        var MODES = [
+          { value: 'low',    name: 'Low',    sub: 'Quick · normal cost' },
+          { value: 'medium', name: 'Medium', sub: 'Thinks 1.5× longer · 1.5× credits' },
+          { value: 'high',   name: 'Hard',   sub: 'Thinks 2.5× longer, aims for AMAZING · 2× credits' },
+        ];
+        function current() {
+          var v = localStorage.getItem('rotex_web_effort');
+          return MODES.some(function (m) { return m.value === v; }) ? v : 'low';
+        }
+        function build() {
+          menu.innerHTML = '';
+          MODES.forEach(function (m) {
+            var item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'mp-item' + (m.value === current() ? ' active' : '');
+            item.setAttribute('role', 'option');
+            item.innerHTML = '<span>' + m.name + '</span><span class="mp-sub">' + m.sub + '</span>';
+            item.addEventListener('click', function () {
+              try { localStorage.setItem('rotex_web_effort', m.value); } catch (e) {}
+              syncLabel();
+              close();
+            });
+            menu.appendChild(item);
+          });
+        }
+        function syncLabel() {
+          var m = MODES.find(function (x) { return x.value === current(); }) || MODES[0];
+          label.textContent = m.name;
+        }
+        function open() { build(); menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); }
+        function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+        btn.addEventListener('click', function (e) { e.stopPropagation(); if (menu.hidden) open(); else close(); });
+        document.addEventListener('click', function (e) { if (!menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) close(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+        window.addEventListener('resize', close);
         syncLabel();
       })();
     </script>

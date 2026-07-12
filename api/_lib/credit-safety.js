@@ -34,8 +34,12 @@ function estimateTexTokens(selected, messages, maxTokens, mode = {}) {
   // stream settle-up block (both in api/chat.js).
   const m = selected.multiplier || 1;
   const agentX = mode.superAgent ? 8 : mode.agent ? 4 : 1;
-  const textokens = (tokens.inputTokens * (selected.inputTexTokens || 1) * m)
-    + (tokens.outputTokens * (selected.outputTexTokens || 1) * m * agentX);
+  // Effort mode price: medium = 1.5x, high = 2x. Must stay in sync with the
+  // stream settle-up and logProviderUsage in api/chat.js (same three-site
+  // rule as the agent multiplier).
+  const effortX = mode.effort === 'high' ? 2 : mode.effort === 'medium' ? 1.5 : 1;
+  const textokens = ((tokens.inputTokens * (selected.inputTexTokens || 1) * m)
+    + (tokens.outputTokens * (selected.outputTexTokens || 1) * m * agentX)) * effortX;
   return {
     ...tokens,
     textokens: Math.ceil(textokens),
