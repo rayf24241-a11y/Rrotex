@@ -44,7 +44,10 @@
       if (!pass) return false;
       var body = pass.split('.', 2)[0];
       var payload = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/')));
-      return payload && payload.plan === 'pro' && Number(payload.exp) > Date.now();
+      // Mirror the server's 40-day lifetime ceiling (propass.js): a stale
+      // long-lived pass must not show a PRO badge the server will reject.
+      return payload && payload.plan === 'pro' && Number(payload.exp) > Date.now()
+        && (Number(payload.exp) - Date.now()) <= 40 * 24 * 60 * 60 * 1000;
     } catch (_) { return false; }
   }
 

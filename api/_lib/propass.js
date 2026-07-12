@@ -33,6 +33,13 @@ function verifyProPass(pass) {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (payload.plan !== 'pro') return null;
     if (!payload.exp || Date.now() > Number(payload.exp)) return null;
+    // Pro lasts A MONTH, no exceptions: reject any pass whose remaining
+    // lifetime exceeds what legitimate minting can produce (30d one-time
+    // purchase, 35d rolling for legacy auto-billing subscriptions; 40d =
+    // ceiling + clock slack). This retroactively kills long-lived passes
+    // from removed code paths (the old 10-year owner/dev pass) and caps the
+    // blast radius of any future minting bug.
+    if (Number(payload.exp) - Date.now() > 40 * 24 * 60 * 60 * 1000) return null;
     return payload;
   } catch {
     return null;

@@ -1451,12 +1451,10 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  // Mint a long-lived Pro pass for the verified dev account so it stays free even
-  // after the Firebase ID token expires (no Stripe). The client persists it and
-  // sends it on later requests, so the dev is recognized as Pro without a live token.
-  const devPass = isDev
-    ? signProPass({ uid: authResult.uid || userId, plan: 'pro', exp: Date.now() + 3650 * 24 * 60 * 60 * 1000 })
-    : '';
+  // The old 10-year "dev pass" mint is gone (isDev is permanently false and
+  // Pro must never outlive its month) — kept as an empty string only so the
+  // response shape stays identical for old clients that read the field.
+  const devPass = '';
 
   try {
     if (stream) {

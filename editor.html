@@ -1040,7 +1040,9 @@
     const pass = localStorage.getItem('rotex_pro_pass') || '';
     try {
       const payload = JSON.parse(atob(pass.split('.', 2)[0].replace(/-/g, '+').replace(/_/g, '/')));
-      return payload.plan === 'pro' && Number(payload.exp) > Date.now();
+      // Mirror the server's 40-day lifetime ceiling (propass.js).
+      return payload.plan === 'pro' && Number(payload.exp) > Date.now()
+        && (Number(payload.exp) - Date.now()) <= 40 * 24 * 60 * 60 * 1000;
     } catch {
       return false;
     }
