@@ -48,7 +48,11 @@ function _fsStr(field) { return field?.stringValue || ''; }
 // without needing admin access to rewrite each doc. addUsage writes the new
 // epoch's keys going forward.
 const USAGE_EPOCH = 'r4';
-function _dayKey()   { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 10); }
+// Daily-only reset lever: bumping DAY_EPOCH re-keys ONLY the day counter, so
+// everyone's dayUsed reads 0 while monthUsed keeps accumulating. Bump
+// USAGE_EPOCH instead for a full (day+month) reset.
+const DAY_EPOCH = 'd1';
+function _dayKey()   { return USAGE_EPOCH + DAY_EPOCH + '-' + new Date().toISOString().slice(0, 10); }
 function _monthKey() { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 7); }
 async function readUsage(uid, authToken) {
   if (!uid) return null;
@@ -550,8 +554,14 @@ async function generatePlannerBrief(currentSpec, userMessage, projectMode, recen
     // case (12s) plus the main cascade's ~70s still fits the 90s ceiling.
     const plannerTimeout = effort === 'high' ? 12000 : effort === 'medium' ? 9000 : 7000;
     const plannerTokens = effort === 'high' ? 2200 : 1400;
+    // Hard effort upgrades the PLANNER itself: the paid Gemini Flash writes a
+    // far sharper plan than the free qwen coder for ~a cent, and the plan is
+    // the skeleton the main build hangs on. Low/Medium keep the free planner.
+    const plannerModel = effort === 'high'
+      ? (process.env.PLANNER_HARD_MODEL || 'google/gemini-3.5-flash')
+      : (process.env.PROJECT_SPEC_MODEL || 'qwen/qwen3-coder:free');
     const result = await tbOrPost('/chat/completions', {
-      model: process.env.PROJECT_SPEC_MODEL || 'qwen/qwen3-coder:free',
+      model: plannerModel,
       messages: buildPlannerPrompt(fallbackSpec, userMessage, projectMode, recentContext),
       max_tokens: plannerTokens,
       temperature: 0.3,
@@ -1980,6 +1990,7 @@ function buildEditorSystemPrompt(selected, agent, projectContext, isPro, project
       'AGENT QUALITY FLOOR: act like a careful senior Roblox developer, not a snippet bot. For every edit request, produce at least one real executable block unless the request is purely conversational. If the request is a bug fix, include the owner file and any needed delete_instance actions. If the request is a feature, include every required server/client/remotes/UI piece. If the request is removal, delete or disable the exact owner.',
       'CONVERSATIONAL MESSAGES RULE (overrides the quality floor): if the user message is a greeting, small talk, a reaction, or a question that changes nothing in the game — "hi", "hello", "hey", "bruh", "lol", "wow", "thanks", "what can you do", "are you there" — reply with ONE or TWO friendly sentences and NOTHING else. Absolutely NO executable blocks, no file blocks, no studio-actions, no downloads, no setup steps. Never build, edit, or queue anything the user did not ask for.',
       effort === 'medium' ? 'EFFORT MODE: MEDIUM. The user paid extra for better quality. Plan more carefully before writing: consider edge cases (respawn, mobile, two players), pick clean structure, and double-check paths and wiring. Prefer doing the job properly over doing it fast.' : '',
+      effort === 'high' ? 'GOLD-STANDARD STRUCTURE (reference for QUALITY BAR and WIRING only — build what the user actually asked for, never this literal example): a complete UI owner LocalScript looks like this, every part present and connected:\n```\n-- StarterPlayer/StarterPlayerScripts/StaminaUI.client.lua\nlocal Players = game:GetService("Players")\nlocal TweenService = game:GetService("TweenService")\nlocal UserInputService = game:GetService("UserInputService")\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild("PlayerGui")\nlocal old = playerGui:FindFirstChild("StaminaGui") if old then old:Destroy() end\nlocal gui = Instance.new("ScreenGui")\ngui.Name, gui.ResetOnSpawn, gui.Enabled = "StaminaGui", false, true\ngui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling\nlocal frame = Instance.new("Frame")\nframe.AnchorPoint = Vector2.new(0.5, 1)\nframe.Position, frame.Size = UDim2.new(0.5, 0, 1, -18), UDim2.new(0, 260, 0, 18)\nframe.BackgroundColor3 = Color3.fromRGB(20, 24, 34)\nframe.Parent = gui\nInstance.new("UICorner", frame).CornerRadius = UDim.new(0, 9)\nlocal bar = Instance.new("Frame")\nbar.Size = UDim2.new(1, 0, 1, 0)\nbar.BackgroundColor3 = Color3.fromRGB(60, 170, 255)\nbar.Parent = frame\nInstance.new("UICorner", bar).CornerRadius = UDim.new(0, 9)\nlocal function setFill(alpha) -- 0..1, tweened so it feels alive\n\tTweenService:Create(bar, TweenInfo.new(0.15), { Size = UDim2.new(math.clamp(alpha, 0, 1), 0, 1, 0) }):Play()\nend\ngui.Parent = playerGui\n```\nNote what makes it gold: WaitForChild before touching PlayerGui, old copy destroyed first, ResetOnSpawn set deliberately, AnchorPoint-based positioning that works on mobile, non-zero sizes, tweened state changes, ONE owner script. Every UI you produce must clear this bar; every system you produce needs the equivalent completeness (server authority, RemoteEvents actually created AND listened to, cleanup on death/respawn).' : '',
       effort === 'high' ? 'EFFORT MODE: HIGH — the user paid double for your absolute best work. Plan exhaustively before writing. Then deliver a polished, production-grade result: handle every edge case (respawn, death mid-action, mobile touch controls, two-player interference, rejoin persistence where relevant), add tasteful visual/UX polish (tweens, sounds hooks, VFX where it fits), keep server authority airtight, and structure the code cleanly. Mentally test the whole flow twice before sending. This should feel AMAZING, not merely functional.' : '',
       'FINAL SELF-CHECK (run silently before sending ANY answer with executable blocks; fix failures before sending, never mention the check): 1) Every delete_instance/set_property/select_instances path is copied EXACTLY from PROJECT CONTEXT (scripts/GUI/WORLD OBJECTS/SELECTION) — no invented paths. 2) Exactly ONE owner script per feature; stale duplicates get delete_instance actions. 3) Every ```file block is COMPLETE and runnable top to bottom — no "...", no "rest stays the same", no truncated end. 4) UI: ScreenGui parented to StarterGui/PlayerGui, Enabled=true, non-zero Size, on-screen Position, opener wired. 5) Server owns money/damage/inventory/purchases; client only sends requests. 6) Only Roblox APIs you are CERTAIN exist. 7) The visible text is 1-2 plain sentences with zero code. If any check fails, rewrite the answer before sending.',
       'AGENT DOES NOT GUESS BLINDLY: if PROJECT CONTEXT contains scripts, use names and contents from context. If the user says "still broken" or "did not change", assume a missed duplicate or owner mismatch and search broader by synonyms before editing again.',
