@@ -3,7 +3,7 @@
 
 local PORTS = {7878, 7874, 7871, 7870, 7861}
 local HTTP_PORT = PORTS[1]
-local PLUGIN_VERSION = "3.8"
+local PLUGIN_VERSION = "3.9"
 local WEB_BRIDGE_URL = "https://www.rrotex.com/api/plugin-bridge"
 
 local HttpService          = game:GetService("HttpService")
@@ -763,17 +763,30 @@ local function handleInsertToolboxModel(action)
 		inserted.Parent = parentInst
 	end
 	if action.name then inserted.Name = action.name end
+	-- Ground-snap + rotate (v3.9): position.y is treated as the GROUND level.
+	-- The old code put the model's arbitrary PrimaryPart AT the coordinate,
+	-- which buried half of most community models underground or left them
+	-- floating. Now the model's bounding-box BOTTOM lands exactly on
+	-- position.y, and an optional `rotation` (degrees around Y) gives maps
+	-- natural variety instead of every prop facing the same way.
+	local yaw = math.rad(tonumber(action.rotation) or 0)
 	if action.position and inserted:IsA("Model") then
-		local ok2 = pcall(function()
-			if not inserted.PrimaryPart then
-				inserted.PrimaryPart = inserted:FindFirstChildWhichIsA("BasePart", true)
-			end
-			if inserted.PrimaryPart then
-				inserted:SetPrimaryPartCFrame(CFrame.new(action.position[1] or 0, action.position[2] or 5, action.position[3] or 0))
-			end
+		pcall(function()
+			local bbCf, size = inserted:GetBoundingBox()
+			local pivotOffset = bbCf.Position - inserted:GetPivot().Position
+			local x = tonumber(action.position[1]) or 0
+			local groundY = tonumber(action.position[2]) or 0
+			local z = tonumber(action.position[3]) or 0
+			local pivotTarget = Vector3.new(x, groundY + size.Y / 2, z) - pivotOffset
+			inserted:PivotTo(CFrame.new(pivotTarget) * CFrame.Angles(0, yaw, 0))
 		end)
 	elseif action.position and inserted:IsA("BasePart") then
-		inserted.CFrame = CFrame.new(action.position[1] or 0, action.position[2] or 5, action.position[3] or 0)
+		pcall(function()
+			local x = tonumber(action.position[1]) or 0
+			local groundY = tonumber(action.position[2]) or 0
+			local z = tonumber(action.position[3]) or 0
+			inserted.CFrame = CFrame.new(x, groundY + inserted.Size.Y / 2, z) * CFrame.Angles(0, yaw, 0)
+		end)
 	end
 	ChangeHistoryService:SetWaypoint("ROTEX InsertToolboxModel Done")
 	return true, "Inserted Toolbox asset " .. tostring(assetId) .. " as " .. inserted.Name

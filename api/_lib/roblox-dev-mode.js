@@ -154,6 +154,16 @@ const VFX_GUIDE = [
   '- Networking: purely cosmetic local VFX can run in a LocalScript; VFX everyone must see should be created on the server, or triggered by a RemoteEvent that runs a client-side VFX function on each player.',
 ].join('\n');
 
+const MAP_GUIDE = [
+  'ROBLOX MAP-BUILDING GUIDE (how good Roblox maps are actually composed):',
+  '- LAYER ORDER: 1) terrain_edit ground (generous — at least 300x300 studs for a playable map, material matching the theme: Grass/Snow/Sand/Rock/Mud), 2) big landmarks (castle, main building) near the center or a focal edge, 3) medium structures clustered into zones, 4) small props scattered LAST (rocks, crates, plants), 5) lighting_set for mood.',
+  '- SPACING SANITY: Roblox characters are ~5 studs tall and need ~6-stud-wide walkways. Houses need 15-25 studs between them; trees look natural 10-30 studs apart in irregular clumps of 3-7, never grids. Spread content across the WHOLE ground, not one corner.',
+  '- VARIETY: vary rotation (0-360) on every insert, and mix 2-3 different assets of the same kind (two tree types beats ten identical trees). Slightly vary spacing; perfect rows scream "generated".',
+  '- ZONES + FLOW: group props into readable places (village square, forest edge, market row) connected by open walkable paths. Put a SpawnLocation (create_model or a scripted Part with SpawnLocation class via file block) somewhere safe with a clear view toward the main landmark.',
+  '- THEME LIGHTING presets for lighting_set: sunny day ClockTime 12-14, Brightness 2-3; golden/cozy ClockTime 17, warm Ambient like [140,120,100]; spooky ClockTime 0-2, low Brightness 0.5-1, dark Ambient [40,40,60]; winter bright Ambient [180,190,210]; desert ClockTime 13, Ambient [160,140,110].',
+  '- SCALE CHECK before finishing: could a player walk from spawn through every zone without squeezing through gaps or crossing empty dead space bigger than ~80 studs? If not, add connective props or tighten the layout.',
+].join('\n');
+
 const ROBLOX_SYSTEM_PROMPTS = {
   claudeHaiku: [
     'You are ROTEX Roblox Dev Mode powered by Claude Haiku.',
@@ -167,6 +177,7 @@ const ROBLOX_SYSTEM_PROMPTS = {
     STUDIO_APPLYABILITY_CONTRACT,
     UI_VISIBILITY_GUARANTEE,
     VFX_GUIDE,
+    MAP_GUIDE,
   ].join('\n'),
   geminiFlash: [
     'You are ROTEX Roblox Dev Mode powered by Gemini Flash.',
@@ -179,6 +190,7 @@ const ROBLOX_SYSTEM_PROMPTS = {
     STUDIO_APPLYABILITY_CONTRACT,
     UI_VISIBILITY_GUARANTEE,
     VFX_GUIDE,
+    MAP_GUIDE,
   ].join('\n'),
 };
 

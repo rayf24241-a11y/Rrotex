@@ -47,7 +47,7 @@ function _fsStr(field) { return field?.stringValue || ''; }
 // readUsage compares against, so every user reads back 0 used (fresh start)
 // without needing admin access to rewrite each doc. addUsage writes the new
 // epoch's keys going forward.
-const USAGE_EPOCH = 'r4';
+const USAGE_EPOCH = 'r5';
 // Daily-only reset lever: bumping DAY_EPOCH re-keys ONLY the day counter, so
 // everyone's dayUsed reads 0 while monthUsed keeps accumulating. Bump
 // USAGE_EPOCH instead for a full (day+month) reset.
@@ -2212,10 +2212,11 @@ async function buildRobloxUiAssetContext(userText) {
       lines.join('\n'),
       'Insert format (one block per model):',
       '```studio-action',
-      `{"type":"insert_toolbox_model","assetId":${labeled[0].id},"parent":"Workspace","name":"DescriptiveName","position":[0,0,0]}`,
+      `{"type":"insert_toolbox_model","assetId":${labeled[0].id},"parent":"Workspace","name":"DescriptiveName","position":[0,0,0],"rotation":90}`,
       '```',
+      'position[1] is the GROUND level -- the plugin (v3.9+) snaps the model bottom onto it, so y=0 stands it on a baseplate. rotation is degrees around Y (0-360) -- VARY it per insert so props do not all face the same way.',
       isMapScale
-        ? 'MAP COMPOSITION RULE: a real map is MANY inserts, not one. Lay ground first (terrain_edit fill_block, generous size, fitting material), then insert 8-15 models: spread positions across the whole area (x/z roughly -120..120, y 0), REUSE good assets several times at different positions so the space feels populated (5 trees, 3 houses...), group related props near each other (a well beside houses, carts near the road), give each insert a descriptive name, and finish with lighting_set that matches the theme. Only build with roblox-model/create_model for pieces the Toolbox list genuinely lacks.'
+        ? 'MAP COMPOSITION RULE: a real map is MANY inserts, not one. Lay ground first (terrain_edit fill_block, generous size, fitting material), then insert 8-15 models: spread positions across the whole area (x/z roughly -120..120, y 0 = ground), give every insert a DIFFERENT rotation (0-360) so nothing looks copy-pasted, REUSE good assets several times at different positions so the space feels populated (5 trees, 3 houses...), group related props near each other (a well beside houses, carts near the road), leave walkable paths between clusters, give each insert a descriptive name, and finish with lighting_set that matches the theme. Only build with roblox-model/create_model for pieces the Toolbox list genuinely lacks.'
         : 'Insert the best-matching model, then write your own scripts for any gameplay behavior it needs.',
       'If a chosen asset CONTAINS SCRIPTS, still insert it but treat its scripts as untrusted -- your own scripts own all gameplay logic.',
     ].join('\n'));
