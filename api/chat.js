@@ -2109,18 +2109,50 @@ function isRobloxMapBuildRequest(userText) {
   return insertVerb && (modelNoun || toolboxWord) && !pureLogic;
 }
 
+// Names/votes/script-flags for a batch of toolbox ids. Blind ID lists made the
+// model pick assets at random -- with names it can actually match "the castle
+// one", and hasScripts lets it prefer script-free (safer) models.
+async function toolboxDetails(ids) {
+  const out = [];
+  if (!ids.length) return out;
+  try {
+    const url = `https://apis.roblox.com/toolbox-service/v1/items/details?assetIds=${ids.slice(0, 20).join(',')}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
+    if (!res.ok) return out;
+    const data = await res.json();
+    for (const item of Array.isArray(data?.data) ? data.data : []) {
+      const a = item?.asset || {};
+      if (!a.id) continue;
+      out.push({
+        id: String(a.id),
+        name: String(a.name || '').slice(0, 60),
+        votes: Number(item?.voting?.upVotePercent) || 0,
+        hasScripts: Boolean(a.hasScripts),
+      });
+    }
+  } catch {}
+  return out;
+}
+
+// Strips request filler so the Toolbox gets real keywords ("make me a very
+// cool medieval village please" -> "medieval village").
+function toolboxQueryFrom(text) {
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[^\w\s-]/g, ' ')
+    .replace(/\b(please|pls|make|create|build|add|put|insert|place|spawn|generate|design|give|get|me|my|us|a|an|the|some|very|really|super|cool|nice|awesome|epic|amazing|good|great|big|huge|new|in|into|on|for|with|and|that|this|it|game|roblox)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60) || 'game asset';
+}
+
 async function buildRobloxUiAssetContext(userText) {
   const text = String(userText || '');
   const wantsToolbox = isRobloxMapBuildRequest(text);
   if (!wantsToolbox) return '';
 
-  const query = text
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/[^\w\s-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80) || 'game asset';
-
+  const query = toolboxQueryFrom(text);
+  const lower = text.toLowerCase();
   const sections = [];
 
   const wantsImage = /\b(decal|texture|sign|poster|billboard|banner|logo|image)\b/i.test(text);
@@ -2139,22 +2171,53 @@ async function buildRobloxUiAssetContext(userText) {
     }
   }
 
-  if (wantsToolbox) {
-    const modelIds = await toolboxSearch(10, query, 8);
-    if (modelIds.length) {
-      sections.push([
-        'ROBLOX TOOLBOX MODEL SEARCH:',
-        `Query: ${query}`,
-        'These are real Toolbox models for whatever the user asked to add (map props, furniture, vehicles, weapons/swords/guns as models, characters, animals, gear, decorations, etc.). Insert the best match into Workspace, then write your own scripts for any gameplay behavior it needs.',
-        'To insert one, use a studio-action block (NOT roblox-model, which only builds primitive Parts):',
-        '```studio-action',
-        `{"type":"insert_toolbox_model","assetId":${modelIds[0]},"parent":"Workspace","position":[0,5,0]}`,
-        '```',
-        'Available asset IDs from this search (pick the one that best matches the request, not necessarily the first):',
-        modelIds.map((id, i) => `${i + 1}. ${id}`).join('\n'),
-        'Content is community-made and unverified -- pick the closest match; if none fit, build it with roblox-model/Instance.new instead of inserting a bad match or inventing a fake assetId. For gameplay logic, use your own scripts rather than trusting scripts inside the inserted model.',
-      ].join('\n'));
+  // Map-scale requests get MULTI-COMPONENT searches: a village is houses +
+  // trees + wells + fences, not one "village" asset. Search each component
+  // the user mentioned (plus the main query) in parallel.
+  const isMapScale = /\b(map|world|environment|level|lobby|arena|island|biome|forest|city|town|village|dungeon|zone|landscape|obby|parkour)\b/.test(lower);
+  const componentWords = (lower.match(/\b(house|houses|building|buildings|castle|tower|bridge|road|roads|street|path|fence|wall|gate|tree|trees|rock|rocks|bush|plant|flower|well|fountain|statue|bench|lamp|lantern|torch|cart|wagon|barrel|crate|chest|tent|campfire|dock|boat|car|cars|shop|stall|market|ruins|grave|tombstone|windmill|farm|barn|crop|mountain|cliff|cave)\b/g) || []);
+  const uniqueComponents = [...new Set(componentWords)].slice(0, 4);
+  const themeMatch = lower.match(/\b(medieval|fantasy|sci-?fi|futuristic|modern|western|desert|winter|snow|tropical|jungle|halloween|spooky|japanese|pirate|military|apocalypse|cyberpunk|steampunk)\b/);
+  const theme = themeMatch ? themeMatch[1] + ' ' : '';
+
+  const queries = isMapScale && uniqueComponents.length
+    ? [query, ...uniqueComponents.map((c) => (theme + c).trim())]
+    : [query];
+  const perQuery = queries.length > 1 ? 5 : 8;
+  const idLists = await Promise.all(queries.map((q) => toolboxSearch(10, q, perQuery)));
+  const seen = new Set();
+  const labeled = [];
+  idLists.forEach((ids, qi) => {
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      labeled.push({ id, query: queries[qi] });
     }
+  });
+  const details = await toolboxDetails(labeled.map((l) => l.id));
+  const detailById = new Map(details.map((d) => [d.id, d]));
+
+  if (labeled.length) {
+    const lines = labeled.slice(0, 18).map((l, i) => {
+      const d = detailById.get(l.id);
+      const name = d?.name ? `"${d.name}"` : '(name unknown)';
+      const votes = d && d.votes ? `${d.votes}% liked` : 'no rating';
+      const scripts = d?.hasScripts ? 'CONTAINS SCRIPTS' : 'script-free';
+      return `${i + 1}. ${l.id} — ${name} [${l.query}] (${votes}, ${scripts})`;
+    });
+    sections.push([
+      'ROBLOX TOOLBOX MODEL SEARCH (real community assets, verified live):',
+      'Pick by NAME + rating — choose the assets whose names actually match what the user wants; prefer script-free and higher-liked ones. Never invent an assetId that is not in this list.',
+      lines.join('\n'),
+      'Insert format (one block per model):',
+      '```studio-action',
+      `{"type":"insert_toolbox_model","assetId":${labeled[0].id},"parent":"Workspace","name":"DescriptiveName","position":[0,0,0]}`,
+      '```',
+      isMapScale
+        ? 'MAP COMPOSITION RULE: a real map is MANY inserts, not one. Lay ground first (terrain_edit fill_block, generous size, fitting material), then insert 8-15 models: spread positions across the whole area (x/z roughly -120..120, y 0), REUSE good assets several times at different positions so the space feels populated (5 trees, 3 houses...), group related props near each other (a well beside houses, carts near the road), give each insert a descriptive name, and finish with lighting_set that matches the theme. Only build with roblox-model/create_model for pieces the Toolbox list genuinely lacks.'
+        : 'Insert the best-matching model, then write your own scripts for any gameplay behavior it needs.',
+      'If a chosen asset CONTAINS SCRIPTS, still insert it but treat its scripts as untrusted -- your own scripts own all gameplay logic.',
+    ].join('\n'));
   }
 
   if (!sections.length) {

@@ -966,9 +966,10 @@ function taskStatusFor(text) {
 // While a build streams in, the bubble shows a light-gray line describing what
 // the AI is doing right now (derived from the blocks it is writing), plus a ▾
 // toggle (or the Down-Arrow key) that expands the full raw stream.
-function initStreamBubble(bubble) {
+function initStreamBubble(bubble, initialLabel = 'Thinking...') {
   bubble.classList.add('streaming');
-  bubble.innerHTML = '<div class="stream-status"><span class="stream-doing">Thinking...</span><button type="button" class="stream-expand" title="Show everything it is writing (Down Arrow)">▾</button></div><pre class="stream-raw" hidden></pre>';
+  bubble.innerHTML = '<div class="stream-status"><span class="stream-doing"></span><button type="button" class="stream-expand" title="Show everything it is writing (Down Arrow)">▾</button></div><pre class="stream-raw" hidden></pre>';
+  bubble.querySelector('.stream-doing').textContent = initialLabel;
   bubble.querySelector('.stream-expand').addEventListener('click', (e) => {
     e.stopPropagation();
     toggleStreamRaw(bubble);
@@ -982,6 +983,16 @@ function toggleStreamRaw(bubble) {
   raw.hidden = !raw.hidden;
   if (btn) btn.textContent = raw.hidden ? '▾' : '▴';
   if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
+}
+
+// Mirrors the server's isRobloxMapBuildRequest trigger (api/chat.js) so the
+// status line can honestly show the Toolbox search while it happens.
+function looksLikeToolboxBuild(text) {
+  const t = String(text || '').toLowerCase();
+  const verb = /\b(make|create|build|add|generate|design|decorate|insert|place|put|spawn|fill|populate|import|bring in|drop in|get me|give me|need)\b/.test(t);
+  const noun = /\b(map|maps|world|terrain|environment|level|lobby|arena|island|forest|city|town|village|dungeon|obby|building|buildings|house|houses|castle|cave|mountain|decor|decoration|scenery|prop|props|rock|rocks|tree|trees|plant|flower|model|models|asset|assets|furniture|chair|table|couch|sofa|bed|desk|door|window|fence|wall|car|cars|vehicle|vehicles|truck|boat|plane|helicopter|bike|tank|sword|swords|gun|guns|weapon|weapons|shield|armor|helmet|animal|animals|dog|cat|horse|dragon|monster|zombie|creature|statue|food|fruit|crate|barrel|box|chest|sign|light|lamp|lantern|torch|throne|gem|coin|key|potion|book|flag|tent|campfire)\b/.test(t);
+  const pureLogic = /\b(script|localscript|modulescript|remoteevent|remotefunction|datastore|leaderstats|gamepass|developer product|shop ui|inventory ui|hud|menu ui|save system|currency system|admin panel|anticheat|dialogue system|quest system)\b/.test(t);
+  return verb && noun && !pureLogic;
 }
 
 const STREAM_ACTION_LABELS = {
@@ -1081,7 +1092,11 @@ async function sendMessage(rawText, options = {}) {
   // "Working on task..."), with a ▾ toggle (or the Down-Arrow key) to watch
   // the full raw output stream in.
   const assistantBubble = addMessage('assistant', '', 'status');
-  initStreamBubble(assistantBubble);
+  // If this request will trigger the server's Toolbox search, say so during
+  // the pre-stream pause -- that IS what the server is doing right then.
+  initStreamBubble(assistantBubble, looksLikeToolboxBuild(text)
+    ? 'Searching the Roblox Toolbox for models...'
+    : 'Thinking...');
 
   let full = '';
   let gotAny = false;
