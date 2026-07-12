@@ -527,18 +527,22 @@ function buildPlannerPrompt(currentSpec, userMessage, projectMode, recentContext
 
 // Never throws; on ANY failure (timeout, HTTP error, empty or shape-invalid
 // output) returns { plan: '', spec: <unchanged current spec> }.
-async function generatePlannerBrief(currentSpec, userMessage, projectMode, recentContext) {
+async function generatePlannerBrief(currentSpec, userMessage, projectMode, recentContext, effort = 'low') {
   const fallbackSpec = String(currentSpec || '').trim().slice(0, PROJECT_SPEC_CAP);
   const fallback = { plan: '', spec: fallbackSpec };
   try {
+    // Effort-aware planning: Medium/Hard paid for more thinking time, so the
+    // free planner gets a longer window and more room for a deeper plan.
+    // Still fail-open — a slow planner drops the plan and proceeds. Worst
+    // case (12s) plus the main cascade's ~70s still fits the 90s ceiling.
+    const plannerTimeout = effort === 'high' ? 12000 : effort === 'medium' ? 9000 : 7000;
+    const plannerTokens = effort === 'high' ? 2200 : 1400;
     const result = await tbOrPost('/chat/completions', {
       model: process.env.PROJECT_SPEC_MODEL || 'qwen/qwen3-coder:free',
       messages: buildPlannerPrompt(fallbackSpec, userMessage, projectMode, recentContext),
-      max_tokens: 1400,
+      max_tokens: plannerTokens,
       temperature: 0.3,
-    }, 7000); // trimmed 9s -> 7s: the free planner model is usually 1-4s, so this
-              // cuts worst-case added latency before the real answer with no
-              // downside (fail-open drops the plan and proceeds if it's slow).
+    }, plannerTimeout);
     const text = String(result?.choices?.[0]?.message?.content || '').trim();
     if (!text) return fallback;
 
@@ -1280,7 +1284,7 @@ module.exports = async function handler(request, response) {
       .slice(-7, -1)
       .map((m) => `${m.role === 'user' ? 'USER' : 'ROTEX'}: ${String(m.content || '').replace(/\s+/g, ' ').slice(0, 320)}`)
       .join('\n');
-    const brief = await generatePlannerBrief(projectSpecText, lastUser?.content || '', projectMode, recentContext);
+    const brief = await generatePlannerBrief(projectSpecText, lastUser?.content || '', projectMode, recentContext, effort);
     plannerPlanText = brief.plan;
     projectSpecText = brief.spec;
     projectSpecGenerated = true;
@@ -2759,7 +2763,9 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
     usage: {
       input_tokens: context.estimate.inputTokens,
       output_tokens: context.estimate.outputTokens,
-      textokens_charged: context.estimate.textokens,
+      // Settled (post-refund) charge when the settle-up ran; the lean
+      // estimate is only the fallback for paths that end before settling.
+      textokens_charged: context._settledCharge ?? context.estimate.textokens,
     },
   });
   const heartbeat = setInterval(() => {
@@ -2868,6 +2874,10 @@ async function streamResponse(response, providerCall, cleanMessages, cleanAttach
           if (context.ipKey && context.ipKey !== context.freeKey) addFreeTokensUsed(context.ipKey, settleDelta);
           if (context.authUid && context.authToken) addUsage(context.authUid, context.authToken, settleDelta).catch(() => {});
         }
+        // Report the SETTLED charge to the client, not the pre-charge estimate
+        // -- otherwise a short reply visibly "costs" the full estimate and the
+        // balance looks wrong until the next server sync.
+        context._settledCharge = Math.max(0, Math.ceil(actual));
       }
       sseWrite(response, donePayload());
       clearInterval(heartbeat);

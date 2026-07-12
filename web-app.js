@@ -1065,7 +1065,13 @@ async function sendMessage(rawText, options = {}) {
   let full = '';
   let gotAny = false;
   try {
-    const history = state.messages.slice(-18).map((m) => ({ role: m.role, content: m.content }));
+    // Greetings/small talk don't need (or want) the full game context and a
+    // deep history -- every character of both is billed as model input, which
+    // made "hi" cost real TexTokens. Mirror of the server classifier's
+    // greeting regex: pure greetings only, so "hi can you build X" still gets
+    // the full payload.
+    const isSmallTalk = /^\s*(hi+|hello+|hey+|yo+|sup|wsg|wassup|what'?s ?up|bruh+|lol+|lmao+|xd|wow+|ok(ay)?|k|ty|thx|thanks?( you)?|good (morning|afternoon|evening)|are you (there|real|alive)|u there)[\s!.?~]*$/i.test(text);
+    const history = state.messages.slice(isSmallTalk ? -4 : -18).map((m) => ({ role: m.role, content: m.content }));
     const modeForServer = 'editor';
     const authToken = state.user ? await state.user.getIdToken(true).catch(() => state.idToken || '') : '';
     if (authToken) state.idToken = authToken; // keep the cached token fresh for other calls
@@ -1077,7 +1083,9 @@ async function sendMessage(rawText, options = {}) {
         model: els.model.value || 'google-flash',
         messages: history,
         projectMode: 'Roblox',
-        projectContext: buildProjectContext(),
+        projectContext: isSmallTalk
+          ? 'ROTEX UI MODE: AGENT.\n(Small-talk message: full project context intentionally omitted. Reply conversationally; do not build.)'
+          : buildProjectContext(),
         projectMemory: localStorage.getItem('rotex_project_memory') || '',
         projectSpec: localStorage.getItem('rotex_project_spec') || '',
         proPass: localStorage.getItem('rotex_pro_pass') || '',
@@ -1087,8 +1095,9 @@ async function sendMessage(rawText, options = {}) {
         superAgent: false,
         category: 'auto',
         // Effort mode: the picker (app.html) persists to this key; the server
-        // is authoritative about what each level costs.
-        effort: (['low', 'medium', 'high'].includes(localStorage.getItem('rotex_web_effort')) ? localStorage.getItem('rotex_web_effort') : 'low'),
+        // is authoritative about what each level costs. Small talk is always
+        // sent at low effort -- nobody should pay 2x for "hi" in Hard mode.
+        effort: isSmallTalk ? 'low' : (['low', 'medium', 'high'].includes(localStorage.getItem('rotex_web_effort')) ? localStorage.getItem('rotex_web_effort') : 'low'),
       }),
     });
 
