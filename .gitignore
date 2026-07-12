@@ -9,3 +9,5 @@ downloads/single-exe/
 .env
 firebase-config.local.js
 .env*
+
+.env*

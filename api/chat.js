@@ -51,7 +51,13 @@ const USAGE_EPOCH = 'r4';
 function _dayKey()   { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 10); }
 function _monthKey() { return USAGE_EPOCH + '-' + new Date().toISOString().slice(0, 7); }
 async function readUsage(uid, authToken) {
-  if (!uid || !authToken || !FIREBASE_PROJECT_ID) return null;
+  if (!uid) return null;
+  // Redis first (server-only, reliable, unfakeable). The legacy Firestore doc
+  // below used the USER'S token -- it failed silently on token/rules issues
+  // (caps never enforced, display drifting) and was client-writable.
+  const kv = await tokenWallet.usageRead(uid, _dayKey(), _monthKey());
+  if (kv) return kv;
+  if (!authToken || !FIREBASE_PROJECT_ID) return null;
   try {
     const res = await fetch(_usageDocUrl(uid), { headers: { Authorization: `Bearer ${authToken}` } });
     if (res.status === 404) return { dayUsed: 0, monthUsed: 0 };
@@ -81,7 +87,14 @@ async function readBalance(uid, authToken) {
 // Accepts negative amounts (settle-up refunds when the pre-charge estimate
 // exceeded the real response cost); counters never go below 0.
 async function addUsage(uid, authToken, amount) {
-  if (!uid || !authToken || !FIREBASE_PROJECT_ID || !amount) return;
+  if (!uid || !amount) return;
+  // Redis first -- no auth token needed, works even when the Firebase token is
+  // stale, and the user can't tamper with it.
+  if (tokenWallet.walletEnabled()) {
+    await tokenWallet.usageAdd(uid, _dayKey(), _monthKey(), amount).catch(() => {});
+    return;
+  }
+  if (!authToken || !FIREBASE_PROJECT_ID) return;
   try {
     const cur = (await readUsage(uid, authToken)) || { dayUsed: 0, monthUsed: 0 };
     const body = { fields: {

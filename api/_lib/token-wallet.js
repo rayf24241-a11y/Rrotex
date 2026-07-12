@@ -86,4 +86,43 @@ async function spend(uid, amount) {
   } catch {}
 }
 
-module.exports = { walletEnabled, getBalance, seed, credit, spend };
+// ── Usage counters (dayUsed / monthUsed, internal units) ────────────────────
+// Server-authoritative usage lives here too: the old Firestore usage doc was
+// read/written with the USER'S token, which (a) failed silently whenever the
+// token/rules disagreed -- caps never enforced, balance display drifting from
+// reality -- and (b) was client-writable, so a user could zero their own
+// usage. Redis is server-only and reliable. Keys embed the caller-supplied
+// day/month keys (which carry USAGE_EPOCH, so an epoch bump still resets
+// everyone). Amounts are signed: the settle-up refunds by adding a negative.
+const USAGE_PREFIX = 'rotex:usage:';
+
+async function usageAdd(uid, dayKey, monthKey, amount) {
+  const key = cleanId(uid);
+  const amt = Math.round(Number(amount) || 0);
+  if (!key || !amt || !walletEnabled()) return;
+  try {
+    const d = USAGE_PREFIX + key + ':' + cleanId(dayKey);
+    const m = USAGE_PREFIX + key + ':' + cleanId(monthKey);
+    await redisCommand('INCRBY', d, String(amt));
+    await redisCommand('EXPIRE', d, String(3 * 24 * 60 * 60));
+    await redisCommand('INCRBY', m, String(amt));
+    await redisCommand('EXPIRE', m, String(45 * 24 * 60 * 60));
+  } catch {}
+}
+
+// Returns { dayUsed, monthUsed } (clamped at 0), or null when KV is off /
+// unreachable so callers can fall back to the legacy Firestore read.
+async function usageRead(uid, dayKey, monthKey) {
+  const key = cleanId(uid);
+  if (!key || !walletEnabled()) return null;
+  try {
+    const d = await redisCommand('GET', USAGE_PREFIX + key + ':' + cleanId(dayKey));
+    const m = await redisCommand('GET', USAGE_PREFIX + key + ':' + cleanId(monthKey));
+    return {
+      dayUsed: Math.max(0, Math.floor(Number(d) || 0)),
+      monthUsed: Math.max(0, Math.floor(Number(m) || 0)),
+    };
+  } catch { return null; }
+}
+
+module.exports = { walletEnabled, getBalance, seed, credit, spend, usageAdd, usageRead };
