@@ -1,0 +1,78 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ROTEX Dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["dev-server.cjs"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "jr-ray-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "C:\\Users\\rayf2\\jr-ray\\renderer", "-p", "8123", "-c-1"],
+      "port": 8123
+    },
+    {
+      "name": "meshy-studio",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\rayf2\\meshy-studio\\server\\index.js"],
+      "port": 4173
+    },
+    {
+      "name": "rays-coworker",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\rayf2\\rays-coworker\\server\\server.js"],
+      "port": 44757
+    },
+    {
+      "name": "unitigh",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\rayf2\\unitigh\\server\\server.js"],
+      "port": 44761
+    },
+    {
+      "name": "unity-mcp-app",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\rayf2\\unity-mcp-app\\server\\server.js"],
+      "port": 44760
+    },
+    {
+      "name": "smoothland",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\rayf2\\smoothland\\server.js"],
+      "port": 9999
+    },
+    {
+      "name": "raysites",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5599", "--bind", "127.0.0.1", "--directory", "C:\\Users\\rayf2\\raysites"],
+      "port": 5599
+    },
+    {
+      "name": "car3d",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5601", "--bind", "127.0.0.1", "--directory", "C:\\Users\\rayf2\\car3d"],
+      "port": 5601
+    },
+    {
+      "name": "nsdt",
+      "runtimeExecutable": "C:\\Users\\rayf2\\nsdt\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["C:\\Users\\rayf2\\nsdt\\app.py"],
+      "port": 5050
+    },
+    {
+      "name": "n8-speed-local-ui",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["C:\\Users\\rayf2\\n8-speed\\local-ui\\server.py"],
+      "port": 7860
+    },
+    {
+      "name": "n8-speed-scratchpad-viewer",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5602", "--bind", "127.0.0.1", "--directory", "C:\\Users\\rayf2\\AppData\\Local\\Temp\\claude\\C--Users-rayf2-rrotex\\941aff94-8077-4bbd-9373-0b57a26220af\\scratchpad"],
+      "port": 5602
+    }
+  ]
+}

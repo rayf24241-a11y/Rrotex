@@ -1,0 +1,24 @@
+downloads/**
+build/**
+
+# Local-only ML training project (Roland / GPU trainer) that happens to live
+# in this same working directory -- not part of the website. gpu_env alone
+# is a 21,000+ file Python venv that pushed the deploy over Vercel's
+# 15,000-file upload limit ("files should NOT have more than 15000 items").
+gpu_env/**
+model_checkpoints/**
+training_docs/**
+bench/**
+examples/**
+templates/**
+__pycache__/**
+**/__pycache__/**
+
+# Local logs, editor/agent config, and local env -- never part of the site.
+*.log
+.env
+.env.*
+.claude/**
+dev-server.cjs
+RojoConnectionManager.js
+godaddy-dns.ps1

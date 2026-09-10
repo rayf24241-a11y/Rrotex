@@ -1,0 +1,10 @@
+{
+  "name": "rrotex",
+  "version": "1.17.27",
+  "private": true,
+  "dependencies": {
+    "@clerk/backend": "^3.17.1",
+    "@upstash/redis": "^1.34.3",
+    "stripe": "^22.6.1"
+  }
+}

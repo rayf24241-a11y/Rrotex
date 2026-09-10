@@ -1,0 +1,2320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>rrotex</title>
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <script
+      async
+      crossorigin="anonymous"
+      data-clerk-publishable-key="pk_test_ZW1pbmVudC1mYWxjb24tNDcuY2xlcmsuYWNjb3VudHMuZGV2JA"
+      src="https://eminent-falcon-47.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+      type="text/javascript"
+    ></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.3.1/dist/model-viewer.min.js"></script>
+    <script type="importmap">
+      { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+    </script>
+    <style>
+      @property --ang {
+        syntax: '<angle>';
+        initial-value: 0deg;
+        inherits: false;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        height: 100%; margin: 0;
+      }
+      body {
+        width: 100%;
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url('/cave-bg.png') center/cover no-repeat;
+      }
+      [hidden] { display: none !important; }
+      #homeView, #myModelsView {
+        width: 100%; height: 100%;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #homeView {
+        flex-direction: column;
+        gap: 30px;
+      }
+      .showcase-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px 16px;
+        width: min(90vw, 500px);
+      }
+      .showcase-card {
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      .showcase-frame {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 13px;
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.14);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.03), 0 4px 16px rgba(0,0,0,.35);
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+      }
+      .showcase-frame:hover, .showcase-frame:focus-visible {
+        transform: translateY(-3px);
+        border-color: rgba(255,255,255,.32);
+        box-shadow: 0 8px 22px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.08);
+      }
+      .showcase-frame:focus-visible { outline: 2px solid rgba(255,255,255,.5); outline-offset: 2px; }
+      .showcase-frame::before,
+      .showcase-frame::after {
+        content: '';
+        position: absolute;
+        width: 12px; height: 12px;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .showcase-frame::before {
+        top: 6px; left: 6px;
+        border-top: 1.5px solid rgba(255,255,255,.55);
+        border-left: 1.5px solid rgba(255,255,255,.55);
+        border-radius: 4px 0 0 0;
+      }
+      .showcase-frame::after {
+        bottom: 6px; right: 6px;
+        border-bottom: 1.5px solid rgba(255,255,255,.55);
+        border-right: 1.5px solid rgba(255,255,255,.55);
+        border-radius: 0 0 4px 0;
+      }
+      .showcase-frame model-viewer {
+        width: 100%; height: 100%;
+        --poster-color: transparent;
+      }
+      .showcase-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: rgba(255,255,255,.85);
+      }
+      .showcase-engine {
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: .03em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,.4);
+      }
+      #modelView {
+        position: fixed; inset: 0; z-index: 4;
+        background: #0b0b0d;
+      }
+      .box {
+        position: relative;
+        z-index: 1;
+        width: 480px; height: 200px;
+        padding: 18px 20px;
+        display: flex; flex-direction: column; justify-content: space-between;
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(6px);
+        border: 1.5px solid #c4c4c4;
+        border-radius: 10px;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      .chat-text-wrap {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+      }
+      .fake-placeholder {
+        position: absolute; inset: 0;
+        display: flex; align-items: flex-start;
+        padding-top: 4px;
+        pointer-events: none;
+      }
+      .fake-placeholder.hidden { display: none; }
+      .chat-text {
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 500;
+        color: rgba(255,255,255,.28);
+        line-height: 1.4;
+      }
+      .caret {
+        display: inline-block;
+        width: 2px; height: 1.05em;
+        background: rgba(255,255,255,.28);
+        margin-left: 2px;
+        vertical-align: -0.15em;
+        animation: caret-blink 1s steps(1) infinite;
+      }
+      @keyframes caret-blink { 50% { opacity: 0; } }
+      .chat-input {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        padding: 4px 0 0;
+        border: none; outline: none; resize: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 1.4;
+        color: #ffffff;
+      }
+      .chat-input::placeholder { color: transparent; }
+
+      .box-footer {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px;
+      }
+      .box::before {
+        content: '';
+        position: absolute; inset: -1.5px;
+        border-radius: 11.5px;
+        padding: 1.5px;
+        background: conic-gradient(from var(--ang), transparent 0deg, transparent 300deg, #ffffff 335deg, #ffffff 360deg);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        filter: drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px rgba(255,255,255,.7));
+        animation: spin 3s linear infinite;
+        pointer-events: none;
+      }
+      @keyframes spin { to { --ang: 360deg; } }
+
+      .model-picker {
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        user-select: none;
+      }
+      .toggle {
+        position: relative;
+        display: inline-flex;
+        background: rgba(20,20,20,.55);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 999px;
+        padding: 3px;
+        box-shadow: 0 6px 18px rgba(0,0,0,.3);
+      }
+      .toggle-thumb {
+        position: absolute; top: 3px; bottom: 3px; left: 3px;
+        width: calc(50% - 3px);
+        background: rgba(255,255,255,.14);
+        border-radius: 999px;
+        transition: transform .22s cubic-bezier(.22,.9,.3,1);
+      }
+      .toggle.oran-active .toggle-thumb { transform: translateX(100%); }
+
+      .toggle-btn {
+        position: relative;
+        border: none; background: transparent;
+        padding: 7px 13px;
+        border-radius: 999px;
+        font-family: inherit;
+        font-size: 11.5px;
+        font-weight: 700;
+        letter-spacing: .01em;
+        color: rgba(255,255,255,.5);
+        cursor: pointer;
+        transition: color .15s ease;
+      }
+      .toggle-btn.active { color: #ffffff; }
+      .toggle-btn.locked { cursor: not-allowed; }
+      .toggle-btn.locked:hover { color: rgba(255,255,255,.7); }
+
+      .toast {
+        position: fixed; top: 18px; left: 50%;
+        transform: translateX(-50%) translateY(-14px);
+        background: rgba(24,24,24,.92);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 10px;
+        padding: 11px 18px;
+        color: #f2f2f2;
+        font: 600 12.5px Inter, ui-sans-serif, system-ui, sans-serif;
+        max-width: min(90vw, 360px);
+        text-align: center;
+        box-shadow: 0 16px 34px rgba(0,0,0,.4);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease, transform .25s ease;
+        z-index: 30;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+        pointer-events: auto;
+      }
+      .toast b { color: #ffb15e; }
+      .toast a { color: #93c5fd; text-decoration: underline; cursor: pointer; }
+
+      .drop-zone {
+        position: relative;
+        flex: 0 0 auto;
+        width: 38px; height: 38px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1.5px dashed rgba(255,255,255,.32);
+        border-radius: 9px;
+        color: rgba(255,255,255,.55);
+        cursor: pointer;
+        background-size: cover; background-position: center;
+        transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+      }
+      .drop-zone:hover {
+        border-color: rgba(255,255,255,.6);
+        background-color: rgba(255,255,255,.08);
+        color: #ffffff;
+      }
+      .drop-zone.dragover {
+        border-color: #ffb15e;
+        background-color: rgba(255,177,94,.12);
+        color: #ffb15e;
+      }
+      .drop-zone svg { width: 16px; height: 16px; }
+      .drop-zone.has-image svg { display: none; }
+      .drop-zone.has-image { border-style: solid; cursor: default; }
+
+      .remove-img-btn {
+        display: none;
+        position: absolute; top: -6px; right: -6px;
+        width: 16px; height: 16px;
+        align-items: center; justify-content: center;
+        border-radius: 50%;
+        background: #1c1c1c;
+        border: 1px solid rgba(255,255,255,.35);
+        color: #ffffff;
+        font-size: 10px; line-height: 1;
+        padding: 0;
+        cursor: pointer;
+      }
+      .drop-zone.has-image .remove-img-btn { display: flex; }
+      .remove-img-btn:hover {
+        background: #2a2a2a;
+        border-color: #ffffff;
+      }
+
+      /* ── Model view ─────────────────────────────────────────────── */
+      .back-btn {
+        position: fixed; top: 18px; left: 18px; z-index: 5;
+        display: flex; align-items: center; gap: 6px;
+        padding: 9px 14px 9px 11px;
+        background: rgba(20,20,20,.55);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 999px;
+        color: #f2f2f2;
+        font-family: inherit; font-size: 12.5px; font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 6px 18px rgba(0,0,0,.3);
+        transition: background .18s ease, border-color .18s ease;
+      }
+      .back-btn:hover { background: rgba(30,30,30,.7); border-color: rgba(255,255,255,.28); }
+      .back-btn svg { width: 14px; height: 14px; }
+
+      .spinner {
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        border: 3px solid rgba(255,255,255,.18);
+        border-top-color: #ffffff;
+        animation: spin-loader .8s linear infinite;
+      }
+      @keyframes spin-loader { to { transform: rotate(360deg); } }
+
+      /* ── Generation workspace: a full-bleed dark 3D viewport (like a real
+           modeling tool) with the rail + controls floating over it ──── */
+      .workspace {
+        position: relative;
+        width: 100%; height: 100%;
+      }
+      .workspace-controls {
+        position: absolute; top: 76px; left: 20px; z-index: 2;
+        display: flex; gap: 12px;
+      }
+      .workspace-rail {
+        width: 52px; flex: 0 0 auto; align-self: flex-start;
+        display: flex; flex-direction: column; gap: 6px;
+        background: #18181c;
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 12px;
+        padding: 8px 6px;
+        box-shadow: 0 16px 36px rgba(0,0,0,.5);
+      }
+      .rail-tab {
+        display: flex; align-items: center; justify-content: center;
+        width: 38px; height: 38px;
+        border-radius: 8px; border: none;
+        background: transparent;
+        color: rgba(255,255,255,.4);
+        cursor: pointer;
+        transition: background .15s ease, color .15s ease;
+      }
+      .rail-tab svg { width: 19px; height: 19px; }
+      .rail-tab.active { background: #2a2a30; color: #ffffff; }
+      .rail-tab:not(.active):not(:disabled):hover { color: rgba(255,255,255,.8); background: rgba(255,255,255,.06); }
+      .rail-tab:disabled { opacity: .3; cursor: not-allowed; }
+
+      .workspace-panel {
+        width: 270px; flex: 0 0 auto;
+        background: #18181c;
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 12px;
+        padding: 20px;
+        color: #f2f2f2;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        box-shadow: 0 16px 36px rgba(0,0,0,.5);
+      }
+      .panel-section {
+        display: flex; flex-direction: column; gap: 14px;
+      }
+      .workspace-title {
+        margin: 0 0 2px; font-size: 14px; font-weight: 800; letter-spacing: -.01em;
+      }
+      .workspace-hint {
+        margin: 0; font-size: 12px; line-height: 1.55; color: rgba(255,255,255,.55);
+      }
+      .workspace-label {
+        font-size: 10.5px; font-weight: 800;
+        text-transform: uppercase; letter-spacing: .06em;
+        color: rgba(255,255,255,.4);
+      }
+      .workspace-textarea {
+        width: 100%; min-height: 68px; resize: vertical;
+        background: #0e0e11;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 8px;
+        padding: 10px 11px;
+        color: #ffffff; font-family: inherit; font-size: 12.5px;
+        outline: none;
+        transition: border-color .15s ease;
+      }
+      .workspace-textarea:focus { border-color: rgba(255,255,255,.4); }
+      .poly-row { display: flex; flex-direction: column; gap: 6px; }
+      .poly-row input[type="range"] { width: 100%; accent-color: #f5c518; }
+      .poly-value { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.65); }
+      .workspace-attach-note {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 11px; font-weight: 600; color: rgba(255,255,255,.55);
+      }
+      .workspace-attach-thumb {
+        width: 26px; height: 26px; flex: 0 0 auto;
+        border-radius: 6px;
+        background-size: cover; background-position: center;
+        border: 1px solid rgba(255,255,255,.2);
+      }
+      .generate-btn {
+        width: 100%; padding: 12px 16px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        border-radius: 9px; border: none;
+        background: #f5c518;
+        color: #1a1400; font-family: inherit; font-size: 13.5px; font-weight: 800;
+        cursor: pointer;
+        transition: filter .15s ease, transform .15s ease;
+      }
+      .generate-btn svg { width: 15px; height: 15px; }
+      .generate-btn .btn-cost {
+        display: inline-flex; align-items: center; gap: 3px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(0,0,0,.16);
+        font-size: 12px; font-weight: 800;
+      }
+      .generate-btn:hover { filter: brightness(1.08); }
+      .generate-btn:active { transform: scale(.98); }
+      .generate-btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+
+      .workspace-preview {
+        position: absolute; inset: 0;
+        background-color: #0a0a0c;
+        background-image:
+          radial-gradient(ellipse 1000px 560px at 50% 40%, rgba(255,255,255,.05) 0%, transparent 65%),
+          radial-gradient(circle, rgba(255,255,255,.06) 1px, transparent 1.4px);
+        background-size: auto, 28px 28px;
+        overflow: hidden;
+      }
+      .preview-overlay {
+        position: absolute; inset: 0; z-index: 1;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        padding: 0 24px;
+        color: #f2f2f2;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      .preview-overlay p { margin: 0; text-align: center; font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,.85); }
+      .preview-overlay p.error-text { color: #ff9a9a; }
+      .preview-subtext {
+        margin-top: -6px !important;
+        font-size: 12px !important; font-weight: 500 !important;
+        color: rgba(255,255,255,.45) !important;
+      }
+      .preview-placeholder-icon { width: 42px; height: 42px; color: rgba(255,255,255,.25); }
+      .preview-viewer, .preview-viewer model-viewer { width: 100%; height: 100%; }
+      .preview-fallback {
+        position: absolute; inset: 0; z-index: 1;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+        padding: 0 32px; text-align: center;
+        color: rgba(255,255,255,.7);
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        font-size: 13px; font-weight: 600; line-height: 1.5;
+      }
+      .preview-fallback svg { width: 34px; height: 34px; color: rgba(255,255,255,.3); }
+      .preview-actions {
+        position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 2;
+        display: flex; gap: 10px;
+      }
+      .download-wrap { position: relative; }
+      .download-menu {
+        position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+        min-width: 140px;
+        background: rgba(24,24,24,.95);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 10px;
+        padding: 5px;
+        display: flex; flex-direction: column; gap: 2px;
+        box-shadow: 0 16px 34px rgba(0,0,0,.45);
+      }
+      .download-menu button {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 10px;
+        border: none; border-radius: 7px;
+        background: transparent;
+        color: #f2f2f2;
+        font-family: inherit; font-size: 12.5px; font-weight: 700;
+        cursor: pointer;
+        text-align: left;
+      }
+      .download-menu button:hover { background: rgba(255,255,255,.1); }
+      .download-menu button span { font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.4); }
+
+      .viewport-gizmo {
+        position: absolute; top: 76px; right: 20px; z-index: 2;
+        width: 56px; height: 56px;
+        opacity: .8;
+        pointer-events: none;
+      }
+      .viewport-toolbar {
+        position: absolute; top: 50%; right: 20px; transform: translateY(-50%); z-index: 2;
+        display: flex; flex-direction: column; gap: 8px;
+      }
+      .viewport-tool-btn {
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        background: rgba(255,255,255,.06);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,.12);
+        color: rgba(255,255,255,.7);
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: background .15s ease, color .15s ease;
+      }
+      .viewport-tool-btn:hover { background: rgba(255,255,255,.16); color: #ffffff; }
+      .viewport-tool-btn svg { width: 16px; height: 16px; }
+      .result-btn {
+        display: flex; align-items: center; gap: 7px;
+        padding: 10px 18px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: rgba(255,255,255,.08);
+        color: #f2f2f2;
+        font-family: inherit; font-size: 12.5px; font-weight: 700;
+        cursor: pointer;
+        transition: background .15s ease, border-color .15s ease;
+      }
+      .result-btn:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.3); }
+      .result-btn.primary {
+        background: linear-gradient(135deg, #60a5fa, #a855f7);
+        border-color: transparent;
+      }
+      .result-btn.primary:hover { filter: brightness(1.1); }
+
+      .storage-bar-track {
+        height: 5px; border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        overflow: hidden;
+      }
+      .storage-bar-fill {
+        height: 100%; border-radius: inherit;
+        background: #4ade80;
+        transition: width .25s ease, background .25s ease;
+      }
+      .storage-warning {
+        margin: 6px 0 0; font-size: 11.5px; font-weight: 600;
+        color: #fbbf24;
+      }
+      .storage-warning.full { color: #f87171; }
+
+      /* ── My Models ──────────────────────────────────────────────── */
+      .my-models-panel {
+        width: 100%; max-width: 460px; max-height: 78vh;
+        display: flex; flex-direction: column;
+        background: rgba(20,20,20,.85);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 16px;
+        padding: 22px 22px 18px;
+        color: #f2f2f2;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        box-shadow: 0 30px 80px rgba(0,0,0,.5);
+      }
+      .my-models-header {
+        display: flex; align-items: baseline; justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .my-models-header h2 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+      .my-models-count { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.5); }
+      .my-models-list {
+        display: flex; flex-direction: column; gap: 8px;
+        overflow-y: auto;
+      }
+      .model-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px;
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 10px;
+        background: rgba(255,255,255,.04);
+      }
+      .model-item-thumb {
+        width: 38px; height: 38px; flex: 0 0 auto;
+        border-radius: 8px;
+        background: linear-gradient(155deg, #60a5fa, #a855f7);
+      }
+      .model-item-info { flex: 1; min-width: 0; }
+      .model-item-name {
+        font-size: 13px; font-weight: 700;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .model-item-date { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 2px; }
+      .model-item-delete {
+        flex: 0 0 auto;
+        width: 26px; height: 26px; border-radius: 50%;
+        border: 1px solid rgba(255,255,255,.15);
+        background: rgba(255,255,255,.06);
+        color: rgba(255,255,255,.7);
+        font-size: 11px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s ease, color .15s ease, border-color .15s ease;
+      }
+      .model-item-delete:hover { background: rgba(255,90,90,.16); border-color: rgba(255,90,90,.4); color: #ff9a9a; }
+      .my-models-empty {
+        margin: 20px 0; text-align: center;
+        font-size: 13px; color: rgba(255,255,255,.4);
+      }
+
+      .my-models-link {
+        display: flex; align-items: center; justify-content: space-between;
+        width: 100%;
+        background: none; border: none; padding: 0;
+        font-family: inherit; font-size: 13px; font-weight: 600;
+        color: #f2f2f2; cursor: pointer;
+        margin: 4px 0 8px;
+      }
+      .my-models-link:hover { color: #ffffff; }
+      .my-models-link span:last-child { font-weight: 800; color: rgba(255,255,255,.5); }
+
+      /* ── Profile ─────────────────────────────────────────────────── */
+      .profile-btn {
+        position: fixed; top: 18px; right: 18px; z-index: 5;
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,.2);
+        background: linear-gradient(135deg, #60a5fa, #a855f7);
+        color: #ffffff;
+        white-space: nowrap;
+        font-family: inherit; font-size: 13px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 6px 18px rgba(0,0,0,.35);
+        transition: transform .18s cubic-bezier(.22,.9,.3,1);
+      }
+      .profile-btn:hover { transform: scale(1.07); }
+      .profile-btn.signed-out {
+        width: auto; height: auto;
+        border-radius: 999px;
+        padding: 9px 16px;
+        font-size: 12px;
+      }
+
+      .credits-chip {
+        position: fixed; top: 18px; right: 62px; z-index: 5;
+        display: none; align-items: center; gap: 5px;
+        padding: 8px 13px;
+        background: rgba(20,20,20,.55);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 999px;
+        color: #f2f2f2;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px; font-weight: 800;
+        box-shadow: 0 6px 18px rgba(0,0,0,.3);
+      }
+      .credits-chip.visible { display: flex; }
+      .credits-chip .coin { color: #ffb15e; }
+
+      .profile-panel {
+        position: fixed; top: 62px; right: 18px; z-index: 5;
+        width: 220px;
+        background: rgba(22,22,22,.75);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 12px;
+        padding: 16px;
+        color: #f2f2f2;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        box-shadow: 0 20px 40px rgba(0,0,0,.4);
+        opacity: 0; transform: translateY(6px) scale(.98);
+        pointer-events: none;
+        transform-origin: top right;
+        transition: opacity .16s ease, transform .16s ease;
+      }
+      .profile-panel.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+      .profile-panel h4 {
+        margin: 0 0 12px; font-size: 11px; font-weight: 800;
+        letter-spacing: .05em; text-transform: uppercase; color: rgba(255,255,255,.5);
+      }
+      .profile-row {
+        display: flex; align-items: baseline; justify-content: space-between;
+        margin-bottom: 8px; font-size: 13px; font-weight: 600;
+      }
+      .profile-row span:last-child { font-weight: 800; }
+      .profile-bar {
+        height: 5px; border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        overflow: hidden; margin: 10px 0 10px;
+      }
+      .profile-bar-fill {
+        height: 100%; border-radius: inherit;
+        background: linear-gradient(90deg, #60a5fa, #a855f7);
+      }
+      .profile-note { margin: 0; font-size: 11.5px; color: rgba(255,255,255,.45); }
+
+      .profile-email {
+        margin: 0 0 12px; font-size: 12px; font-weight: 600;
+        color: rgba(255,255,255,.6);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .signout-btn {
+        display: block; width: 100%;
+        margin-top: 14px; padding: 8px 0;
+        border-radius: 8px;
+        border: 1px solid rgba(255,90,90,.3);
+        background: rgba(255,90,90,.1);
+        color: #ff9a9a;
+        font-family: inherit; font-size: 12px; font-weight: 700;
+        cursor: pointer;
+        transition: background .15s ease;
+      }
+      .signout-btn:hover { background: rgba(255,90,90,.2); }
+
+      /* ── Auth (Clerk) ───────────────────────────────────────────── */
+      .auth-modal {
+        position: relative;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .auth-modal .pricing-close {
+        top: -14px; right: -14px;
+        background: rgba(20,20,20,.9);
+      }
+
+      .credits-value { display: inline-flex; align-items: center; gap: 6px; }
+      .buy-credits-btn {
+        width: 16px; height: 16px; border-radius: 50%;
+        border: 1px solid rgba(255,255,255,.3);
+        background: rgba(255,255,255,.08);
+        color: #ffffff; font-size: 11px; line-height: 1; font-family: inherit;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; padding: 0;
+        transition: background .15s ease, border-color .15s ease;
+      }
+      .buy-credits-btn:hover { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.55); }
+
+      /* ── Pricing modal ──────────────────────────────────────────── */
+      .pricing-overlay {
+        position: fixed; inset: 0; z-index: 20;
+        background: rgba(0,0,0,.6);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 24px;
+      }
+      .pricing-modal {
+        position: relative;
+        width: 100%; max-width: 640px;
+        max-height: 85vh; overflow-y: auto;
+        background: rgba(20,20,20,.92);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 16px;
+        padding: 28px 26px;
+        color: #f2f2f2;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        box-shadow: 0 30px 80px rgba(0,0,0,.5);
+      }
+      .pricing-close {
+        position: absolute; top: 16px; right: 16px;
+        width: 28px; height: 28px; border-radius: 50%;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.15);
+        color: #ffffff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px;
+      }
+      .pricing-close:hover { background: rgba(255,255,255,.16); }
+      .pricing-modal h2 { margin: 0 0 6px; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+      .pricing-sub { margin: 0; font-size: 13px; color: rgba(255,255,255,.7); }
+      .pricing-badges { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; }
+      .pricing-badge {
+        font-size: 11.5px; font-weight: 700;
+        padding: 6px 12px; border-radius: 999px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.85);
+      }
+      .pricing-badge.discount { color: #a9c8ff; }
+      .pricing-badge.accent { color: #ffb15e; }
+      .pricing-note-small { margin: 10px 0 18px; font-size: 11.5px; color: rgba(255,255,255,.4); }
+      .no-refunds-notice {
+        margin: 22px 0 0; padding-top: 14px;
+        border-top: 1px solid rgba(255,255,255,.1);
+        font-size: 11px; font-weight: 600;
+        color: rgba(255,255,255,.35);
+        text-align: center;
+      }
+
+      .credit-packs {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+        margin-bottom: 26px;
+      }
+      .pack-card {
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 12px;
+        padding: 16px 8px;
+        text-align: center;
+        display: flex; flex-direction: column; align-items: center;
+        transition: border-color .15s ease, transform .15s ease, background .15s ease;
+      }
+      .pack-card:hover { border-color: rgba(255,255,255,.28); transform: translateY(-2px); background: rgba(255,255,255,.08); }
+      .pack-credits { font-size: 19px; font-weight: 800; }
+      .pack-label { font-size: 10px; color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+      .pack-price { font-size: 14.5px; font-weight: 700; color: #ffb15e; margin-bottom: 10px; }
+      .pack-buy, .plan-buy {
+        width: 100%;
+        padding: 8px 0;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: rgba(255,255,255,.1);
+        color: #ffffff;
+        font-family: inherit; font-size: 12px; font-weight: 700;
+        cursor: pointer;
+        transition: background .15s ease;
+      }
+      .pack-buy:hover, .plan-buy:hover { background: rgba(255,255,255,.2); }
+
+      .pricing-modal h3 {
+        margin: 0 0 12px; font-size: 12px; font-weight: 800;
+        text-transform: uppercase; letter-spacing: .05em; color: rgba(255,255,255,.5);
+      }
+      .plan-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      .plan-card {
+        position: relative;
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 12px;
+        padding: 18px 14px;
+        display: flex; flex-direction: column; gap: 10px;
+        transition: border-color .15s ease, transform .15s ease;
+      }
+      .plan-card:hover { border-color: rgba(255,255,255,.28); transform: translateY(-2px); }
+      .plan-card.featured {
+        border-color: rgba(168,85,247,.5);
+        background: linear-gradient(160deg, rgba(96,165,250,.14), rgba(168,85,247,.1));
+      }
+      .plan-badge {
+        position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+        background: linear-gradient(135deg, #60a5fa, #a855f7);
+        color: #ffffff; font-size: 9.5px; font-weight: 800;
+        padding: 3px 10px; border-radius: 999px;
+        letter-spacing: .03em; text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .plan-name {
+        font-size: 11px; font-weight: 800;
+        text-transform: uppercase; letter-spacing: .05em;
+        color: rgba(255,255,255,.5);
+      }
+      .plan-price { font-size: 21px; font-weight: 800; }
+      .plan-price span { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.5); }
+      .plan-card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+      .plan-card li {
+        font-size: 12px; color: rgba(255,255,255,.8);
+        display: flex; align-items: flex-start; gap: 6px;
+        line-height: 1.35;
+      }
+      .plan-card li::before { content: '✓'; color: #60a5fa; font-weight: 800; flex: 0 0 auto; }
+
+      @media (max-width: 560px) {
+        .credit-packs, .plan-cards { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="homeView">
+      <div class="box">
+        <div class="chat-text-wrap">
+          <div class="fake-placeholder" id="fakePlaceholder">
+            <span class="chat-text" id="chatTyped"></span><span class="caret"></span>
+          </div>
+          <textarea class="chat-input" id="chatInput" autocomplete="off" spellcheck="false"></textarea>
+        </div>
+        <div class="box-footer">
+          <div class="model-picker" id="modelPicker">
+            <div class="toggle" id="modelToggle">
+              <span class="toggle-thumb"></span>
+              <button class="toggle-btn active" id="speedBtn" type="button">N8-SPEED</button>
+              <button class="toggle-btn locked" id="oranBtn" type="button">N8-ORAN</button>
+            </div>
+          </div>
+          <div class="drop-zone" id="dropZone" title="Drop or click to attach an image">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/>
+            </svg>
+            <button type="button" class="remove-img-btn" id="removeImgBtn" title="Remove image">✕</button>
+          </div>
+          <input type="file" accept="image/*" id="fileInput" style="display:none" />
+        </div>
+      </div>
+
+      <div class="showcase-grid">
+        <div class="showcase-card">
+          <div class="showcase-frame" data-src="/showcase/sports-car.glb" data-prompt="a sleek futuristic sports car" tabindex="0" role="button" aria-label="View Sports Car in 3D viewer">
+            <model-viewer src="/showcase/sports-car.glb" auto-rotate rotation-per-second="16deg" camera-orbit="10deg 75deg auto" shadow-intensity="1" loading="lazy" reveal="auto"></model-viewer>
+          </div>
+          <span class="showcase-label">Sports Car</span>
+          <span class="showcase-engine">Made with N8-SPEED</span>
+        </div>
+        <div class="showcase-card">
+          <div class="showcase-frame" data-src="/showcase/robot.glb" data-prompt="a friendly small robot companion" tabindex="0" role="button" aria-label="View Robot in 3D viewer">
+            <model-viewer src="/showcase/robot.glb" auto-rotate rotation-per-second="16deg" camera-orbit="10deg 75deg auto" shadow-intensity="1" loading="lazy" reveal="auto"></model-viewer>
+          </div>
+          <span class="showcase-label">Robot</span>
+          <span class="showcase-engine">Made with N8-SPEED</span>
+        </div>
+        <div class="showcase-card">
+          <div class="showcase-frame" data-src="/showcase/sword.glb" data-prompt="an ornate fantasy sword" tabindex="0" role="button" aria-label="View Sword in 3D viewer">
+            <model-viewer src="/showcase/sword.glb" auto-rotate rotation-per-second="16deg" camera-orbit="10deg 75deg auto" shadow-intensity="1" loading="lazy" reveal="auto"></model-viewer>
+          </div>
+          <span class="showcase-label">Sword</span>
+          <span class="showcase-engine">Made with N8-SPEED</span>
+        </div>
+        <div class="showcase-card">
+          <div class="showcase-frame" data-src="/showcase/cottage.glb" data-prompt="a cozy small cottage house" tabindex="0" role="button" aria-label="View Cottage in 3D viewer">
+            <model-viewer src="/showcase/cottage.glb" auto-rotate rotation-per-second="16deg" camera-orbit="10deg 75deg auto" shadow-intensity="1" loading="lazy" reveal="auto"></model-viewer>
+          </div>
+          <span class="showcase-label">Cottage</span>
+          <span class="showcase-engine">Made with N8-SPEED</span>
+        </div>
+        <div class="showcase-card">
+          <div class="showcase-frame" data-src="/showcase/spaceship.glb" data-prompt="a compact sci-fi spaceship" tabindex="0" role="button" aria-label="View Spaceship in 3D viewer">
+            <model-viewer src="/showcase/spaceship.glb" auto-rotate rotation-per-second="16deg" camera-orbit="10deg 75deg auto" shadow-intensity="1" loading="lazy" reveal="auto"></model-viewer>
+          </div>
+          <span class="showcase-label">Spaceship</span>
+          <span class="showcase-engine">Made with N8-SPEED</span>
+        </div>
+        <div class="showcase-card">
+          <div class="showcase-frame" data-src="/showcase/treasure-chest.glb" data-prompt="an old wooden treasure chest" tabindex="0" role="button" aria-label="View Treasure Chest in 3D viewer">
+            <model-viewer src="/showcase/treasure-chest.glb" auto-rotate rotation-per-second="16deg" camera-orbit="10deg 75deg auto" shadow-intensity="1" loading="lazy" reveal="auto"></model-viewer>
+          </div>
+          <span class="showcase-label">Treasure Chest</span>
+          <span class="showcase-engine">Made with N8-SPEED</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="modelView" hidden>
+      <button class="back-btn" id="backBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+        Back
+      </button>
+      <div class="workspace">
+        <div class="workspace-preview">
+          <div class="preview-overlay" id="previewOverlay">
+            <div class="spinner" id="previewSpinner" hidden></div>
+            <svg class="preview-placeholder-icon" id="previewPlaceholderIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/></svg>
+            <p id="modelStatusText">Configure your model, then click Generate.</p>
+            <p class="preview-subtext" id="modelStatusSubtext" hidden>A lot of people are using this model, it may take longer.</p>
+          </div>
+          <div class="preview-viewer" id="previewViewer" hidden></div>
+          <div class="preview-fallback" id="previewFallback" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+            <span>Your model finished, but this browser can't preview 3D content (WebGL is disabled or unsupported).<br/>You can still download or save it below.</span>
+          </div>
+          <div class="preview-actions" id="previewActions" hidden>
+            <div class="download-wrap">
+              <div class="download-menu" id="downloadMenu" hidden>
+                <button type="button" data-format="glb">.GLB <span>native</span></button>
+                <button type="button" data-format="obj">.OBJ <span>+ texture, .zip</span></button>
+              </div>
+              <button class="result-btn" id="downloadBtn" type="button">
+                Download
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+            </div>
+            <button class="result-btn primary" id="saveModelBtn" type="button">Save to My Models</button>
+          </div>
+
+          <svg class="viewport-gizmo" viewBox="0 0 64 64" fill="none">
+            <line x1="32" y1="32" x2="52" y2="32" stroke="#f87171" stroke-width="2"/>
+            <circle cx="54" cy="32" r="5" fill="#f87171"/>
+            <text x="54" y="34.5" font-size="7" fill="#0b0b0d" text-anchor="middle" font-family="sans-serif">X</text>
+            <line x1="32" y1="32" x2="32" y2="12" stroke="#4ade80" stroke-width="2"/>
+            <circle cx="32" cy="10" r="5" fill="#4ade80"/>
+            <text x="32" y="12.5" font-size="7" fill="#0b0b0d" text-anchor="middle" font-family="sans-serif">Y</text>
+            <line x1="32" y1="32" x2="18" y2="46" stroke="#60a5fa" stroke-width="2"/>
+            <circle cx="15" cy="49" r="5" fill="#60a5fa"/>
+            <text x="15" y="51.5" font-size="7" fill="#0b0b0d" text-anchor="middle" font-family="sans-serif">Z</text>
+            <circle cx="32" cy="32" r="3" fill="#ffffff" opacity=".6"/>
+          </svg>
+
+          <div class="viewport-toolbar">
+            <button class="viewport-tool-btn" id="resetViewBtn" type="button" title="Reset view">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+            </button>
+            <button class="viewport-tool-btn" id="lightingBtn" type="button" title="Toggle lighting">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="workspace-controls">
+          <div class="workspace-rail">
+            <button class="rail-tab active" id="tabModelBtn" type="button" title="Model">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/></svg>
+            </button>
+            <button class="rail-tab" id="tabImageBtn" type="button" title="Image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            </button>
+            <button class="rail-tab" id="tabBatchBtn" type="button" title="Batch">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </button>
+            <button class="rail-tab" id="tabTextureBtn" type="button" title="Texture" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16c3.3 0 6-2.7 6-6 0-4.4-4.5-8-10-8z"/></svg>
+            </button>
+          </div>
+
+          <div class="workspace-panel">
+            <div class="panel-section" id="modelSection">
+              <h3 class="workspace-title">Generate Model</h3>
+              <p class="workspace-hint">Describe what to generate, or attach a reference image on the Image tab.</p>
+              <div class="workspace-label">Prompt</div>
+              <textarea class="workspace-textarea" id="workspacePrompt" placeholder="Describe your model…"></textarea>
+
+              <div class="workspace-attach-note" id="workspaceAttachNote" hidden>
+                <span class="workspace-attach-thumb" id="workspaceAttachThumb"></span>
+                <span>Using attached image</span>
+              </div>
+
+              <div class="workspace-label">Polygons</div>
+              <div class="poly-row">
+                <input type="range" id="polySlider" min="1000" max="200000" step="1000" value="50000" />
+                <span class="poly-value" id="polyValue">50,000</span>
+              </div>
+
+              <button class="generate-btn" id="generateBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                <span>Generate</span>
+                <span class="btn-cost" id="workspaceCost">10</span>
+              </button>
+            </div>
+
+            <div class="panel-section" id="imageSection" hidden>
+              <h3 class="workspace-title">Image</h3>
+              <p class="workspace-hint">Attach a reference image to generate a 3D model from it instead of a text prompt.</p>
+              <div class="workspace-attach-note" id="imageTabAttachNote" hidden>
+                <span class="workspace-attach-thumb" id="imageTabAttachThumb"></span>
+                <span>Image attached</span>
+              </div>
+              <button class="generate-btn" id="chooseImageBtn" type="button" style="background:rgba(255,255,255,.1);color:#fff;">
+                <span id="chooseImageLabel">Choose Image</span>
+              </button>
+              <button class="generate-btn" id="removeImageTabBtn" type="button" style="background:rgba(255,90,90,.14);color:#ff9a9a;" hidden>
+                <span>Remove Image</span>
+              </button>
+            </div>
+
+            <div class="panel-section" id="batchSection" hidden>
+              <h3 class="workspace-title">Batch</h3>
+              <p class="workspace-hint">Generate several versions in one go.</p>
+              <p class="workspace-hint" id="batchLimitNote">—</p>
+              <div class="workspace-label">Batch size</div>
+              <div class="poly-row">
+                <input type="range" id="batchSlider" min="1" max="1" step="1" value="1" disabled />
+                <span class="poly-value" id="batchValue">1</span>
+              </div>
+              <button class="generate-btn" id="batchGenerateBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                <span>Generate</span>
+                <span class="btn-cost" id="batchCost">10</span>
+              </button>
+            </div>
+
+            <div class="panel-section" id="textureSection" hidden>
+              <h3 class="workspace-title">Texture</h3>
+              <p class="workspace-hint">Add full color and material detail to your generated model. This re-renders it as a new textured version.</p>
+              <button class="generate-btn" id="textureBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                <span>Add Texture</span>
+                <span class="btn-cost">10</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="myModelsView" hidden>
+      <button class="back-btn" id="myModelsBackBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+        Back
+      </button>
+      <div class="my-models-panel">
+        <div class="my-models-header">
+          <h2>My Models</h2>
+          <span class="my-models-count" id="myModelsCount">0 / 3 saved</span>
+        </div>
+        <div class="storage-bar-track"><div class="storage-bar-fill" id="storageBarPage"></div></div>
+        <p class="storage-warning" id="storageWarningPage" hidden></p>
+        <div class="my-models-list" id="myModelsList" style="margin-top:14px;"></div>
+        <p class="my-models-empty" id="myModelsEmpty">No models saved yet.</p>
+      </div>
+    </div>
+
+    <div class="credits-chip" id="creditsChip"><span class="coin">◆</span><span id="creditsChipValue">—</span></div>
+    <button class="profile-btn" id="profileBtn" type="button" title="Profile">R</button>
+    <div class="profile-panel" id="profilePanel">
+      <p class="profile-email" id="profileEmail"></p>
+      <h4>Usage &amp; Credits</h4>
+      <div class="profile-row"><span>Plan</span><span id="profilePlan">Free</span></div>
+      <div class="profile-row">
+        <span>Credits left</span>
+        <span class="credits-value">
+          <span id="creditsLeft">50</span>
+          <button class="buy-credits-btn" id="buyCreditsBtn" type="button" title="Buy credits">+</button>
+        </span>
+      </div>
+      <div class="profile-bar"><div class="profile-bar-fill" id="creditsBarFill" style="width:100%"></div></div>
+      <button class="my-models-link" id="myModelsLink" type="button">
+        <span>My Models</span>
+        <span id="myModelsMini">0 / 3 →</span>
+      </button>
+      <div class="storage-bar-track"><div class="storage-bar-fill" id="storageBarMini"></div></div>
+      <p class="storage-warning" id="storageWarningMini" hidden></p>
+      <div class="profile-row" style="margin-top:10px;"><span>Account created</span><span id="accountCreated">—</span></div>
+      <button class="signout-btn" id="signOutBtn" type="button">Sign out</button>
+    </div>
+
+    <div class="pricing-overlay" id="authOverlay" hidden>
+      <div class="auth-modal">
+        <button class="pricing-close" id="authClose" type="button">✕</button>
+        <div id="clerkSignIn"></div>
+      </div>
+    </div>
+
+    <div class="pricing-overlay" id="pricingOverlay" hidden>
+      <div class="pricing-modal">
+        <button class="pricing-close" id="pricingClose" type="button">✕</button>
+        <h2>Buy Credits</h2>
+        <p class="pricing-sub">Top up any time, or subscribe for a monthly refill.</p>
+        <div class="pricing-badges">
+          <span class="pricing-badge discount">All 20% cheaper with a plan</span>
+          <span class="pricing-badge accent">First credit pack: +15% bonus credits</span>
+        </div>
+        <p class="pricing-note-small">Price scales with credits — bigger packs aren't cheaper per credit.</p>
+
+        <div class="credit-packs">
+          <div class="pack-card">
+            <div class="pack-credits">500</div>
+            <div class="pack-label">Credits</div>
+            <div class="pack-price">$5</div>
+            <button class="pack-buy" type="button" data-pack-id="500">Buy</button>
+          </div>
+          <div class="pack-card">
+            <div class="pack-credits">1,000</div>
+            <div class="pack-label">Credits</div>
+            <div class="pack-price">$10</div>
+            <button class="pack-buy" type="button" data-pack-id="1000">Buy</button>
+          </div>
+          <div class="pack-card">
+            <div class="pack-credits">2,000</div>
+            <div class="pack-label">Credits</div>
+            <div class="pack-price">$20</div>
+            <button class="pack-buy" type="button" data-pack-id="2000">Buy</button>
+          </div>
+          <div class="pack-card">
+            <div class="pack-credits">4,000</div>
+            <div class="pack-label">Credits</div>
+            <div class="pack-price">$50</div>
+            <button class="pack-buy" type="button" data-pack-id="4000">Buy</button>
+          </div>
+        </div>
+
+        <h3>Monthly Plans</h3>
+        <div class="plan-cards">
+          <div class="plan-card">
+            <div class="plan-name">Pro</div>
+            <div class="plan-price">$10<span>/mo</span></div>
+            <ul>
+              <li>Infinite downloads</li>
+              <li>500 credits / month</li>
+              <li>5 batch</li>
+              <li>5 models in storage</li>
+            </ul>
+            <button class="plan-buy" type="button" data-plan-id="pro">Subscribe</button>
+          </div>
+          <div class="plan-card featured">
+            <span class="plan-badge">Most popular</span>
+            <div class="plan-name">Business</div>
+            <div class="plan-price">$20<span>/mo</span></div>
+            <ul>
+              <li>Everything in Pro</li>
+              <li>1,000 credits / month</li>
+              <li>Higher model priority</li>
+              <li>Edit models from the past 7 days</li>
+              <li>10 batch</li>
+              <li>30 models in storage</li>
+            </ul>
+            <button class="plan-buy" type="button" data-plan-id="business">Subscribe</button>
+          </div>
+          <div class="plan-card">
+            <div class="plan-name">Pro+</div>
+            <div class="plan-price">$50<span>/mo</span></div>
+            <ul>
+              <li>Everything in Business</li>
+              <li>Edit from whenever you want</li>
+              <li>Infinite batch</li>
+              <li>Infinite models in storage</li>
+            </ul>
+            <button class="plan-buy" type="button" data-plan-id="pro_plus">Subscribe</button>
+          </div>
+        </div>
+
+        <p class="no-refunds-notice">All credit and plan purchases are final — no refunds.</p>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">
+      <b>N8-ORAN</b> is in development. It is not available.
+    </div>
+
+    <script>
+      var showToast = (function () {
+        var toast = document.getElementById('toast');
+        var hideTimer = null;
+        return function (html) {
+          clearTimeout(hideTimer);
+          toast.innerHTML = html;
+          toast.classList.add('show');
+          hideTimer = setTimeout(function () {
+            toast.classList.remove('show');
+          }, 2600);
+        };
+      })();
+
+      (function () {
+        var oranBtn = document.getElementById('oranBtn');
+        oranBtn.addEventListener('click', function () {
+          showToast('<b>N8-ORAN</b> is in development. It is not available.');
+        });
+      })();
+
+      (function () {
+        var phrases = [
+          'Generate me a 3d fish',
+          'Generate me a raven',
+          'Generate me a floating island',
+          'Generate me a cyberpunk city',
+          'Generate me a dragon skull',
+          'Generate me a coral reef',
+          'Generate me a spaceship cockpit',
+          'Generate me a medieval sword',
+          'Generate me a foggy forest',
+          'Generate me a robot butler',
+          'Generate me a crystal cave',
+          'Generate me a lava golem'
+        ];
+        var el = document.getElementById('chatTyped');
+        var i = 0, charIndex = 0, deleting = false;
+        function tick() {
+          var current = phrases[i];
+          if (!deleting) {
+            charIndex++;
+            el.textContent = current.slice(0, charIndex);
+            if (charIndex === current.length) {
+              deleting = true;
+              setTimeout(tick, 1500);
+              return;
+            }
+            setTimeout(tick, 45);
+          } else {
+            charIndex--;
+            el.textContent = current.slice(0, charIndex);
+            if (charIndex === 0) {
+              deleting = false;
+              i = (i + 1) % phrases.length;
+              setTimeout(tick, 400);
+              return;
+            }
+            setTimeout(tick, 25);
+          }
+        }
+        tick();
+      })();
+
+      (function () {
+        var chatInput = document.getElementById('chatInput');
+        var fakePlaceholder = document.getElementById('fakePlaceholder');
+        chatInput.addEventListener('input', function () {
+          fakePlaceholder.classList.toggle('hidden', chatInput.value.length > 0);
+        });
+      })();
+
+      var showView = (function () {
+        var homeView = document.getElementById('homeView');
+        var modelView = document.getElementById('modelView');
+        var myModelsView = document.getElementById('myModelsView');
+        return function (name) {
+          homeView.hidden = name !== 'home';
+          modelView.hidden = name !== 'model';
+          myModelsView.hidden = name !== 'models';
+        };
+      })();
+
+      // ── Saved-models "library" (client-side mock; nothing here is a real
+      // account/DB/file store -- see conversation for why). Free plan caps
+      // at 3 saved models; generating/downloading is never limited.
+      var ModelLibrary = (function () {
+        var STORAGE_KEY = 'rotex_saved_models';
+        var PLAN_LIMIT = 3; // Free plan
+
+        function getAll() {
+          try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+          catch (e) { return []; }
+        }
+        function setAll(list) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        }
+        function add(name) {
+          var list = getAll();
+          if (list.length >= PLAN_LIMIT) return { ok: false, list: list };
+          list.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 7), name: name, date: new Date().toISOString() });
+          setAll(list);
+          return { ok: true, list: list };
+        }
+        function remove(id) {
+          var list = getAll().filter(function (m) { return m.id !== id; });
+          setAll(list);
+          return list;
+        }
+        return { getAll: getAll, add: add, remove: remove, limit: PLAN_LIMIT };
+      })();
+
+      (function () {
+        function setBar(fillEl, warnEl, used, limit, fullLabel, warnLabel) {
+          var ratio = limit > 0 ? used / limit : 0;
+          fillEl.style.width = Math.min(ratio, 1) * 100 + '%';
+          if (ratio >= 1) {
+            fillEl.style.background = '#f87171';
+            warnEl.textContent = fullLabel;
+            warnEl.hidden = false;
+            warnEl.classList.add('full');
+          } else if (ratio >= (limit - 1) / limit) {
+            fillEl.style.background = '#fbbf24';
+            warnEl.textContent = warnLabel;
+            warnEl.hidden = false;
+            warnEl.classList.remove('full');
+          } else {
+            fillEl.style.background = '#4ade80';
+            warnEl.hidden = true;
+            warnEl.classList.remove('full');
+          }
+        }
+        function renderCounts() {
+          var list = ModelLibrary.getAll();
+          var used = list.length;
+          var limit = ModelLibrary.limit;
+          var slotsLeft = limit - used;
+          document.getElementById('myModelsCount').textContent = used + ' / ' + limit + ' saved';
+          document.getElementById('myModelsMini').textContent = used + ' / ' + limit + ' →';
+          var fullMsg = 'Full — delete one or upgrade to save more.';
+          var warnMsg = slotsLeft === 1 ? 'Only 1 slot left on the Free plan.' : slotsLeft + ' slots left on the Free plan.';
+          setBar(document.getElementById('storageBarPage'), document.getElementById('storageWarningPage'), used, limit, fullMsg, warnMsg);
+          setBar(document.getElementById('storageBarMini'), document.getElementById('storageWarningMini'), used, limit, fullMsg, warnMsg);
+        }
+        function renderList() {
+          var list = ModelLibrary.getAll();
+          var listEl = document.getElementById('myModelsList');
+          var emptyEl = document.getElementById('myModelsEmpty');
+          listEl.innerHTML = '';
+          emptyEl.hidden = list.length > 0;
+          list.slice().reverse().forEach(function (m) {
+            var row = document.createElement('div');
+            row.className = 'model-item';
+            var dateStr = new Date(m.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            row.innerHTML =
+              '<div class="model-item-thumb"></div>' +
+              '<div class="model-item-info">' +
+                '<div class="model-item-name"></div>' +
+                '<div class="model-item-date"></div>' +
+              '</div>' +
+              '<button class="model-item-delete" type="button" title="Delete">✕</button>';
+            row.querySelector('.model-item-name').textContent = m.name;
+            row.querySelector('.model-item-date').textContent = 'Saved ' + dateStr;
+            row.querySelector('.model-item-delete').addEventListener('click', function () {
+              ModelLibrary.remove(m.id);
+              renderCounts();
+              renderList();
+            });
+            listEl.appendChild(row);
+          });
+        }
+
+        window.renderModelLibrary = function () { renderCounts(); renderList(); };
+        renderCounts();
+        renderList();
+
+        document.getElementById('myModelsLink').addEventListener('click', function () {
+          document.getElementById('profilePanel').classList.remove('open');
+          showView('models');
+        });
+        document.getElementById('myModelsBackBtn').addEventListener('click', function () {
+          showView('home');
+        });
+      })();
+
+      // ── Credits display (real balance from /api/credits, Clerk-authed) ──
+      var PLAN_LABELS = { free: 'Free', pro: 'Pro', business: 'Business', pro_plus: 'Pro+' };
+      var Credits = (function () {
+        var balance = null;
+        var plan = 'free';
+        var batchLimit = 1;
+        function paint() {
+          var shown = balance === null ? '—' : String(balance);
+          var chip = document.getElementById('creditsChip');
+          document.getElementById('creditsChipValue').textContent = shown;
+          chip.classList.toggle('visible', balance !== null);
+          document.getElementById('creditsLeft').textContent = shown;
+          var pct = balance === null ? 0 : Math.max(0, Math.min(100, balance));
+          document.getElementById('creditsBarFill').style.width = pct + '%';
+          var planLabel = PLAN_LABELS[plan] || 'Free';
+          var planEl = document.getElementById('profilePlan');
+          if (planEl) planEl.textContent = planLabel;
+          paintBatchLimit(planLabel);
+        }
+        function paintBatchLimit(planLabel) {
+          var note = document.getElementById('batchLimitNote');
+          var slider = document.getElementById('batchSlider');
+          if (!note || !slider) return;
+          if (batchLimit === null) {
+            note.textContent = 'Unlimited batches right now (' + planLabel + ' plan).';
+            slider.max = 50;
+            slider.disabled = false;
+          } else {
+            note.textContent = (batchLimit === 1 ? 'You can run 1 at a time right now' : 'You can run up to ' + batchLimit + ' at once right now') + ' (' + planLabel + ' plan).';
+            slider.max = batchLimit;
+            slider.disabled = batchLimit <= 1;
+          }
+          if (Number(slider.value) > Number(slider.max)) slider.value = slider.max;
+          var valueEl = document.getElementById('batchValue');
+          if (valueEl) valueEl.textContent = slider.value;
+        }
+        function set(value) {
+          balance = value;
+          paint();
+        }
+        async function refresh() {
+          var token = await AuthToken.get();
+          if (!token) { set(null); return; }
+          try {
+            var res = await fetch('/api/credits', { headers: { Authorization: 'Bearer ' + token } });
+            var data = await res.json();
+            if (res.ok) {
+              plan = data.plan || 'free';
+              batchLimit = (data.batchLimit === undefined) ? 1 : data.batchLimit;
+              set(data.credits);
+            }
+          } catch (e) { /* leave last known balance on screen */ }
+        }
+        return { set: set, refresh: refresh, get: function () { return balance; } };
+      })();
+
+      var AuthToken = (function () {
+        return {
+          get: async function () {
+            if (!window.Clerk || !Clerk.session) return null;
+            try { return await Clerk.session.getToken(); }
+            catch (e) { return null; }
+          }
+        };
+      })();
+
+      // Mirrors api/_lib/pricing.js -- for display only; the server is the
+      // real authority and re-checks this independently.
+      var MIN_FACES = 1000, MAX_FACES = 200000, TEXTURE_COST_CLIENT = 10;
+      function computeCostClient(hasImage, targetFaces) {
+        var faces = Math.max(MIN_FACES, Math.min(MAX_FACES, Number(targetFaces) || MIN_FACES));
+        var ratio = (faces - MIN_FACES) / (MAX_FACES - MIN_FACES);
+        var base = hasImage ? 5 + ratio * 5 : 10 + ratio * 5;
+        return Math.round(base);
+      }
+
+      function fileToBase64(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function () {
+            var result = String(reader.result || '');
+            var comma = result.indexOf(',');
+            resolve(comma === -1 ? result : result.slice(comma + 1));
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      (function () {
+        var chatInput = document.getElementById('chatInput');
+        var backBtn = document.getElementById('backBtn');
+        var tabModelBtn = document.getElementById('tabModelBtn');
+        var tabImageBtn = document.getElementById('tabImageBtn');
+        var tabBatchBtn = document.getElementById('tabBatchBtn');
+        var tabTextureBtn = document.getElementById('tabTextureBtn');
+        var modelSection = document.getElementById('modelSection');
+        var imageSection = document.getElementById('imageSection');
+        var batchSection = document.getElementById('batchSection');
+        var textureSection = document.getElementById('textureSection');
+        var workspacePrompt = document.getElementById('workspacePrompt');
+        var polySlider = document.getElementById('polySlider');
+        var polyValue = document.getElementById('polyValue');
+        var workspaceCost = document.getElementById('workspaceCost');
+        var workspaceAttachNote = document.getElementById('workspaceAttachNote');
+        var workspaceAttachThumb = document.getElementById('workspaceAttachThumb');
+        var imageTabAttachNote = document.getElementById('imageTabAttachNote');
+        var imageTabAttachThumb = document.getElementById('imageTabAttachThumb');
+        var chooseImageBtn = document.getElementById('chooseImageBtn');
+        var removeImageTabBtn = document.getElementById('removeImageTabBtn');
+        var batchCost = document.getElementById('batchCost');
+        var batchGenerateBtn = document.getElementById('batchGenerateBtn');
+        var batchSlider = document.getElementById('batchSlider');
+        var batchValue = document.getElementById('batchValue');
+        var generateBtn = document.getElementById('generateBtn');
+        var textureBtn = document.getElementById('textureBtn');
+        var previewOverlay = document.getElementById('previewOverlay');
+        var previewSpinner = document.getElementById('previewSpinner');
+        var previewPlaceholderIcon = document.getElementById('previewPlaceholderIcon');
+        var previewViewer = document.getElementById('previewViewer');
+        var previewFallback = document.getElementById('previewFallback');
+        var previewActions = document.getElementById('previewActions');
+        var modelStatusText = document.getElementById('modelStatusText');
+        var modelStatusSubtext = document.getElementById('modelStatusSubtext');
+        var saveBtn = document.getElementById('saveModelBtn');
+        var downloadBtn = document.getElementById('downloadBtn');
+        var downloadMenu = document.getElementById('downloadMenu');
+        var lastPrompt = '';
+        var lastImageB64 = null;
+        var lastTargetFaces = 50000;
+        var lastJobId = null;
+        var pollTimer = null;
+        var resultBlob = null;
+        var resultBlobUrl = null;
+        var currentViewer = null;
+        var litUp = false;
+        var pollStartedAt = null;
+
+        function stopPolling() {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+
+        // state: 'idle' | 'loading' | 'error' | 'done'
+        function hasWebGL() {
+          try {
+            var canvas = document.createElement('canvas');
+            return !!(window.WebGLRenderingContext &&
+              (canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+          } catch (e) {
+            return false;
+          }
+        }
+
+        function setPreviewState(state, text) {
+          previewOverlay.hidden = state === 'done';
+          previewViewer.hidden = state !== 'done';
+          previewFallback.hidden = true; // reset here; loadResult re-shows it if needed
+          previewActions.hidden = state !== 'done';
+          previewSpinner.hidden = state !== 'loading';
+          previewPlaceholderIcon.hidden = state !== 'idle';
+          modelStatusText.classList.toggle('error-text', state === 'error');
+          if (text !== undefined) modelStatusText.textContent = text;
+          modelStatusSubtext.hidden = state !== 'loading';
+          if (state === 'done') tabTextureBtn.disabled = false;
+        }
+
+        var TABS = {
+          model: { btn: tabModelBtn, section: modelSection },
+          image: { btn: tabImageBtn, section: imageSection },
+          batch: { btn: tabBatchBtn, section: batchSection },
+          texture: { btn: tabTextureBtn, section: textureSection },
+        };
+        function switchTab(name) {
+          Object.keys(TABS).forEach(function (key) {
+            var active = key === name;
+            TABS[key].btn.classList.toggle('active', active);
+            TABS[key].section.hidden = !active;
+          });
+        }
+
+        function updateCost() {
+          var hasImage = !!(window.getAttachedImageFile && window.getAttachedImageFile());
+          var cost = computeCostClient(hasImage, polySlider.value);
+          workspaceCost.textContent = cost;
+          batchCost.textContent = cost; // batch size is locked to 1 on Free, same cost as a single generation
+        }
+
+        // Keeps the Model tab's attach note and the Image tab's own preview
+        // in sync -- there's one shared attached-image state (set from the
+        // home screen's drop-zone or from this Image tab), not two.
+        function syncImageTabDisplay() {
+          var hasImage = !!(window.getAttachedImageFile && window.getAttachedImageFile());
+          workspaceAttachNote.hidden = !hasImage;
+          imageTabAttachNote.hidden = !hasImage;
+          removeImageTabBtn.hidden = !hasImage;
+          document.getElementById('chooseImageLabel').textContent = hasImage ? 'Change Image' : 'Choose Image';
+          if (hasImage && window.getAttachedImageUrl) {
+            var url = window.getAttachedImageUrl();
+            workspaceAttachThumb.style.backgroundImage = 'url(' + url + ')';
+            imageTabAttachThumb.style.backgroundImage = 'url(' + url + ')';
+          }
+          updateCost();
+        }
+        window.onImageAttachmentChanged = syncImageTabDisplay;
+
+        function openWorkspace(prompt, hasImage) {
+          workspacePrompt.value = prompt || '';
+          polySlider.value = 50000;
+          polyValue.textContent = Number(polySlider.value).toLocaleString();
+          syncImageTabDisplay();
+          tabTextureBtn.disabled = true;
+          switchTab('model');
+          resultBlob = null;
+          if (resultBlobUrl) { URL.revokeObjectURL(resultBlobUrl); resultBlobUrl = null; }
+          previewViewer.innerHTML = '';
+          currentViewer = null;
+          lastJobId = null;
+          setPreviewState('idle', 'Configure your model, then click Generate.');
+          showView('model');
+        }
+
+        // Shared by the Model tab's "Generate" and the Texture tab's "Add
+        // Texture" -- both queue a real N8 Speed job and poll it the same
+        // way, they just hit different endpoints at different costs.
+        async function runJob(endpoint, body, clientCost) {
+          var token = await AuthToken.get();
+          if (!token) {
+            if (window.ClerkAuthOpen) window.ClerkAuthOpen();
+            return;
+          }
+
+          var known = Credits.get();
+          if (known !== null && known < clientCost) {
+            showToast(
+              'You need ' + clientCost + ' credits for this. You have ' + known + '. ' +
+              '<a id="toastBuyCreditsLink">Buy more</a>'
+            );
+            return;
+          }
+
+          resultBlob = null;
+          if (resultBlobUrl) { URL.revokeObjectURL(resultBlobUrl); resultBlobUrl = null; }
+          previewViewer.innerHTML = '';
+          currentViewer = null;
+          tabTextureBtn.disabled = true;
+          setPreviewState('loading', 'Working on your model…');
+
+          var res, data;
+          try {
+            res = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+              body: JSON.stringify(body),
+            });
+            data = await res.json();
+          } catch (e) {
+            setPreviewState('error', 'Generation service is temporarily unavailable.');
+            return;
+          }
+
+          if (res.status === 402) {
+            setPreviewState('idle', 'Configure your model, then click Generate.');
+            showToast(data.message + ' <a id="toastBuyCreditsLink">Buy more</a>');
+            return;
+          }
+          if (!res.ok) {
+            setPreviewState('error', data.error || 'Could not start generation.');
+            return;
+          }
+
+          Credits.set(data.balance);
+          if (data.same_model === false) {
+            showToast('That model had expired, so this is a fresh regeneration -- not the same one.');
+          }
+          lastJobId = data.job_id;
+          setPreviewState('loading', 'Working on your model…');
+          pollStartedAt = Date.now();
+          poll(data.job_id);
+        }
+
+        async function startGeneration() {
+          var prompt = workspacePrompt.value.trim();
+          var imageFile = window.getAttachedImageFile ? window.getAttachedImageFile() : null;
+          var hasImage = !!imageFile;
+          var targetFaces = Number(polySlider.value);
+
+          if (!prompt && !hasImage) {
+            showToast('Type a prompt or attach an image first.');
+            return;
+          }
+
+          lastPrompt = prompt || 'Untitled model';
+          lastTargetFaces = targetFaces;
+
+          var body = { target_faces: targetFaces };
+          if (prompt) body.prompt = prompt;
+          if (hasImage) {
+            try {
+              body.image_b64 = await fileToBase64(imageFile);
+              lastImageB64 = body.image_b64;
+            } catch (e) {
+              setPreviewState('error', 'Could not read the attached image.');
+              return;
+            }
+          } else {
+            lastImageB64 = null;
+          }
+
+          await runJob('/api/generate', body, computeCostClient(hasImage, targetFaces));
+        }
+
+        async function startTexture() {
+          if (!lastJobId && !lastImageB64 && (!lastPrompt || lastPrompt === 'Untitled model')) {
+            showToast('Generate a model first.');
+            return;
+          }
+          var body = { target_faces: lastTargetFaces };
+          if (lastJobId) body.job_id = lastJobId;
+          if (lastImageB64) body.image_b64 = lastImageB64;
+          else if (lastPrompt && lastPrompt !== 'Untitled model') body.prompt = lastPrompt;
+          await runJob('/api/texture', body, TEXTURE_COST_CLIENT);
+        }
+
+        // Clerk session tokens are short-lived (~60s) by design and meant to
+        // be re-fetched for every request -- Clerk.session.getToken() caches
+        // and auto-renews internally, so calling it fresh each time (instead
+        // of reusing one token string across a multi-minute poll loop) is
+        // what keeps long-running polling from suddenly 401'ing mid-job.
+        // Belt-and-suspenders timeout: an auth call or fetch that hangs
+        // (flaky network, a stuck browser tab, Clerk's token refresh not
+        // resolving) used to leave the UI stuck on "Working on your
+        // model..." forever with no way out. Race everything against a
+        // clock so a hang becomes a visible error instead of silence.
+        function withTimeout(promise, ms) {
+          return new Promise(function (resolve, reject) {
+            var timer = setTimeout(function () { reject(new Error('timeout')); }, ms);
+            promise.then(
+              function (v) { clearTimeout(timer); resolve(v); },
+              function (e) { clearTimeout(timer); reject(e); }
+            );
+          });
+        }
+
+        var MAX_POLL_MS = 5 * 60 * 1000; // give up after 5 minutes total
+
+        function poll(jobId) {
+          pollTimer = setTimeout(async function () {
+            if (Date.now() - pollStartedAt > MAX_POLL_MS) {
+              setPreviewState('error', 'This is taking way longer than usual. Please try again.');
+              return;
+            }
+
+            var token;
+            try {
+              token = await withTimeout(AuthToken.get(), 10000);
+            } catch (e) {
+              poll(jobId); // transient hiccup getting a token -- keep trying until MAX_POLL_MS
+              return;
+            }
+            if (!token) {
+              setPreviewState('error', 'Signed out -- sign in again to keep checking this job.');
+              return;
+            }
+
+            var res, data;
+            try {
+              res = await withTimeout(fetch('/api/status/' + encodeURIComponent(jobId), {
+                headers: { Authorization: 'Bearer ' + token },
+              }), 15000);
+              data = await res.json();
+            } catch (e) {
+              poll(jobId);
+              return;
+            }
+            if (!res.ok) {
+              setPreviewState('error', data.error || 'Lost track of this job.');
+              return;
+            }
+            if (data.balance !== undefined) Credits.set(data.balance);
+
+            if (data.status === 'queued') {
+              setPreviewState('loading', 'Working on your model…');
+              poll(jobId);
+            } else if (data.status === 'processing') {
+              setPreviewState('loading', 'Working on your model…');
+              poll(jobId);
+            } else if (data.status === 'error') {
+              setPreviewState('error', 'Generation failed. Credits refunded.');
+            } else if (data.status === 'done') {
+              stopPolling();
+              await loadResult(jobId);
+            } else {
+              poll(jobId);
+            }
+          }, 2500);
+        }
+
+        async function loadResult(jobId) {
+          setPreviewState('loading', 'Working on your model…');
+          var token;
+          try {
+            token = await withTimeout(AuthToken.get(), 10000);
+          } catch (e) {
+            setPreviewState('error', 'Could not fetch your model -- please try again.');
+            return;
+          }
+          if (!token) {
+            setPreviewState('error', 'Signed out -- sign in again to fetch your model.');
+            return;
+          }
+          try {
+            var res = await withTimeout(fetch('/api/result/' + encodeURIComponent(jobId), {
+              headers: { Authorization: 'Bearer ' + token },
+            }), 30000);
+            if (!res.ok) throw new Error('result fetch failed');
+            resultBlob = await res.blob();
+            resultBlobUrl = URL.createObjectURL(resultBlob);
+            previewViewer.innerHTML = '<model-viewer src="' + resultBlobUrl + '" camera-controls auto-rotate exposure="1"></model-viewer>';
+            currentViewer = previewViewer.querySelector('model-viewer');
+            setPreviewState('done');
+            if (!hasWebGL()) {
+              // model-viewer needs WebGL and fails to render with no error
+              // event when it's unavailable -- show a clear reason instead
+              // of a silent blank canvas; downloading/saving still works.
+              previewFallback.hidden = false;
+            } else {
+              currentViewer.addEventListener('error', function () {
+                previewFallback.hidden = false;
+              }, { once: true });
+            }
+          } catch (e) {
+            console.error('loadResult failed:', e);
+            setPreviewState('error', 'Could not display the finished model. Please try again.');
+          }
+        }
+
+        // Showcase gallery cards -- these are real, already-finished .glb
+        // files (not a job), so this skips straight to the "done" preview
+        // state instead of going through runJob/poll.
+        function openShowcaseModel(src, prompt) {
+          workspacePrompt.value = prompt || '';
+          lastPrompt = prompt || 'Untitled model';
+          lastImageB64 = null;
+          lastJobId = null; // showcase items aren't a real N8 Speed job -- Add Texture falls back to a fresh regeneration from the prompt
+          polySlider.value = 50000;
+          polyValue.textContent = Number(polySlider.value).toLocaleString();
+          syncImageTabDisplay();
+          switchTab('model');
+          tabTextureBtn.disabled = false;
+          resultBlob = null;
+          if (resultBlobUrl) { URL.revokeObjectURL(resultBlobUrl); resultBlobUrl = null; }
+          previewViewer.innerHTML = '';
+          currentViewer = null;
+          setPreviewState('loading', 'Loading model…');
+          showView('model');
+
+          fetch(src).then(function (res) {
+            if (!res.ok) throw new Error('fetch failed');
+            return res.blob();
+          }).then(function (blob) {
+            resultBlob = blob;
+            resultBlobUrl = URL.createObjectURL(blob);
+            previewViewer.innerHTML = '<model-viewer src="' + resultBlobUrl + '" camera-controls auto-rotate exposure="1"></model-viewer>';
+            currentViewer = previewViewer.querySelector('model-viewer');
+            setPreviewState('done');
+            if (!hasWebGL()) {
+              previewFallback.hidden = false;
+            } else {
+              currentViewer.addEventListener('error', function () {
+                previewFallback.hidden = false;
+              }, { once: true });
+            }
+          }).catch(function () {
+            setPreviewState('error', 'Could not load this model. Please try again.');
+          });
+        }
+        document.querySelectorAll('.showcase-frame').forEach(function (frame) {
+          frame.addEventListener('click', function () {
+            openShowcaseModel(frame.getAttribute('data-src'), frame.getAttribute('data-prompt'));
+          });
+          frame.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openShowcaseModel(frame.getAttribute('data-src'), frame.getAttribute('data-prompt'));
+            }
+          });
+        });
+
+        chatInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            var prompt = chatInput.value.trim();
+            var hasImage = !!(window.getAttachedImageFile && window.getAttachedImageFile());
+            if (!prompt && !hasImage) {
+              showToast('Type a prompt or attach an image first.');
+              return;
+            }
+            openWorkspace(prompt, hasImage);
+          }
+        });
+        workspacePrompt.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            startGeneration();
+          }
+        });
+        polySlider.addEventListener('input', function () {
+          polyValue.textContent = Number(polySlider.value).toLocaleString();
+          updateCost();
+        });
+        batchSlider.addEventListener('input', function () {
+          batchValue.textContent = batchSlider.value;
+        });
+        generateBtn.addEventListener('click', startGeneration);
+        textureBtn.addEventListener('click', startTexture);
+        tabModelBtn.addEventListener('click', function () { switchTab('model'); });
+        tabImageBtn.addEventListener('click', function () { switchTab('image'); });
+        tabBatchBtn.addEventListener('click', function () { switchTab('batch'); });
+        tabTextureBtn.addEventListener('click', function () {
+          if (!tabTextureBtn.disabled) switchTab('texture');
+        });
+
+        chooseImageBtn.addEventListener('click', function () {
+          if (window.chooseAttachedImage) window.chooseAttachedImage();
+        });
+        removeImageTabBtn.addEventListener('click', function () {
+          if (window.clearAttachedImage) window.clearAttachedImage();
+        });
+        batchGenerateBtn.addEventListener('click', startGeneration);
+
+        document.getElementById('resetViewBtn').addEventListener('click', function () {
+          if (!currentViewer) return;
+          currentViewer.cameraOrbit = 'auto auto auto';
+          currentViewer.cameraTarget = 'auto auto auto';
+          currentViewer.fieldOfView = 'auto';
+        });
+        document.getElementById('lightingBtn').addEventListener('click', function () {
+          if (!currentViewer) return;
+          litUp = !litUp;
+          currentViewer.exposure = litUp ? '1.6' : '1';
+        });
+
+        backBtn.addEventListener('click', function () {
+          stopPolling();
+          showView('home');
+        });
+
+        function fileBaseName() {
+          return (lastPrompt || 'model').replace(/[^a-z0-9-_]+/gi, '_').slice(0, 60) || 'model';
+        }
+        function triggerDownload(blob, filename) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+
+        // GLB is N8 Speed's native output (instant, no conversion, already
+        // textured). OBJ is converted client-side via three.js -- but
+        // three.js's OBJExporter only ever writes bare geometry (no mtllib
+        // line, and it skips usemtl whenever a material has no .name), so a
+        // plain OBJExporter().parse() silently drops all color/texture. This
+        // names every material and builds a real companion .mtl plus the
+        // actual PNG texture(s), zipped alongside the .obj so the texture
+        // isn't lost. FBX has no reliable, trustworthy browser-side exporter
+        // (three.js ships none; the handful of npm packages claiming to be
+        // one are obscure, near-identical "from-scratch" clones with no real
+        // track record -- not something to pull into a real app blind), so
+        // it's deliberately not offered here rather than faked.
+        function textureToPngBlob(texture) {
+          return new Promise(function (resolve, reject) {
+            try {
+              var img = texture.image;
+              var canvas = document.createElement('canvas');
+              canvas.width = img.width || img.videoWidth || 1024;
+              canvas.height = img.height || img.videoHeight || 1024;
+              var ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob(function (blob) {
+                if (blob) resolve(blob); else reject(new Error('toBlob failed'));
+              }, 'image/png');
+            } catch (e) { reject(e); }
+          });
+        }
+
+        async function downloadAsObj() {
+          if (!resultBlob) return;
+          showToast('Converting to OBJ…');
+          try {
+            var fflate = await import('https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js');
+            var gltfMod = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js');
+            var objMod = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/exporters/OBJExporter.js');
+            var buf = await resultBlob.arrayBuffer();
+            var loader = new gltfMod.GLTFLoader();
+            var gltf = await new Promise(function (resolve, reject) {
+              loader.parse(buf, '', resolve, reject);
+            });
+
+            // Collect every distinct material actually used, name each one
+            // (OBJExporter only writes "usemtl" when a name is present), and
+            // remember which ones have a real texture to export.
+            var materials = [];
+            gltf.scene.traverse(function (child) {
+              if (child.isMesh && child.material && materials.indexOf(child.material) === -1) {
+                materials.push(child.material);
+              }
+            });
+            materials.forEach(function (mat, i) {
+              if (!mat.name) mat.name = 'material_' + i;
+            });
+
+            var base = fileBaseName();
+            var files = {};
+            var mtlLines = [];
+            for (var i = 0; i < materials.length; i++) {
+              var mat = materials[i];
+              var c = mat.color || { r: 1, g: 1, b: 1 };
+              mtlLines.push('newmtl ' + mat.name);
+              mtlLines.push('Kd ' + c.r.toFixed(6) + ' ' + c.g.toFixed(6) + ' ' + c.b.toFixed(6));
+              mtlLines.push('d 1.0');
+              mtlLines.push('illum 2');
+              if (mat.map && mat.map.image) {
+                var texFilename = mat.name + '.png';
+                try {
+                  var pngBlob = await textureToPngBlob(mat.map);
+                  files[texFilename] = new Uint8Array(await pngBlob.arrayBuffer());
+                  mtlLines.push('map_Kd ' + texFilename);
+                } catch (texErr) {
+                  console.error('Texture export failed for', mat.name, texErr);
+                }
+              }
+              mtlLines.push('');
+            }
+
+            var objString = 'mtllib ' + base + '.mtl\n' + new objMod.OBJExporter().parse(gltf.scene);
+            files[base + '.obj'] = fflate.strToU8(objString);
+            files[base + '.mtl'] = fflate.strToU8(mtlLines.join('\n'));
+
+            var zipped = fflate.zipSync(files, { level: 6 });
+            var blob = new Blob([zipped], { type: 'application/zip' });
+            triggerDownload(blob, base + '.zip');
+          } catch (e) {
+            console.error('OBJ conversion failed:', e);
+            showToast('Could not convert to OBJ. Try the GLB instead.');
+          }
+        }
+
+        downloadBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          downloadMenu.hidden = !downloadMenu.hidden;
+        });
+        document.addEventListener('click', function (e) {
+          if (!downloadMenu.hidden && e.target !== downloadBtn && !downloadMenu.contains(e.target)) {
+            downloadMenu.hidden = true;
+          }
+        });
+        downloadMenu.querySelectorAll('button').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            downloadMenu.hidden = true;
+            if (!resultBlob) return;
+            var format = btn.getAttribute('data-format');
+            if (format === 'glb') {
+              triggerDownload(resultBlob, fileBaseName() + '.glb');
+            } else if (format === 'obj') {
+              downloadAsObj();
+            }
+          });
+        });
+        saveBtn.addEventListener('click', function () {
+          var result = ModelLibrary.add(lastPrompt);
+          window.renderModelLibrary();
+          if (result.ok) {
+            showToast('Saved to My Models (' + result.list.length + '/' + ModelLibrary.limit + ').');
+          } else {
+            showToast(
+              'You\'ve saved ' + ModelLibrary.limit + '/' + ModelLibrary.limit + ' models on the Free plan. ' +
+              '<a id="toastMyModelsLink">Delete one</a> below or upgrade to save more.'
+            );
+          }
+        });
+
+        document.getElementById('toast').addEventListener('click', function (e) {
+          if (e.target && e.target.id === 'toastMyModelsLink') {
+            document.getElementById('toast').classList.remove('show');
+            showView('models');
+          } else if (e.target && e.target.id === 'toastBuyCreditsLink') {
+            document.getElementById('toast').classList.remove('show');
+            if (window.openPricingModal) window.openPricingModal();
+          }
+        });
+      })();
+
+      // ── Real auth via Clerk (see conversation: this replaces the earlier
+      // localStorage-only "account created" mock with a real signed-in user).
+      var ClerkAuth = (function () {
+        var profileBtn = document.getElementById('profileBtn');
+        var profilePanel = document.getElementById('profilePanel');
+        var authOverlay = document.getElementById('authOverlay');
+        var clerkMount = document.getElementById('clerkSignIn');
+        var ready = false;
+
+        function render() {
+          var signedIn = ready && !!window.Clerk.user;
+          if (signedIn) {
+            var u = Clerk.user;
+            var initial = (u.firstName || (u.primaryEmailAddress && u.primaryEmailAddress.emailAddress) || 'U').charAt(0).toUpperCase();
+            profileBtn.innerHTML = u.imageUrl
+              ? '<img src="' + u.imageUrl + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+              : initial;
+            document.getElementById('profileEmail').textContent = u.primaryEmailAddress ? u.primaryEmailAddress.emailAddress : '';
+            document.getElementById('accountCreated').textContent = u.createdAt
+              ? new Date(u.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+              : '—';
+            profileBtn.classList.remove('signed-out');
+            if (!authOverlay.hidden) closeAuth();
+            if (window.Credits) Credits.refresh();
+          } else {
+            profileBtn.textContent = 'Sign in';
+            profileBtn.classList.add('signed-out');
+            profilePanel.classList.remove('open');
+            if (window.Credits) Credits.set(null);
+          }
+        }
+
+        function openAuth(e) {
+          if (e) e.stopPropagation();
+          clerkMount.innerHTML = '';
+          authOverlay.hidden = false;
+          var here = window.location.href;
+          Clerk.mountSignIn(clerkMount, {
+            // Explicit redirects so an OAuth round-trip (e.g. Google) lands
+            // back on this exact page instead of Clerk's hosted Account
+            // Portal -- covers both old and new Clerk option names since we
+            // can't be sure which clerk-js minor version @latest resolves to.
+            redirectUrl: here,
+            afterSignInUrl: here,
+            afterSignUpUrl: here,
+            fallbackRedirectUrl: here,
+            signUpFallbackRedirectUrl: here
+          });
+        }
+        function closeAuth() {
+          authOverlay.hidden = true;
+          Clerk.unmountSignIn(clerkMount);
+        }
+
+        profileBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (ready && Clerk.user) {
+            profilePanel.classList.toggle('open');
+          } else {
+            openAuth();
+          }
+        });
+        document.addEventListener('click', function (e) {
+          if (!profilePanel.contains(e.target) && e.target !== profileBtn) {
+            profilePanel.classList.remove('open');
+          }
+        });
+        document.getElementById('authClose').addEventListener('click', closeAuth);
+        authOverlay.addEventListener('click', function (e) {
+          if (e.target === authOverlay) closeAuth();
+        });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && !authOverlay.hidden) closeAuth();
+        });
+        document.getElementById('signOutBtn').addEventListener('click', function () {
+          profilePanel.classList.remove('open');
+          Clerk.signOut();
+        });
+
+        window.ClerkAuthOpen = openAuth;
+
+        window.addEventListener('load', function () {
+          if (!window.Clerk) return; // script blocked or still loading
+          Clerk.load().then(function () {
+            ready = true;
+            render();
+            Clerk.addListener(function () { render(); });
+          });
+        });
+
+        return { render: render };
+      })();
+
+      (function () {
+        var zone = document.getElementById('dropZone');
+        var input = document.getElementById('fileInput');
+        var removeBtn = document.getElementById('removeImgBtn');
+        var currentUrl = null;
+        var currentFile = null;
+
+        function handleFiles(files) {
+          if (!files || !files.length) return;
+          var file = files[0];
+          if (!file.type || file.type.indexOf('image/') !== 0) return;
+          if (currentUrl) URL.revokeObjectURL(currentUrl);
+          currentUrl = URL.createObjectURL(file);
+          currentFile = file;
+          zone.style.backgroundImage = 'url(' + currentUrl + ')';
+          zone.classList.add('has-image');
+          if (window.onImageAttachmentChanged) window.onImageAttachmentChanged();
+        }
+
+        function clearImage() {
+          if (currentUrl) URL.revokeObjectURL(currentUrl);
+          currentUrl = null;
+          currentFile = null;
+          zone.style.backgroundImage = '';
+          zone.classList.remove('has-image');
+          input.value = '';
+          if (window.onImageAttachmentChanged) window.onImageAttachmentChanged();
+        }
+
+        window.getAttachedImageFile = function () { return currentFile; };
+        window.getAttachedImageUrl = function () { return currentUrl; };
+        window.chooseAttachedImage = function () { input.click(); };
+        window.clearAttachedImage = clearImage;
+
+        zone.addEventListener('click', function () { input.click(); });
+        input.addEventListener('change', function () { handleFiles(input.files); });
+        removeBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          clearImage();
+        });
+
+        ['dragenter', 'dragover'].forEach(function (evt) {
+          zone.addEventListener(evt, function (e) {
+            e.preventDefault();
+            zone.classList.add('dragover');
+          });
+        });
+        ['dragleave', 'drop'].forEach(function (evt) {
+          zone.addEventListener(evt, function (e) {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+          });
+        });
+        zone.addEventListener('drop', function (e) {
+          e.preventDefault();
+          handleFiles(e.dataTransfer.files);
+        });
+      })();
+
+      (function () {
+        var buyBtn = document.getElementById('buyCreditsBtn');
+        var overlay = document.getElementById('pricingOverlay');
+        var closeBtn = document.getElementById('pricingClose');
+        var profilePanel = document.getElementById('profilePanel');
+
+        function openPricing(e) {
+          if (e) e.stopPropagation();
+          profilePanel.classList.remove('open');
+          overlay.hidden = false;
+        }
+        function closePricing() {
+          overlay.hidden = true;
+        }
+
+        window.openPricingModal = openPricing;
+
+        buyBtn.addEventListener('click', openPricing);
+        closeBtn.addEventListener('click', closePricing);
+        overlay.addEventListener('click', function (e) {
+          if (e.target === overlay) closePricing();
+        });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && !overlay.hidden) closePricing();
+        });
+
+        var buyButtons = overlay.querySelectorAll('.pack-buy, .plan-buy');
+        for (var i = 0; i < buyButtons.length; i++) {
+          buyButtons[i].addEventListener('click', async function (e) {
+            var btn = e.currentTarget;
+            var packId = btn.getAttribute('data-pack-id');
+            var planId = btn.getAttribute('data-plan-id');
+            var token = await AuthToken.get();
+            if (!token) {
+              closePricing();
+              if (window.ClerkAuthOpen) window.ClerkAuthOpen();
+              return;
+            }
+            var originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Redirecting…';
+            try {
+              var res = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify(packId ? { kind: 'pack', id: packId } : { kind: 'plan', id: planId }),
+              });
+              var data = await res.json();
+              if (res.ok && data.url) {
+                window.location.href = data.url;
+              } else {
+                showToast(data.error || 'Could not start checkout.');
+                btn.disabled = false;
+                btn.textContent = originalText;
+              }
+            } catch (err) {
+              showToast('Could not start checkout.');
+              btn.disabled = false;
+              btn.textContent = originalText;
+            }
+          });
+        }
+      })();
+
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var checkoutState = params.get('checkout');
+        if (checkoutState === 'success') {
+          showToast('Purchase complete! Your balance will update shortly.');
+          if (window.Credits) Credits.refresh();
+        } else if (checkoutState === 'cancelled') {
+          showToast('Checkout cancelled — nothing was charged.');
+        }
+        if (checkoutState) {
+          params.delete('checkout');
+          var newQuery = params.toString();
+          history.replaceState(null, '', window.location.pathname + (newQuery ? '?' + newQuery : ''));
+        }
+      })();
+    </script>
+  </body>
+</html>

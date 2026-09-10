@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="ROTEX AI workspace">
+  <rect width="1200" height="630" fill="#212121"/>
+  <rect x="72" y="72" width="1056" height="486" rx="26" fill="#2b2b2b" stroke="#3f3f3f" stroke-width="2"/>
+  <text x="118" y="158" fill="#ececec" font-family="Arial, sans-serif" font-size="62" font-weight="800">ROTEX</text>
+  <text x="118" y="226" fill="#d8d0bf" font-family="Arial, sans-serif" font-size="34" font-weight="700">AI chat, coding, files, and PC control</text>
+  <text x="118" y="304" fill="#b4b4b4" font-family="Arial, sans-serif" font-size="26">Chat with ROTEX models, make downloadable files,</text>
+  <text x="118" y="342" fill="#b4b4b4" font-family="Arial, sans-serif" font-size="26">read images and zips, and connect your phone to a PC.</text>
+  <rect x="118" y="420" width="258" height="74" rx="12" fill="#d8d0bf"/>
+  <text x="148" y="468" fill="#171717" font-family="Arial, sans-serif" font-size="25" font-weight="800">Try ROTEX</text>
+  <text x="742" y="468" fill="#8ea7ff" font-family="Arial, sans-serif" font-size="25" font-weight="800">www.rrotex.com</text>
+</svg>
