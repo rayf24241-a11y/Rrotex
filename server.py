@@ -140,7 +140,7 @@ def _prompt_is_flagged(prompt: str) -> bool:
 
 
 print("Loading content reviewer (moondream2)...", flush=True)
-from transformers import AutoModelForCausalLM  # noqa: E402
+from transformers import AutoModelForCausalLM, PreTrainedModel  # noqa: E402
 
 # The keyword filter and NSFW classifier above can only catch what they were
 # specifically built for -- neither has any concept of "is there a chair in
@@ -165,17 +165,15 @@ from transformers import AutoModelForCausalLM  # noqa: E402
 # future transformers/model version mismatch) must never be able to take
 # the whole service down the way it just did. reviewer_model is None when
 # unavailable; _ai_review_image() no-ops in that case.
-reviewer_model = None
-reviewer_load_error = None
-try:
-    reviewer_model = AutoModelForCausalLM.from_pretrained(
-        "vikhyatk/moondream2", revision="2025-06-21", trust_remote_code=True
-    ).to("cuda")
-    print("  -> content reviewer loaded", flush=True)
-except Exception as e:  # noqa: BLE001
-    traceback.print_exc()
-    reviewer_load_error = f"{type(e).__name__}: {e}"[:500]
-    print("  -> content reviewer failed to load; continuing without it", flush=True)
+#
+# The same version mismatch bit again on a rebuilt pod, one layer deeper:
+# transformers 5.x looks up `all_tied_weights_keys` on every model it
+# loads, and moondream2's pinned custom code predates that attribute, so
+# from_pretrained raised AttributeError and the reviewer silently never
+# existed (review_seconds stayed 0.00 on every job). Declaring the empty
+# default on the base class is accurate for this model -- it ties no
+# weights -- and only fills in a default for classes that don't declare
+# one, so it can't change behaviour for the other models here.
 
 # How many reference images a text prompt gets before the pipeline accepts
 # whatever it has. Each rejected attempt costs one image + one review (a few
@@ -195,6 +193,31 @@ REVIEWER_QUESTION = (
     "missing, cut off, or malformed; a limb is duplicated or missing. "
     "Otherwise answer PASS."
 )
+
+if not hasattr(PreTrainedModel, "all_tied_weights_keys"):
+    PreTrainedModel.all_tied_weights_keys = {}
+
+reviewer_model = None
+reviewer_load_error = None
+try:
+    reviewer_model = AutoModelForCausalLM.from_pretrained(
+        "vikhyatk/moondream2", revision="2025-06-21", trust_remote_code=True
+    ).to("cuda")
+    # Loading successfully is not the same as working: the shim above gets
+    # a model built against an older transformers past from_pretrained, and
+    # a broken one would answer every image with garbage -- which, now that
+    # a FAIL costs a regeneration, means every job silently pays for
+    # IMAGE_ATTEMPTS images. One synthetic query at startup proves it can
+    # actually answer the question format before anything depends on it.
+    probe = reviewer_model.query(Image.new("RGB", (378, 378), (255, 255, 255)), REVIEWER_QUESTION)["answer"]
+    if not probe.strip().upper().startswith(("PASS", "FAIL")):
+        raise RuntimeError(f"reviewer self-test returned unusable answer: {probe.strip()[:120]!r}")
+    print("  -> content reviewer loaded", flush=True)
+except Exception as e:  # noqa: BLE001
+    traceback.print_exc()
+    reviewer_model = None
+    reviewer_load_error = f"{type(e).__name__}: {e}"[:500]
+    print("  -> content reviewer failed to load; continuing without it", flush=True)
 
 
 def _review_image(image: Image.Image) -> Optional[str]:
