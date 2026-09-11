@@ -77,14 +77,14 @@ def _load_txt2img():
                 model_id, torch_dtype=torch.float16, variant="fp16"
             ).to("cuda")
             print(f"  -> loaded {model_id}", flush=True)
-            return pipe, steps, guidance
+            return pipe, model_id, steps, guidance
         except Exception as e:  # noqa: BLE001
             print(f"  -> failed ({e}); trying next candidate", flush=True)
             last_err = e
     raise RuntimeError(f"Could not load any text-to-image checkpoint: {last_err}")
 
 
-txt2img, TXT2IMG_STEPS, TXT2IMG_GUIDANCE = _load_txt2img()
+txt2img, TXT2IMG_MODEL_ID, TXT2IMG_STEPS, TXT2IMG_GUIDANCE = _load_txt2img()
 
 print("Loading background remover...", flush=True)
 from hy3dgen.rembg import BackgroundRemover  # noqa: E402
@@ -166,13 +166,15 @@ from transformers import AutoModelForCausalLM  # noqa: E402
 # the whole service down the way it just did. reviewer_model is None when
 # unavailable; _ai_review_image() no-ops in that case.
 reviewer_model = None
+reviewer_load_error = None
 try:
     reviewer_model = AutoModelForCausalLM.from_pretrained(
         "vikhyatk/moondream2", revision="2025-06-21", trust_remote_code=True
     ).to("cuda")
     print("  -> content reviewer loaded", flush=True)
-except Exception:  # noqa: BLE001
+except Exception as e:  # noqa: BLE001
     traceback.print_exc()
+    reviewer_load_error = f"{type(e).__name__}: {e}"[:500]
     print("  -> content reviewer failed to load; continuing without it", flush=True)
 
 # How many reference images a text prompt gets before the pipeline accepts
@@ -810,4 +812,13 @@ def result(job_id: str):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    # Which optional models actually came up is otherwise invisible from
+    # outside the pod (no shell on it), and both of these degrade silently:
+    # a missing reviewer just stops rejecting bad reference images, and a
+    # txt2img fallback quietly drops image quality.
+    return {
+        "status": "ok",
+        "txt2img_model": TXT2IMG_MODEL_ID,
+        "reviewer_loaded": reviewer_model is not None,
+        "reviewer_error": reviewer_load_error,
+    }
